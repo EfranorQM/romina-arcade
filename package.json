@@ -8,5 +8,12 @@
     "cap:add": "npx cap add android",
     "cap:sync": "npx cap sync android",
     "apk": "cd android && gradlew.bat assembleDebug"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.3"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/core": "^7.4.3"
   }
 }

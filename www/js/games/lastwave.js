@@ -278,7 +278,10 @@ export default {
   // -------------------------------------------------------------------------
   startWave() {
     const W = ++this.wave;
-    this.budgetTotal = Math.min(96, 3 + Math.floor(W * 1.9) + Math.floor(W * W / 14));
+    // Arranca en 6 y no en 4 (con 4 repartidos en 3.5s los primeros segundos
+    // eran tiempo muerto), pero la curva sube mas suave: probado con 7 y
+    // W*2.2 la mediana caia a la oleada 3, contra las 6-11 que busca el diseno.
+    this.budgetTotal = Math.min(96, 6 + Math.floor(W * 1.8) + Math.floor(W * W / 15));
     this.budgetLeft = this.budgetTotal;
     const win = Math.min(9000, 3200 + W * 380) / 1000;
     this.spawnGap = win / this.budgetTotal;

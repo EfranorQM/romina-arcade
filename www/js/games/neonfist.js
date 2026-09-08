@@ -260,8 +260,10 @@ export default {
 
     // --- Controles ---
     this.stick = new Stick(45, 8);
-    this.bPunch = new Button(206, 486, 39, 12);
-    this.bDash  = new Button(128, 548, 28, 12);
+    // Subidos ~30px: en y=548 el boton caia sobre la barra de gestos de MIUI,
+    // donde un toque puede sacarla de la app en vez de pegar.
+    this.bPunch = new Button(206, 462, 39, 12);
+    this.bDash  = new Button(126, 516, 28, 12);
 
     // --- Estado de Romina ---
     this.x = AX0 + AW / 2; this.y = AY0 + AH / 2;
@@ -387,8 +389,14 @@ export default {
   },
 
   killFoe(e, from) {
-    // El exploder NUNCA muere sin estallar: matarlo de cerca sigue siendo peligroso.
-    if (e.type === T_EXPLODER && e.st !== 1) { e.st = 1; e.t = 0; e.hp = 1; e.blip = 0; return; }
+    // El exploder cebado (st===1) siempre estalla: ya se comprometio.
+    // Pero matarlo ANTES de que se cebe lo desactiva limpiamente, si ella esta
+    // fuera del radio. Que muera igual estando lejos se sentia tramposo:
+    // castigaba justo la respuesta correcta, que es matarlo a distancia.
+    if (e.type === T_EXPLODER && e.st !== 1) {
+      const far = Math.hypot(e.x - this.x, e.y - this.y) > 58;
+      if (!far) { e.st = 1; e.t = 0; e.hp = 1; e.blip = 0; return; }
+    }
     e.dead = true;
     this.kills++;
     this.award(E_SCORE[e.type]);
