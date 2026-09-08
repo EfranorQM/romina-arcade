@@ -1,7 +1,7 @@
 // ROMINA'S ARCADE — arranque, bucle de tiempo fijo, gestor de escenas y menu.
 import { VW, VH, initCanvas, view, makeRng, Save, cam } from './core.js';
 import { initInput } from './input.js';
-import { initAudio, unlockAudio, SFX, toggleMute, suspendAudio, resumeAudio } from './audio.js';
+import { initAudio, unlockAudio, SFX, toggleMute, suspendAudio, resumeAudio, playMusic, stopMusic, SONGS } from './audio.js';
 import { text, textCenter, measure } from './font.js';
 import { particles, updateParticles, drawParticles } from './gfx.js';
 import { GAMES } from './games.js';
@@ -19,6 +19,9 @@ const sm = {
     particles.clear(); cam.reset();
     this.cur = this.next; this.next = null;
     if (this.cur.init) this.cur.init(ctx, this.nextArgs);
+    // La musica vive en la capa compartida: cada juego solo declara su cancion.
+    const song = SONGS[this.cur.meta.id];
+    if (song) playMusic(song); else stopMusic();
   },
 };
 

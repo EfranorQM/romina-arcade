@@ -28,9 +28,12 @@ const R_BODY = [
 ];
 const RMAP = { '1':P.out, '2':P.mag, '3':P.cy, '4':P.ye, '5':P.dk, '6':P.pink };
 
-const SPIKE = ['..1..1..','.11..11.','111..111','11111111','22222222','12222221'];
-const SMAP  = { '1':P.cy, '2':P.pur };
-const SMAP2 = { '1':P.wh, '2':P.pur };
+// Los pinchos NO pueden ser cian: es el color del borde de la azotea sobre la
+// que se apoyan, y un peligro del mismo tono que su superficie es invisible.
+// Rojo-naranja: no aparece en ningun otro elemento del juego.
+const SPIKE = ['..1..1..','.11..11.','111..111','11111111','22222222','32222223'];
+const SMAP  = { '1':'#ff3355', '2':'#c81030', '3':P.out };
+const SMAP2 = { '1':'#ffdd44', '2':'#ff3355', '3':P.out };
 
 const DRONE = [
   '...1111.....',
@@ -360,8 +363,10 @@ export default {
       b.x -= sp * dt; b.ph += dt * 5;
       if (b.x < -20) { this.beacons.free(b); continue; }
       if (aabb(this.x + this.dashX, this.y, 15, 24, b.x - 8, b.y - 8, 16, 16)) {
-        if (b.kind === 0) { this.overdrive = 6; this.msg = 'OVERDRIVE'; }
-        else { this.phase = 5; this.msg = 'FASE'; }
+        // ESCUDO reemplaza a FASE: invulnerable un rato, legible de un vistazo
+        // (ella parpadea) y no permite atrincherarse porque dura poco.
+        if (b.kind === 0) { this.overdrive = 6; this.msg = 'TURBO'; }
+        else { this.phase = 6; this.msg = 'ESCUDO'; }
         this.msgT = 0.9;
         burst(b.x, b.y, 16,
           { rnd:this.rnd, colors:[P.ye, P.cy, P.wh], speed:150, life:0.5, size:2 });
@@ -383,13 +388,12 @@ export default {
       if (this.grounded || this.coyote > 0) {
         this.jump();
       } else if (!this.airUsed) {
+        // Siempre doble salto: un solo boton con dos resultados opuestos segun
+        // la velocidad vertical era un cambio de modo invisible que ella no puede
+        // predecir. El dash ahora sale del power-up, no de adivinar el momento.
         this.airUsed = true;
-        if (this.vy > -60) {
-          this.vy = -270; this.holding = true; this.holdT = 0; SFX.jump();
-        } else {
-          this.dashT = 0.18; this.iframe = 0.18; this.dashX = 0;
-          SFX.dash(); vibrate(10);
-        }
+        this.vy = -270; this.holding = true; this.holdT = 0;
+        SFX.jump();
       } else {
         this.buffer = 0.12;   // se dispara solo al aterrizar
       }
@@ -454,8 +458,8 @@ export default {
     text(g, String(Math.floor(this.score)), 8, 24, P.wh, 3);
     if (this.combo > 1) text(g, this.combo + 'x', 8, 48, P.ye, 2);
     if (this.msgT > 0) textCenter(g, this.msg, VW / 2, 70, P.ye, 3);
-    if (this.overdrive > 0) text(g, 'OVERDRIVE', VW - 8 - measure('OVERDRIVE', 2), 8, P.ye, 2);
-    if (this.phase > 0) text(g, 'FASE', VW - 8 - measure('FASE', 2), 8, P.cy, 2);
+    if (this.overdrive > 0) text(g, 'TURBO', VW - 8 - measure('TURBO', 2), 8, P.ye, 2);
+    if (this.phase > 0) text(g, 'ESCUDO', VW - 8 - measure('ESCUDO', 2), 8, P.cy, 2);
   },
 
   destroy() { this.roofs = this.drones = this.bits = this.beacons = null; },

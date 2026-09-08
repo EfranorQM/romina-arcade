@@ -33,8 +33,19 @@ export function unlockAudio() {
 
 export function setMute(m) { if (master) master.gain.value = m ? 0 : 0.5; }
 export function toggleMute() { const m = Save.toggleMute(); setMute(m); return m; }
-export function suspendAudio() { if (ac && ac.state === 'running') ac.suspend(); }
-export function resumeAudio() { if (ac && ac.state === 'suspended') ac.resume(); }
+// Al minimizar hay que parar TAMBIEN el temporizador del secuenciador: si solo
+// se suspende el contexto, el reloj sigue y al volver se disparan de golpe todas
+// las notas acumuladas.
+export function suspendAudio() {
+  if (seqTimer) { clearTimeout(seqTimer); seqTimer = 0; }
+  if (ac && ac.state === 'running') ac.suspend();
+}
+
+export function resumeAudio() {
+  if (ac && ac.state === 'suspended') ac.resume();
+  // Resincroniza el acumulador con el reloj actual antes de reanudar.
+  if (seq && ac && !seqTimer) { seq.next = ac.currentTime + 0.08; seqTick(); }
+}
 
 // Onda pulso con duty variable (voz clasica de NES). Los coeficientes van en real[].
 const waveCache = new Map();
@@ -102,6 +113,94 @@ export function sfx(o) {
   src.start(t);
   src.stop(t + dur + 0.02);
 }
+
+// ---------- Musica: secuenciador con lookahead ----------
+// setTimeout solo derivaria: se programan notas por adelantado con tiempos
+// ABSOLUTOS del AudioContext. 0.15s de anticipacion aguanta el throttling de MIUI.
+const NOTE = {
+  C:130.81, D:146.83, E:164.81, F:174.61, G:196.00, A:220.00, B:246.94,
+  c:261.63, d:293.66, e:329.63, f:349.23, g:392.00, a:440.00, b:493.88,
+  x:523.25, y:587.33, z:659.25,
+};
+const LOOKAHEAD = 25, AHEAD = 0.15;
+let seq = null, seqTimer = 0;
+
+function noteAt(o, when) {
+  if (!ac || Save.muted) return;
+  const gain = ac.createGain();
+  const vol = o.vol || 0.12;
+  gain.gain.setValueAtTime(0.0001, when);
+  gain.gain.exponentialRampToValueAtTime(vol, when + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + o.dur);
+  gain.connect(master);
+  let src;
+  if (o.wave === 'noise') {
+    src = ac.createBufferSource(); src.buffer = noiseBuffer(); src.loop = true;
+    const f = ac.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.setValueAtTime(o.f0 || 800, when);
+    src.connect(f); f.connect(gain);
+  } else {
+    src = ac.createOscillator();
+    if (o.wave === 'pulse') src.setPeriodicWave(pulseWave(o.duty || 0.5));
+    else src.type = o.wave === 'tri' ? 'triangle' : 'square';
+    src.frequency.setValueAtTime(o.f0, when);
+    src.connect(gain);
+  }
+  src.onended = () => { try { src.disconnect(); gain.disconnect(); } catch (e) {} };
+  src.start(when);
+  src.stop(when + o.dur + 0.02);
+}
+
+function seqTick() {
+  if (!seq || !ac) return;
+  while (seq.next < ac.currentTime + AHEAD) {
+    const t = seq.next;
+    for (const tr of seq.song.tracks) {
+      const c = tr.pattern[seq.step % tr.pattern.length];
+      if (c && c !== '.') {
+        if (tr.wave === 'noise') {
+          noteAt({ wave:'noise', f0: c === 'H' ? 2400 : 700, dur: c === 'H' ? 0.04 : 0.09, vol: tr.vol }, t);
+        } else if (NOTE[c]) {
+          noteAt({ wave:tr.wave, duty:tr.duty, f0:NOTE[c], dur:seq.stepDur * (tr.gate || 0.8), vol:tr.vol }, t);
+        }
+      }
+    }
+    seq.next += seq.stepDur;
+    seq.step++;
+  }
+  seqTimer = setTimeout(seqTick, LOOKAHEAD);
+}
+
+export function playMusic(song) {
+  if (!ac) return;
+  stopMusic();
+  seq = { song, step:0, stepDur: 60 / song.bpm / 4, next: ac.currentTime + 0.08 };
+  seqTick();
+}
+
+export function stopMusic() {
+  if (seqTimer) { clearTimeout(seqTimer); seqTimer = 0; }
+  seq = null;
+}
+
+// Tres pistas: bajo, arpegio y percusion. 16 pasos por compas.
+export const SONGS = {
+  skyline: { bpm: 138, tracks: [
+    { wave:'tri',   pattern:'C...C...G...G...F...F...G...G...', vol:0.16 },
+    { wave:'pulse', duty:0.25, pattern:'c.e.g.e.c.e.g.e.b.d.f.d.g.b.d.b.', vol:0.07 },
+    { wave:'noise', pattern:'H.h.H.h.H.h.H.hH', vol:0.05 },
+  ]},
+  neonfist: { bpm: 152, tracks: [
+    { wave:'tri',   pattern:'A...A...E...E...F...F...G...G...', vol:0.17 },
+    { wave:'pulse', duty:0.125, pattern:'a.a.e.e.a.a.b.b.f.f.c.c.g.g.b.b.', vol:0.07 },
+    { wave:'noise', pattern:'H.hHH.h.H.hHH.h.', vol:0.06 },
+  ]},
+  lastwave: { bpm: 126, tracks: [
+    { wave:'tri',   pattern:'D...D...B...B...G...G...A...A...', vol:0.16 },
+    { wave:'pulse', duty:0.5, pattern:'d.f.a.f.d.f.a.f.b.d.g.d.a.c.e.c.', vol:0.06 },
+    { wave:'noise', pattern:'H...h...H...h.h.', vol:0.05 },
+  ]},
+};
 
 // Presets listos.
 export const SFX = {
