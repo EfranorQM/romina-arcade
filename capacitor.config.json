@@ -1,0 +1,16 @@
+{
+  "appId": "com.romina.juegos",
+  "appName": "Juegos Romina",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#000000",
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true,
+    "zoomEnabled": false
+  },
+  "server": {
+    "androidScheme": "https",
+    "hostname": "localhost"
+  }
+}

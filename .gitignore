@@ -1,0 +1,7 @@
+node_modules/
+android/
+dist/
+*.apk
+*.keystore
+.DS_Store
+desktop.ini
