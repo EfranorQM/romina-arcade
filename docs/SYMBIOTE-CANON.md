@@ -87,3 +87,50 @@ jugabilidad verificados, no opiniones.
 12. **El aim assist de 44px se robaba el verbo principal**, enganchando enemigos
     cuando ella apuntaba a la pared. → Precedencia explícita: si el rayo directo
     da en geometría antes que en el radio de captura, gana la geometría.
+
+---
+
+# Rediseño Carrion (segunda versión)
+
+El usuario probó la primera versión en el celular: **el movimiento se siente
+mal**, no puede moverlo con fluidez. Identificó el juego de referencia:
+es **CARRION**.
+
+## Por qué falló la primera versión
+
+Construí un **gancho tipo Spider-Man**: un tentáculo, botón para lanzarlo,
+anclar a un punto, columpiarse, soltar. **Carrion es lo contrario.**
+
+En Carrion la criatura es una masa blanda que **fluye**. Hay muchos tentáculos
+fuera a la vez, se agarran solos de las superficies cercanas y **tiran del
+cuerpo** de forma continua hacia donde apunta el jugador. No existe el ciclo
+"lanzar / anclar / columpiar / soltar". El movimiento nunca se detiene a apuntar.
+
+Es un error de arquitectura, no de ajuste de números.
+
+## Decisiones del usuario (fijas)
+
+1. **Arrastrar el dedo + botón de ataque.** La criatura fluye hacia el dedo;
+   los tentáculos se agarran solos. Un botón aparte para agarrar y matar.
+2. **Vertical y horizontal**, cambiando en vivo al girar. Solo este juego;
+   los otros tres quedan fijos en vertical.
+3. **Arte fiel a Carrion**: masa de carne roja, muchos tentáculos en abanico,
+   laboratorio oscuro e industrial con tuberías, luces rojas de emergencia,
+   sangre por todas partes.
+
+## Bugs de rotación encontrados y corregidos
+
+- **`symbiote.js` declaraba `const VW = 540, VH = 1200`**, tapando los bindings
+  vivos del motor. Al girar, el HUD y los botones se quedaban colocados para
+  vertical. Ahora se importan vivos de `core.js`.
+- **`applyOrientation` no avisaba al juego** cuando la resolución ya coincidía,
+  así que al armar la rotación nunca recolocaba nada. Ahora avisa siempre.
+- **El aviso llegaba antes de `init()`**, cuando el juego todavía no tenía
+  controles que recolocar. Ahora se dispara también después de inicializar.
+
+## Pendiente para el rediseño
+
+**En horizontal el nivel no llena la pantalla**: el mapa ocupa el 68% izquierdo
+y el resto queda negro, porque el nivel no es lo bastante ancho y la cámara se
+queda sin mundo. Los niveles deben generarse con proporción suficiente para
+ambas orientaciones, o la cámara debe encuadrar de otra forma al girar.

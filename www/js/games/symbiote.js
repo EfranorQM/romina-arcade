@@ -6,7 +6,7 @@
 // enemigos en sym-world.js, y la sangre en sym-gore.js.
 // Unidades canonicas: 540x1200 virtual, TS=24 (docs/SYMBIOTE-CANON.md).
 
-import { Pool, makeRng, clamp, cam, Save } from '../core.js';
+import { Pool, makeRng, clamp, cam, Save, VW, VH } from '../core.js';
 import { bake, spr, burst } from '../gfx.js';
 import { text, textCenter, measure } from '../font.js';
 import { SFX, sfx } from '../audio.js';
@@ -15,7 +15,10 @@ import * as R from './sym-rope.js';
 import * as W from './sym-world.js';
 import * as G from './sym-gore.js';
 
-const VW = 540, VH = 1200;
+// VW/VH se importan VIVOS del motor: declararlos aqui como constantes los
+// congelaba en 540x1200 y al girar el telefono el HUD y los botones se
+// quedaban colocados para vertical.
+const BASE_W = 540, BASE_H = 1200;
 
 const P = {
   body:'#4a2668', bodyLit:'#6b3a94', edge:'#140a1e', eye:'#ff2d55',
@@ -48,7 +51,7 @@ export default {
   meta: {
     id:'symbiote', title:'SYMBIOTE', tag:'ESCAPA DEL LAB',
     colors:['#ff2d55','#6b3a94'],
-    vw: VW, vh: VH,          // este juego corre al doble de resolucion
+    vw: BASE_W, vh: BASE_H,  // este juego corre al doble de resolucion
     rotates: true,           // unico juego que se adapta al giro del telefono
   },
 
@@ -67,7 +70,8 @@ export default {
     this.drips = G.makeDripPool();
 
     this.stick = new Stick(34, 5);
-    this.btn = new Button(VW - 96, VH - 150, 56, 18);
+    this.btn = new Button(0, 0, 56, 18);
+    this.layout();
 
     this.level = 0;
     this.score = 0;
@@ -113,6 +117,15 @@ export default {
       onEnemyHurt: () => SFX.hit(),
     };
   },
+
+  // Recoloca los controles segun la orientacion. El motor lo llama al girar.
+  layout() {
+    if (!this.btn) return;
+    this.btn.x = VW - 96;
+    this.btn.y = VH - 150;
+  },
+
+  onResize() { this.layout(); },
 
   flash(m) { this.msg = m; this.msgT = 1.1; },
 

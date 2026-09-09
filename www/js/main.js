@@ -23,8 +23,12 @@ const sm = {
     const m = this.cur.meta;
     setVirtual(m.vw || BASE_VW, m.vh || BASE_VH);
     // Solo los juegos que lo declaran giran; el resto queda fijo en vertical.
+    // El callback se arma ANTES de init (para que setVirtual ya deje la
+    // resolucion correcta) pero el aviso inicial se dispara DESPUES, cuando el
+    // juego ya creo sus controles y puede recolocarlos.
     setRotatable(!!m.rotates, () => { if (this.cur && this.cur.onResize) this.cur.onResize(); });
     if (this.cur.init) this.cur.init(ctx, this.nextArgs);
+    if (m.rotates && this.cur.onResize) this.cur.onResize();
     // La musica vive en la capa compartida: cada juego solo declara su cancion.
     const song = SONGS[this.cur.meta.id];
     if (song) playMusic(song); else stopMusic();

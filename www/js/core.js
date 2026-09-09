@@ -64,10 +64,12 @@ function applyOrientation() {
   const long = Math.max(VW, VH), short = Math.min(VW, VH);
   const w = land ? long : short;
   const h = land ? short : long;
-  if (w !== VW || h !== VH) {
-    setVirtual(w, h);
-    if (onRotate) onRotate(w, h, land);
-  }
+  const changed = (w !== VW || h !== VH);
+  if (changed) setVirtual(w, h);
+  // Se avisa SIEMPRE, no solo cuando cambia el tamano: al armar la rotacion la
+  // resolucion puede coincidir ya, y sin este aviso el juego nunca recolocaria
+  // su HUD ni sus botones para la orientacion actual.
+  if (onRotate) onRotate(VW, VH, land);
 }
 
 export function fitAndOrient() {
