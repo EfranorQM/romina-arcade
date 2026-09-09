@@ -200,6 +200,15 @@ export const SONGS = {
     { wave:'pulse', duty:0.5, pattern:'d.f.a.f.d.f.a.f.b.d.g.d.a.c.e.c.', vol:0.06 },
     { wave:'noise', pattern:'H...h...H...h.h.', vol:0.05 },
   ]},
+  // FURIA: la mas rapida del arcade. Bajo en corcheas constantes (motor que no
+  // afloja) y percusion densa; el arpegio sube para dar sensacion de carrera.
+  furia: { bpm: 166, tracks: [
+    // 'saw' solo existe para efectos puntuales: playMusic solo entiende
+    // tri/pulse/noise, asi que un 'saw' aqui sonaria como cuadrada sin avisar.
+    { wave:'tri',   pattern:'E.E.E.E.E.E.E.E.C.C.C.C.G.G.G.G.', vol:0.16 },
+    { wave:'pulse', duty:0.25, pattern:'e.g.b.g.e.g.b.g.c.e.g.e.g.b.d.b.', vol:0.07 },
+    { wave:'noise', pattern:'H.hHH.hHH.hHH.hH', vol:0.06 },
+  ]},
 };
 
 // Presets listos.

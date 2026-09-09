@@ -19,14 +19,24 @@ export function initCanvas(el) {
   return g;
 }
 
+// Modo de filtrado. Los juegos de pixel art necesitan el nearest-neighbour
+// (smooth=false, el defecto); un juego que dibuja con curvas y degradados en
+// vez de sprites horneados pide smooth=true via meta.smooth, y entonces el
+// escalado y los bordes salen suaves en vez de escalonados.
+let smoothMode = false;
+export function setSmooth(on) {
+  smoothMode = !!on;
+  if (g) g.imageSmoothingEnabled = smoothMode;
+}
+
 // Cambia la resolucion virtual entre escenas. OJO: asignar canvas.width RESETEA
 // todo el estado del contexto 2D, incluido imageSmoothingEnabled; hay que
 // volver a ponerlo aqui o el juego entero se dibuja borroso sin avisar.
 export function setVirtual(w, h) {
-  if (w === VW && h === VH) return;
+  if (w === VW && h === VH) { g.imageSmoothingEnabled = smoothMode; return; }
   VW = w; VH = h;
   canvas.width = VW; canvas.height = VH;
-  g.imageSmoothingEnabled = false;
+  g.imageSmoothingEnabled = smoothMode;
   fit();
 }
 

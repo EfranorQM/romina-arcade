@@ -1,5 +1,5 @@
 // ROMINA'S ARCADE — arranque, bucle de tiempo fijo, gestor de escenas y menu.
-import { VW, VH, BASE_VW, BASE_VH, setVirtual, setRotatable, initCanvas, view, makeRng, Save, cam } from './core.js';
+import { VW, VH, BASE_VW, BASE_VH, setVirtual, setSmooth, setRotatable, initCanvas, view, makeRng, Save, cam } from './core.js';
 import { initInput } from './input.js';
 import { initAudio, unlockAudio, SFX, toggleMute, suspendAudio, resumeAudio, playMusic, stopMusic, SONGS } from './audio.js';
 import { text, textCenter, measure } from './font.js';
@@ -21,6 +21,9 @@ const sm = {
     // La resolucion se fija ANTES de init(): los juegos hornean sprites y
     // calculan posiciones contra VW/VH, asi que deben leer ya el valor nuevo.
     const m = this.cur.meta;
+    // El filtrado se elige ANTES de setVirtual: asignar canvas.width resetea el
+    // contexto, y setVirtual reaplica el modo que se haya dejado puesto aqui.
+    setSmooth(!!m.smooth);
     setVirtual(m.vw || BASE_VW, m.vh || BASE_VH);
     // Solo los juegos que lo declaran giran; el resto queda fijo en vertical.
     // El callback se arma ANTES de init (para que setVirtual ya deje la

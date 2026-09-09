@@ -1,6 +1,6 @@
 # ROMINA'S ARCADE
 
-Tres juegos de acción retro, 100% offline, para el Redmi Note 10.
+Cinco juegos de acción, 100% offline, para el Redmi Note 10.
 
 ---
 
@@ -56,6 +56,8 @@ La app queda con su ícono (una R rosa en un marco cian) y ya no pide nada más.
 | **SKYLINE** | Corre por azoteas neón, esquiva huecos y drones | Tocar = saltar · Mantener = saltar más alto · Tocar en el aire = doble salto |
 | **NEON FIST** | Arena de pelea contra oleadas de enemigos | Pulgar izquierdo = mover · Botón grande = golpear · Botón chico = esquivar |
 | **LAST WAVE** | Sobrevive oleadas, elige mejoras entre ronda y ronda | Un dedo mueve; dispara sola · Entre oleadas, tocar una carta |
+| **SYMBIOTE** | Criatura de carne que trepa un laboratorio | Arrastrar el dedo = fluir · Botón = agarrar y matar · Gira con el teléfono |
+| **FURIA** | Moto de montaña: 8 niveles con meta | Derecha = acelerar · Izquierda = saltar (tocar) y frenar (mantener) · En el aire, las dos zonas giran la moto |
 
 Sin tutoriales, sin diálogos, sin historia. Se toca y se juega.
 Los récords se guardan solos. El sonido se activa y desactiva desde el menú.
@@ -81,6 +83,12 @@ android/              proyecto nativo (lo genera Capacitor)
 
 Sin dependencias, sin paso de compilación, sin archivos de imagen ni de sonido:
 todo el arte y el audio se generan por código. El APK pesa poco por eso.
+
+**FURIA es la excepción al pixel art.** Los otros cuatro juegos hornean sprites
+y corren con el filtrado en nearest-neighbour. FURIA declara `meta.smooth` y
+corre a 540x1200 con antialiasing: el terreno es una polilínea, la moto se
+dibuja con curvas y degradados, y las ruedas giran de verdad. Por eso se ve
+suave en lugar de escalonado, sin usar ni una imagen.
 
 ---
 
