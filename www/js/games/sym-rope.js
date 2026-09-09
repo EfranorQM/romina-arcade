@@ -21,7 +21,9 @@ const AIR = 0.999;              // amortiguacion por substep
 export const REEL_IN = 220, REEL_OUT = 260;
 export const LEN_MIN = 40, LEN_MAX = 156;
 export const WALK = 78;         // px/s caminando: lento a proposito
-export const BODY_R = 14;
+// El cuerpo tiene que caber por un hueco de un tile (24px) con holgura. Con
+// BODY_R=14 medía 28px de diametro y se atascaba en cada esquina del nivel.
+export const BODY_R = 9;
 
 // Estados de tentaculo
 export const T_FREE = 0, T_FLYING = 1, T_ANCHORED = 2, T_GRIP = 3, T_RETRACT = 4;
@@ -164,17 +166,26 @@ export function step(R, B, dtFrame, stickX, stickY, solidFn, TS) {
       vy += ty * push * SWING * fall * dt2;
 
       // Recoger / soltar cuerda: acorta el pendulo y acelera la cadencia.
+      // Recoger ademas EMPUJA hacia el ancla: sin ese tiron, subir en vertical
+      // era casi imposible y la salida en alto quedaba inalcanzable.
       const radial = stickX * nx + stickY * ny;
-      if (radial < -0.3) R.len[t] = Math.max(LEN_MIN, R.len[t] - REEL_IN * dt);
-      else if (radial > 0.3) R.len[t] = Math.min(LEN_MAX, R.len[t] + REEL_OUT * dt);
-    } else {
-      // Sin colgar: control debil. Caminar es lento a proposito, para que
-      // columpiarse se sienta como volar.
-      vx += stickX * 900 * dt2;
-      if (B.onGround) {
-        const cap = WALK * dt;
-        if (vx > cap) vx = cap; else if (vx < -cap) vx = -cap;
+      if (radial < -0.3) {
+        R.len[t] = Math.max(LEN_MIN, R.len[t] - REEL_IN * dt);
+        vx -= nx * 1600 * dt2;
+        vy -= ny * 1600 * dt2;
+      } else if (radial > 0.3) {
+        R.len[t] = Math.min(LEN_MAX, R.len[t] + REEL_OUT * dt);
       }
+    } else if (B.onGround) {
+      // En el suelo se fija la velocidad directamente. Acelerar hacia ella con
+      // 900px/s^2 sobre dt^2 daba 0.06px por substep: tardaba segundos en
+      // arrancar y en la practica la dejaba clavada en el sitio.
+      vx = stickX * WALK * dt;
+    } else {
+      // En el aire, control debil: se puede corregir el arco pero no volar.
+      vx += stickX * 1400 * dt2;
+      const cap = 320 * dt;
+      if (vx > cap) vx = cap; else if (vx < -cap) vx = -cap;
     }
 
     // Tope de velocidad ANTES de integrar, para que la restriccion vea algo sano.
@@ -197,7 +208,9 @@ export function step(R, B, dtFrame, stickX, stickY, solidFn, TS) {
 
     // Barrido contra tiles: nunca teletransportar. A 900px/s son 15px por frame
     // contra tiles de 24, y SUB=2 lo baja a 7.5px = 3.2x de margen.
-    sweepBody(B, nx2, ny2, solidFn, TS);
+    // Colgando NO se marca suelo: en un pasillo siempre hay piso a pocos px y
+    // eso mataba la velocidad cada frame, anulando el columpio por completo.
+    sweepBody(B, nx2, ny2, solidFn, TS, t >= 0 && R.state[t] === T_ANCHORED);
 
     // ---- Tentaculos ----
     for (let i = 0; i < TENT_MAX; i++) {
@@ -263,12 +276,12 @@ export function step(R, B, dtFrame, stickX, stickY, solidFn, TS) {
 
 // Mueve el cuerpo a (nx,ny) con barrido DDA, deteniendose en el primer solido.
 // Mata la velocidad SOLO en el eje bloqueado, para poder deslizar por muros.
-function sweepBody(B, nx, ny, solidFn, TS) {
+function sweepBody(B, nx, ny, solidFn, TS, swinging) {
   const dx = nx - B.x, dy = ny - B.y;
   const dist = Math.hypot(dx, dy);
   B.onGround = false;
 
-  if (dist < 0.0001) { checkGround(B, solidFn, TS); return; }
+  if (dist < 0.0001) { if (!swinging) checkGround(B, solidFn, TS); return; }
 
   const steps = Math.max(1, Math.ceil(dist / (TS * 0.4)));
   const sx = dx / steps, sy = dy / steps;
@@ -281,11 +294,11 @@ function sweepBody(B, nx, ny, solidFn, TS) {
     const tryY = B.y + sy;
     if (!bodyBlocked(B.x, tryY, solidFn, TS)) B.y = tryY;
     else {
-      if (sy > 0) B.onGround = true;
+      if (sy > 0 && !swinging) B.onGround = true;
       B.oy = B.y;                              // choque vertical: pierde vy
     }
   }
-  checkGround(B, solidFn, TS);
+  if (!swinging) checkGround(B, solidFn, TS);
 }
 
 function checkGround(B, solidFn, TS) {

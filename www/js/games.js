@@ -2,4 +2,5 @@
 import skyline from './games/skyline.js';
 import neonfist from './games/neonfist.js';
 import lastwave from './games/lastwave.js';
-export const GAMES = [skyline, neonfist, lastwave];
+import symbiote from './games/symbiote.js';
+export const GAMES = [skyline, neonfist, lastwave, symbiote];
