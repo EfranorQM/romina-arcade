@@ -20,19 +20,41 @@
 import { TS, solidTile } from './sym-world.js';
 
 // ---- Constantes (validadas midiendo, no suponiendo) ----
-export const NT = 12;         // tentaculos simultaneos: 12 lee como abanico, 6 como arana
-export const SEG = 8;         // particulas por tentaculo
+export const NT = 9;          // 9 reparte mejor que 12: con 12 se apilan en el mismo punto
+export const SEG = 12;        // particulas por tentaculo
 const SUB = 3, ITERS = 3;
-// REACH es el numero mas sensible del sistema. Con 132 la criatura no alcanza
-// ninguna pared desde el centro de una sala y se cae; con 288 alcanza el 95%.
-export const REACH = 288;
-const RING = 16;              // anclajes candidatos en brujula fija
+// REACH ya no es 'lo mas lejos que alcanza' sino el LARGO DEL TENTACULO, y ese
+// largo define la silueta. A 288 con el cuerpo en 14 un tentaculo medía 10x el
+// cuerpo entero: leia como arana de patas largas, no como masa de carne. En
+// Carrion la proporcion es ~2-4x. A 210 con radio visual 26 el ratio es 4x,
+// y 210/11 = 19px entre nodos (antes 41): recien ahi la Catmull-Rom tiene
+// nodos lo bastante juntos como para describir una curva en vez de un palo.
+// Medido: 150, 210 y 240 dan todos 8/8, asi que se elige por silueta.
+export const REACH = 210;
+const RING = 24;              // mas anclajes: con 16 quedaban huecos de 22.5 grados
 const MIN_GRIP = 2;           // nunca soltar por debajo de esto o cae al vacio
-const HAUL = 2600;            // px/s^2 de arrastre
+const HAUL = 3400;            // px/s^2 de arrastre
 const GRAV = 1400;
-const MAXSPD = 620;
+const MAXSPD = 720;
 const AIR = 0.992;
-export const BODY_R = 10;
+// DOS RADIOS, no uno. Medido: subir el radio de COLISION de 10 a 14 hace caer
+// la tasa de llegada de 8/8 a 2/8, porque blocked() sondea a r-2 y a r=14 eso
+// exige un hueco de 24px = 1 tile exacto: los pasillos de 1 tile se vuelven
+// intransitables y la criatura queda encajonada. El corte esta entre 12 y 14.
+// Pero un cuerpo de radio 10 se ve como un punto con palos, que es justo lo
+// que se veia mal. La salida es la de Carrion: la masa es GRANDE pero BLANDA,
+// se aplasta para pasar. Asi que la colision usa un radio chico y el dibujo
+// uno grande; la deformacion del blob vende la diferencia.
+export const BODY_R = 12;     // radio de COLISION: el maximo que pasa 8/8
+export const BODY_VR = 26;    // radio VISUAL: la masa que se ve
+export const HIT_R = 19;      // radio de IMPACTO de balas y enemigos: el medio
+
+// Zona muerta y saturacion del dedo, en px de pantalla. Antes solo se usaba la
+// direccion normalizada al dedo y se tiraba la distancia, asi que la criatura
+// empujaba con fuerza maxima tanto si el dedo estaba a 20px como a 400: no
+// habia control fino ni sensacion de seguir el dedo. Ahora la distancia modula.
+export const DEAD_R = 14;     // dentro de esto la criatura frena y se posa
+export const FULL_R = 190;    // a partir de aqui es empuje maximo
 
 export const SEEK = 0, GRIP = 1, REL = 2;
 
@@ -51,7 +73,7 @@ export function makeCreature(x, y) {
     pox: new Float32Array(NT * SEG), poy: new Float32Array(NT * SEG),
     ringX: new Float32Array(RING), ringY: new Float32Array(RING),
     ringHit: new Uint8Array(RING),
-    scanK: 0, gripsLast: 0,
+    scanK: 0, gripsLast: 0, wt: 0,
     hp: 100, bloodiness: 0,
   };
 }
@@ -127,9 +149,20 @@ export function blocked(x, y, solid) {
          solid(Math.floor(x / TS), Math.floor((y + r) / TS));
 }
 
-// Un paso completo. (aimx,aimy) es la direccion normalizada hacia el dedo;
+// Un paso completo. (aimx,aimy) es la direccion normalizada hacia el dedo,
+// aimDist la distancia en px al dedo (para modular la fuerza; -1 = sin dato),
 // pulling indica si la jugadora esta arrastrando.
-export function step(C, dt, aimx, aimy, pulling, solid) {
+export function step(C, dt, aimx, aimy, pulling, solid, aimDist) {
+  C.wt += dt;
+  // Fuerza proporcional a lo lejos que esta el dedo. Cerca del cuerpo la
+  // criatura se posa suave; lejos, empuje pleno. Esto es lo que da control
+  // fino: acercar el dedo ya no significa 'misma fuerza en otra direccion'.
+  let force = 1;
+  if (aimDist !== undefined && aimDist >= 0) {
+    force = (aimDist - DEAD_R) / (FULL_R - DEAD_R);
+    force = force < 0 ? 0 : force > 1 ? 1 : force;
+    force = force * force * (3 - 2 * force);   // smoothstep: sin escalon al salir de la zona muerta
+  }
   // Anillo de anclajes: 4 ranuras por frame, o las 16 de golpe si se quedo sin
   // agarre. Ese rescate es lo que garantiza que nunca se queda colgada sin nada.
   if (C.gripsLast === 0) { for (let k = 0; k < RING; k++) scanSlot(C, solid, k); }
@@ -171,22 +204,33 @@ export function step(C, dt, aimx, aimy, pulling, solid) {
       hx /= hm; hy /= hm;
       // El dedo manda; el tiron de los agarres solo aporta un cuarto.
       let mixX = aimx * 0.75 + hx * 0.25, mixY = aimy * 0.75 + hy * 0.25;
-      // DESLIZAMIENTO sobre la superficie. Es la correccion que arreglo los
-      // atascos: apuntar hacia una esquina concava clavaba a la criatura 88
-      // segundos, porque la fuerza empujaba al muro y el barrido la frenaba
-      // cada frame. Proyectando el empuje sobre la pared, resbala y sigue.
+      // DESLIZAMIENTO sobre la superficie. Cortar el eje a cero (lo que se hacia
+      // antes) mata TODA la componente, asi que empujar en diagonal contra una
+      // pared vertical borraba tambien el avance vertical: la criatura se
+      // quedaba pegada. Ahora se estima la normal del muro y se proyecta el
+      // empuje sobre la pared (v - n(v.n)), que es deslizamiento de verdad: la
+      // componente paralela sobrevive intacta y la criatura resbala y sigue.
       const probe = BODY_R + 4;
-      if (mixX !== 0 && blocked(C.x + Math.sign(mixX) * probe, C.y, solid)) mixX = 0;
-      if (mixY !== 0 && blocked(C.x, C.y + Math.sign(mixY) * probe, solid)) mixY = 0;
-      if (mixX === 0 && mixY === 0) {
-        // Esquina cerrada: se busca el eje libre mas cercano en vez de parar.
+      let nx = 0, ny = 0;
+      if (blocked(C.x + probe, C.y, solid)) nx -= 1;
+      if (blocked(C.x - probe, C.y, solid)) nx += 1;
+      if (blocked(C.x, C.y + probe, solid)) ny -= 1;
+      if (blocked(C.x, C.y - probe, solid)) ny += 1;
+      if (nx !== 0 || ny !== 0) {
+        const nm = Math.hypot(nx, ny);
+        nx /= nm; ny /= nm;
+        const dot = mixX * nx + mixY * ny;
+        if (dot < 0) { mixX -= nx * dot; mixY -= ny * dot; }
+      }
+      if (Math.abs(mixX) < 1e-4 && Math.abs(mixY) < 1e-4) {
+        // Encajonada de verdad: se busca el eje libre mas cercano en vez de parar.
         if (!blocked(C.x, C.y - probe, solid)) mixY = -1;
         else if (!blocked(C.x + probe, C.y, solid)) mixX = 1;
         else if (!blocked(C.x - probe, C.y, solid)) mixX = -1;
         else if (!blocked(C.x, C.y + probe, solid)) mixY = 1;
       }
       const mm = Math.hypot(mixX, mixY) || 1;
-      const k = pulling ? 1 : 0.25;
+      const k = pulling ? force : 0.18;
       vx += (mixX / mm) * HAUL * k * sdt2;
       vy += (mixY / mm) * HAUL * k * sdt2;
       // Agarrada NO hay gravedad: es lo que permite trepar muros y techos.
@@ -227,11 +271,24 @@ export function step(C, dt, aimx, aimy, pulling, solid) {
       const x = C.px[p], y = C.py[p];
       const vx2 = (x - C.pox[p]) * 0.94, vy2 = (y - C.poy[p]) * 0.94;
       C.pox[p] = x; C.poy[p] = y;
-      C.px[p] = x + vx2;
-      C.py[p] = y + vy2 + GRAV * dt * dt * 0.25;
+      // ONDULACION. Sin esto el tentaculo agarrado es un segmento tenso y recto:
+      // es lo que lo hacia leer como pata de arana. Un seno perpendicular al
+      // tentaculo, con fase propia por tentaculo y amplitud maxima en el medio
+      // (cero en la base y en la punta, que estan clavadas), lo hace serpentear
+      // como musculo. Es puramente cinematico y cuesta un seno por particula.
+      const f = s / (SEG - 1);
+      const env = Math.sin(f * Math.PI);          // 0 en extremos, 1 en el medio
+      const wob = Math.sin(C.wt * 5.5 + i * 2.1 - f * 4.2) * env * 26 * dt;
+      const tdx = C.gx[i] - C.x, tdy = C.gy[i] - C.y;
+      const tm = Math.hypot(tdx, tdy) || 1;
+      C.px[p] = x + vx2 + (-tdy / tm) * wob;
+      C.py[p] = y + vy2 + GRAV * dt * dt * 0.25 + (tdx / tm) * wob;
     }
+    // HOLGURA. El largo en reposo era exactamente la distancia al ancla partida
+    // por los segmentos: la cuerda quedaba tensa por construccion, o sea recta.
+    // Un 12% de holgura le deja material para curvarse y la ondulacion se ve.
     let rl = REACH / (SEG - 1);
-    if (gripped) rl = Math.max(4, Math.hypot(C.gx[i] - C.x, C.gy[i] - C.y) / (SEG - 1));
+    if (gripped) rl = Math.max(4, Math.hypot(C.gx[i] - C.x, C.gy[i] - C.y) / (SEG - 1) * 1.12);
     for (let k = 0; k < ITERS; k++) {
       for (let s = 0; s < SEG - 1; s++) {
         const a = b + s, c = a + 1;

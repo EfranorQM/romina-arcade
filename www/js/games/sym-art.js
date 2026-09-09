@@ -58,7 +58,12 @@ const _bot = new Int32Array(256);
 export function makeBlob(baseR) {
   const b = {
     rad: new Float32Array(NR), vel: new Float32Array(NR),
-    base: baseR, sx: 1, sy: 1, t: 0,
+    // r0 es el radio en reposo. Se guarda porque blobUpdate() recalcula `base`
+    // en cada frame: antes lo pisaba con una constante 12, asi que el argumento
+    // de makeBlob() no tenia ningun efecto y la criatura salia siempre diminuta
+    // por mas que se pidiera una masa grande. Ese era el motivo real de que se
+    // viera como un punto con palos.
+    r0: baseR, base: baseR, sx: 1, sy: 1, t: 0,
   };
   for (let i = 0; i < NR; i++) b.rad[i] = baseR;
   return b;
@@ -68,7 +73,7 @@ export function makeBlob(baseR) {
 // mas o menos, asi que se lee como algo incompresible y no como un globo.
 export function blobUpdate(b, dt, squeezeX, squeezeY, grow) {
   b.t += dt;
-  b.base = 12 + grow * 10;
+  b.base = b.r0 + grow * 10;
   for (let i = 0; i < NR; i++) {
     // Dos senos desfasados por punto: con uno solo parece un circulo respirando.
     const target = b.base * (1 + 0.10 * Math.sin(b.t * 3.1 + i * 1.7)
@@ -167,7 +172,10 @@ export function drawTentacle(g, C, i, SEG, camX, camY, gripped) {
       for (let k = 0; k <= n; k++) {
         const t = k / n, t2 = t * t, t3 = t2 * t;
         const f = (s + t) / (SEG - 1);
-        const w = Math.max(2, Math.round(8 - f * 6));
+        // Grosor: base gruesa que nace de la masa y se afina a la punta. Con el
+        // cuerpo en radio 22 un tentaculo de 8px se veia como un hilo pegado a
+        // una pelota; 14 en la base lo hace leer como extension de la carne.
+        const w = Math.max(3, Math.round(14 - f * 10));
         const x = Math.round(0.5 * ((2 * x0) + (-ax + x1) * t +
           (2 * ax - 5 * x0 + 4 * x1 - bx) * t2 + (-ax + 3 * x0 - 3 * x1 + bx) * t3));
         const y = Math.round(0.5 * ((2 * y0) + (-ay + y1) * t +

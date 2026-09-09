@@ -134,3 +134,102 @@ Es un error de arquitectura, no de ajuste de números.
 y el resto queda negro, porque el nivel no es lo bastante ancho y la cámara se
 queda sin mundo. Los niveles deben generarse con proporción suficiente para
 ambas orientaciones, o la cámara debe encuadrar de otra forma al girar.
+
+---
+
+# Tercera version: la locomocion se veia y se sentia mal
+
+El usuario probo la segunda version y mando captura. Diagnostico sobre la
+imagen: tentaculos como palos rectos de arana, criatura del tamano de un punto,
+y respuesta al dedo sin control fino. Marco los tres problemas a la vez
+(se ve mal, responde mal, se atasca).
+
+## La pregunta de fondo: motor grafico
+
+El usuario pregunto si un motor (Unity, Godot) o una libreria haria mejores
+juegos. **No para este problema**: lo que se veia mal era diseno de locomocion,
+no capacidad grafica; el mismo motor dibujaria los mismos tentaculos feos.
+Carrion mismo esta hecho en GameMaker. Ademas cambiar de motor costaria el APK
+de 4 MB sin permisos (Unity: ~80 MB) y toda la investigacion ya medida.
+
+## Bug de fondo: el blob ignoraba su radio
+
+`blobUpdate()` pisaba `b.base = 12 + grow*10` en cada frame, asi que el
+argumento de `makeBlob(r)` **no tenia ningun efecto**. Por eso la criatura salia
+siempre diminuta. Ahora se guarda `r0` y `base = r0 + grow*10`.
+
+## Tres radios, no uno (medido)
+
+Subir el radio de colision para que la criatura se viera grande la dejaba
+encajonada. Simulando 24 niveles reales, navegando por `routeWaypoint()`:
+
+| BODY_R | llegan |
+|---|---|
+| 12 | **24/24** |
+| 14 | 2/8 |
+| 16 | 2/8 |
+| 22 | 2/8 |
+
+El corte es brusco porque `blocked()` sondea a `r-2`: a r=14 exige un hueco de
+24px = 1 tile exacto y los pasillos de 1 tile se vuelven intransitables.
+
+```
+BODY_R  = 12    colision contra el mundo (el maximo que pasa 24/24)
+HIT_R   = 19    impacto de balas y enemigos
+BODY_VR = 26    tamano visual de la masa
+```
+
+Es la solucion de Carrion: masa grande pero blanda, que se aplasta al pasar.
+
+## Silueta: por que salian rectos
+
+Dos causas, ambas de fisica y no de dibujo:
+
+1. **Nodos demasiado separados.** REACH=288 con SEG=8 daba 41px entre nodos:
+   la Catmull-Rom no tiene de donde curvar. Ahora REACH=210 con SEG=12 → 19px.
+2. **Cuerda tensa por construccion.** El largo en reposo era exactamente la
+   distancia al ancla partida por los segmentos, o sea una recta. Ahora lleva
+   12% de holgura, mas una ondulacion senoidal perpendicular con fase propia
+   por tentaculo y amplitud maxima en el medio.
+
+Tambien NT 12 → 9 (con 12 se apilaban en el mismo punto) y RING 16 → 24.
+
+## Respuesta al dedo
+
+Antes solo se pasaba la direccion normalizada y **se tiraba la distancia**: la
+criatura empujaba con fuerza maxima tanto con el dedo a 20px como a 400. Ahora
+`step()` recibe `aimDist` y la fuerza se modula con smoothstep entre
+`DEAD_R=14` (se posa) y `FULL_R=190` (empuje pleno).
+
+## Atascos
+
+El deslizamiento cortaba el eje a cero, lo que mataba **toda** la componente:
+empujar en diagonal contra una pared vertical borraba tambien el avance
+vertical. Ahora se estima la normal del muro y se proyecta (`v - n(v·n)`), que
+conserva la componente paralela. HAUL 2600 → 3400 (medido: el que minimiza el
+atasco, 0.62s).
+
+## Resultado medido
+
+```
+24/24 niveles llegan | peor atasco 0.62s | 0.3% frames sin agarre | 0.017 ms/frame
+```
+
+(El original medido con el mismo arnes: 7-8/8.)
+
+## Nota sobre el arnes de medicion
+
+Navegar en **linea recta** a `L.exitX/exitY` atraviesa paredes y da 1/8 incluso
+con codigo bueno. Hay que navegar con `W.routeWaypoint()` (la ruta BFS real).
+Esa trampa hizo parecer que la locomocion estaba rota cuando el roto era el test.
+
+## build-apk.ps1: tres bugs corregidos
+
+1. `java -version` escribe en stderr; con `2>&1` PowerShell 5.1 lo vuelve un
+   `NativeCommandError` y disparaba el catch: decia "no se encuentra java"
+   teniendo Java instalado.
+2. El script **rechazaba Java 21**, que es justo el que Capacitor exige. Ahora
+   busca activamente un JDK 21 y lo antepone al PATH (esta maquina tiene el 17
+   primero en el PATH).
+3. El Android SDK esta en `C:\Android\Sdk`, no en la ruta por defecto y sin
+   variables de entorno. Ahora se prueban varias ubicaciones.

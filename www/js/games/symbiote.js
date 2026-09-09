@@ -46,7 +46,7 @@ export default {
     this.drips = G.makeDripPool();
 
     this.btn = new Button(0, 0, 58, 20);
-    this.blob = A.makeBlob(14);
+    this.blob = A.makeBlob(F.BODY_VR);   // radio VISUAL: la colision usa BODY_R, mas chico
 
     this.level = 0;
     this.score = 0;
@@ -86,7 +86,7 @@ export default {
 
     // Entrada tactil
     this.dragId = -1; this.dragX = 0; this.dragY = 0; this.pulling = false;
-    this.aimX = 0; this.aimY = 1;
+    this.aimX = 0; this.aimY = 1; this.aimDist = -1;
     this.grabT = 0; this.grabbed = -1;
 
     this.freeze = 0; this.slowT = 0; this.slowScale = 1;
@@ -100,7 +100,10 @@ export default {
     this.world = {
       px: this.C.x, py: this.C.y, alive: true, alert: false,
       rnd: this.rnd, bulletPool: this.bullets, wcam: this.wcam,
-      playerRadius: F.BODY_R, playerInPipe: false, mercy: 0,
+      // Radio de IMPACTO: entre el de colision (12) y el visual (26). Con el de
+      // colision las balas atravesaban carne visible sin tocarla; con el visual
+      // entero la criatura recibia tiros que se ven lejos del cuerpo.
+      playerRadius: F.HIT_R, playerInPipe: false, mercy: 0,
       onShoot: () => SFX.shoot(),
       onAlarm: () => { SFX.alarm(); this.alarm = 1; this.flash('ALARMA'); },
       onEnemyDeath: (e, dx, dy, hard) => this.onKill(e, dx, dy, hard),
@@ -218,17 +221,21 @@ export default {
       const wx = this.dragX + this.wcam.x, wy = this.dragY + this.wcam.y;
       let ax = wx - this.C.x, ay = wy - this.C.y;
       const m = Math.hypot(ax, ay);
+      this.aimDist = m;
       if (m > 6) { this.aimX = ax / m; this.aimY = ay / m; }
-    }
+    } else this.aimDist = -1;
 
-    F.step(this.C, sdt, this.aimX, this.aimY, this.pulling, this.solid);
+    F.step(this.C, sdt, this.aimX, this.aimY, this.pulling, this.solid, this.aimDist);
 
     // Deformacion: se aplasta si el hueco es estrecho
-    const probe = F.BODY_R + 6;
+    // Se sondea con el radio VISUAL: la masa que se ve es la que debe
+    // aplastarse al entrar en un hueco angosto, aunque la colision use uno
+    // menor. Ese aplastamiento es lo que vende que la criatura es blanda.
+    const probe = F.BODY_VR;
     const tightX = this.solidPx(this.C.x - probe, this.C.y) || this.solidPx(this.C.x + probe, this.C.y);
     const tightY = this.solidPx(this.C.x, this.C.y - probe) || this.solidPx(this.C.x, this.C.y + probe);
     A.blobUpdate(this.blob, dt,
-      tightX ? 0.62 : 1, tightY ? 0.62 : 1, this.grow);
+      tightX ? 0.5 : 1, tightY ? 0.5 : 1, this.grow);
 
     this.world.px = this.C.x; this.world.py = this.C.y;
     W.updateEnemies(this.enemies, this.L, sdt, this.world);
@@ -238,7 +245,7 @@ export default {
     for (let i = this.bullets.n - 1; i >= 0; i--) {
       const b = this.bullets.items[i];
       if (b.friendly) continue;
-      if (Math.hypot(b.x - this.C.x, b.y - this.C.y) < F.BODY_R + 4) {
+      if (Math.hypot(b.x - this.C.x, b.y - this.C.y) < F.HIT_R) {
         this.bullets.free(b);
         this.hurt(b.dmg || 20);
       }
@@ -294,6 +301,7 @@ export default {
         const wx = ev.x + this.wcam.x, wy = ev.y + this.wcam.y;
         const ax = wx - this.C.x, ay = wy - this.C.y;
         const m = Math.hypot(ax, ay);
+        this.aimDist = m;
         if (m > 6) { this.aimX = ax / m; this.aimY = ay / m; }
       }
       return;

@@ -13,24 +13,55 @@ Write-Host '=== ROMINA''S ARCADE - build APK ===' -ForegroundColor Magenta
 Write-Host ''
 
 # --- 1. Comprobar Java ---
-try {
-  $javaOut = (& java -version 2>&1) -join ' '
-  if ($javaOut -match '"?(\d+)') { $jv = [int]$Matches[1] } else { $jv = 0 }
-  if ($jv -ge 21) {
-    Write-Host "AVISO: Java $jv detectado. Gradle de Capacitor falla con Java 21+." -ForegroundColor Yellow
-    Write-Host 'Necesitas Java 17. Instala Temurin 17 y apunta JAVA_HOME ahi.' -ForegroundColor Yellow
-    exit 1
-  }
-  Write-Host "Java $jv OK" -ForegroundColor Green
-} catch {
-  Write-Host 'ERROR: no se encuentra java en el PATH.' -ForegroundColor Red
+# Capacitor EXIGE Java 21 (con 17 falla Gradle). Antes este bloque rechazaba
+# Java 21+, que es justo el que hace falta.
+#
+# `java -version` escribe en STDERR aunque todo vaya bien. En PowerShell 5.1 un
+# `2>&1` sobre un exe nativo envuelve cada linea en un ErrorRecord, lo que
+# disparaba el catch y abortaba con 'no se encuentra java' teniendo Java
+# instalado y funcionando. Por eso aqui no se redirige stderr.
+# Se busca SIEMPRE un JDK 21, sin mirar primero JAVA_HOME ni el PATH: en esta
+# maquina conviven un Java 17 (primero en el PATH) y el 21, y Gradle necesita
+# el 21. Confiar en el PATH elegia el 17 y la compilacion fallaba.
+$jdk21 = $null
+foreach ($d in @("$env:ProgramFiles\Microsoft", "$env:ProgramFiles\Eclipse Adoptium", "$env:ProgramFiles\Java")) {
+  if (-not (Test-Path $d)) { continue }
+  $hit = Get-ChildItem $d -Directory -ErrorAction SilentlyContinue |
+         Where-Object { $_.Name -match 'jdk-?21' } |
+         Sort-Object Name -Descending | Select-Object -First 1
+  if ($hit) { $jdk21 = $hit.FullName; break }
+}
+if ($jdk21) {
+  $env:JAVA_HOME = $jdk21
+  $env:PATH = (Join-Path $jdk21 'bin') + ';' + $env:PATH
+}
+if (-not (Get-Command java -ErrorAction SilentlyContinue)) {
+  Write-Host 'ERROR: no se encuentra java. Instala Java 21 (Temurin o Microsoft OpenJDK).' -ForegroundColor Red
   exit 1
 }
+# `java -version` escribe en STDERR aunque todo vaya bien; en PowerShell 5.1 eso
+# genera un NativeCommandError. Se captura con cmd para evitar ese ruido.
+$javaExe = Join-Path (Join-Path $env:JAVA_HOME 'bin') 'java.exe'
+$javaOut = (cmd /c "`"$javaExe`" -version 2>&1") -join ' '
+if ($javaOut -match 'version "?(\d+)') { $jv = [int]$Matches[1] } else { $jv = 0 }
+if ($jv -lt 21) {
+  Write-Host "AVISO: Java $jv detectado. Capacitor necesita Java 21." -ForegroundColor Yellow
+  exit 1
+}
+Write-Host "Java $jv OK" -ForegroundColor Green
 
 # --- 2. Comprobar Android SDK ---
-$sdk = $env:ANDROID_HOME
-if (-not $sdk) { $sdk = $env:ANDROID_SDK_ROOT }
+# Se prueban varias ubicaciones: en esta maquina el SDK esta en C:\Android\Sdk,
+# no en la ruta por defecto, y sin las variables de entorno definidas.
+$sdk = $null
+foreach ($cand in @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT,
+                    (Join-Path $env:LOCALAPPDATA 'Android\Sdk'),
+                    'C:\Android\Sdk')) {
+  if ($cand -and (Test-Path (Join-Path $cand 'platform-tools'))) { $sdk = $cand; break }
+}
 if (-not $sdk) { $sdk = Join-Path $env:LOCALAPPDATA 'Android\Sdk' }
+$env:ANDROID_HOME = $sdk
+$env:ANDROID_SDK_ROOT = $sdk
 
 if (-not (Test-Path $sdk)) {
   Write-Host 'FALTA EL ANDROID SDK.' -ForegroundColor Yellow
