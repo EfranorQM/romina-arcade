@@ -172,16 +172,16 @@ export function lineOfSight(L, x0, y0, x1, y1) {
 
 // Rampa de tamano del diseno, topada a profundidad 6: mas alla solo se anade
 // caminata, y caminar no es lo divertido.
-function levelW(d) { return Math.min(MAXW, 32 + Math.min(d, 6) * 2); }
+function levelW(d) { return Math.min(MAXW, 52 + Math.min(d, 6) * 2); }
 // Tope duro en 88: el canon fija el nivel maximo en 44x88 tiles = 1056x2112 px,
 // que es lo que dimensiona el canvas horneado y la capa de sangre.
-function levelH(d) { return Math.min(MAXH, 72 + Math.min(d, 6) * 3); }
+function levelH(d) { return Math.min(MAXH, 64 + Math.min(d, 6) * 2); }
 function roomTarget(d) { return 10 + Math.round(Math.min(d, 6) * 2.667); }
 
 // Buffers de trabajo de la generacion. Se reservan al tamano maximo posible
-// (44x88) una sola vez y se reutilizan en cada intento y en cada nivel, asi que
+// (64x76) una sola vez y se reutilizan en cada intento y en cada nivel, asi que
 // regenerar tras una muerte no asigna ni un byte.
-const MAXW = 44, MAXH = 88, MAXN = MAXW * MAXH;
+const MAXW = 64, MAXH = 76, MAXN = MAXW * MAXH;
 const _seen = new Uint8Array(MAXN);
 const _dist = new Int32Array(MAXN);
 const _distE = new Int32Array(MAXN);
