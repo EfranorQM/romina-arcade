@@ -45,7 +45,7 @@ MIUI muestra avisos porque la app no viene de la Play Store. Es normal:
 2. MIUI escanea la app y puede decir que no la reconoce → **Instalar de todos modos**.
 3. Si aparece "Enviar para análisis" → se puede omitir.
 
-La app queda con su ícono (una R rosa en un marco cian) y ya no pide nada más.
+La app queda con su ícono (una marquesina de arcade en neón) y ya no pide nada más.
 
 ---
 
@@ -78,11 +78,28 @@ www/                  el juego (esto es todo lo que corre)
     font.js           fuente pixel 5x7
     games/            los tres juegos
 docs/                 investigación técnica y diseños
+tools/                utilidades de desarrollo (no entran en el APK)
+  icono.py            dibuja el ícono del APK en las cinco densidades
 android/              proyecto nativo (lo genera Capacitor)
 ```
 
 Sin dependencias, sin paso de compilación, sin archivos de imagen ni de sonido:
 todo el arte y el audio se generan por código. El APK pesa poco por eso.
+
+**El ícono también se dibuja por código**, con `tools/icono.py`: una marquesina
+de arcade con neón rosa, mueble cian y pantalla oscura. `build-apk.ps1` lo
+regenera en cada compilación, y tiene que ser así — `npx cap sync` reescribe los
+mipmap con el ícono por defecto de Capacitor, y `android/` no está en git.
+
+```
+python tools/icono.py --hoja hoja.png   # verlo a tamaño real y bajo las máscaras
+python tools/icono.py --verificar       # comprobar que no lo recorta el launcher
+```
+
+El ícono se revisa mirando la hoja de contactos, no el PNG grande: a 432px todo
+parece bueno, y lo que importa es cómo se ve a 48. La verificación comprueba lo
+único que puede romperlo en el teléfono — que el dibujo quepa en el círculo
+seguro de 66dp, porque cada launcher recorta con su propia máscara.
 
 **FURIA es la excepción al pixel art.** Los otros cuatro juegos hornean sprites
 y corren con el filtrado en nearest-neighbour. FURIA declara `meta.smooth` y

@@ -5,3 +5,4 @@ dist/
 *.keystore
 .DS_Store
 desktop.ini
+__pycache__/

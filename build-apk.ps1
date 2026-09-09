@@ -98,6 +98,22 @@ if (-not (Test-Path (Join-Path $root 'android'))) {
 Write-Host 'Sincronizando archivos del juego...' -ForegroundColor Cyan
 npx cap sync android
 
+# --- 4b. Regenerar el icono ---
+# Va DESPUES de `cap sync` a proposito: Capacitor reescribe los mipmap con su
+# icono por defecto, asi que generar antes no serviria de nada. El icono se
+# dibuja por codigo, como el resto del arte del juego; no hay PNG de origen que
+# se pueda perder al recrear la carpeta android/.
+$py = Get-Command python -ErrorAction SilentlyContinue
+if ($py) {
+  Write-Host 'Generando el icono...' -ForegroundColor Cyan
+  & python (Join-Path $root 'tools\icono.py')
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host 'AVISO: el icono no se genero. Se sigue con el de Capacitor.' -ForegroundColor Yellow
+  }
+} else {
+  Write-Host 'AVISO: sin python, no se regenera el icono (hace falta Pillow).' -ForegroundColor Yellow
+}
+
 # --- 5. Parchear el manifest: quitar INTERNET, bloquear vertical ---
 $manifest = Join-Path $root 'android\app\src\main\AndroidManifest.xml'
 if (Test-Path $manifest) {
