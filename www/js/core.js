@@ -1,6 +1,9 @@
 // Nucleo del motor: canvas virtual, bucle de tiempo fijo, RNG, pools, guardado.
-// Resolucion virtual 270x600 = 20:9 exacto, calza el 1080x2400 del Redmi Note 10 sin barras negras.
-export const VW = 270, VH = 600;
+// Resolucion virtual por defecto 270x600 = 20:9 exacto, calza el 1080x2400 del
+// Redmi Note 10 sin barras negras. Un juego puede pedir mas detalle declarando
+// meta.vw/meta.vh; 540x1200 mantiene el 20:9 y escala x2 exacto en pantalla.
+export let VW = 270, VH = 600;
+export const BASE_VW = 270, BASE_VH = 600;
 
 export const view = { scale: 1, ox: 0, oy: 0 };
 export let canvas = null, g = null;
@@ -14,6 +17,17 @@ export function initCanvas(el) {
   window.addEventListener('resize', fit);
   window.addEventListener('orientationchange', () => setTimeout(fit, 100));
   return g;
+}
+
+// Cambia la resolucion virtual entre escenas. OJO: asignar canvas.width RESETEA
+// todo el estado del contexto 2D, incluido imageSmoothingEnabled; hay que
+// volver a ponerlo aqui o el juego entero se dibuja borroso sin avisar.
+export function setVirtual(w, h) {
+  if (w === VW && h === VH) return;
+  VW = w; VH = h;
+  canvas.width = VW; canvas.height = VH;
+  g.imageSmoothingEnabled = false;
+  fit();
 }
 
 export function fit() {

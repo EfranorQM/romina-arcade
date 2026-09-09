@@ -1,5 +1,5 @@
 // ROMINA'S ARCADE — arranque, bucle de tiempo fijo, gestor de escenas y menu.
-import { VW, VH, initCanvas, view, makeRng, Save, cam } from './core.js';
+import { VW, VH, BASE_VW, BASE_VH, setVirtual, initCanvas, view, makeRng, Save, cam } from './core.js';
 import { initInput } from './input.js';
 import { initAudio, unlockAudio, SFX, toggleMute, suspendAudio, resumeAudio, playMusic, stopMusic, SONGS } from './audio.js';
 import { text, textCenter, measure } from './font.js';
@@ -18,6 +18,10 @@ const sm = {
     if (this.cur && this.cur.destroy) this.cur.destroy();
     particles.clear(); cam.reset();
     this.cur = this.next; this.next = null;
+    // La resolucion se fija ANTES de init(): los juegos hornean sprites y
+    // calculan posiciones contra VW/VH, asi que deben leer ya el valor nuevo.
+    const m = this.cur.meta;
+    setVirtual(m.vw || BASE_VW, m.vh || BASE_VH);
     if (this.cur.init) this.cur.init(ctx, this.nextArgs);
     // La musica vive en la capa compartida: cada juego solo declara su cancion.
     const song = SONGS[this.cur.meta.id];
@@ -27,7 +31,11 @@ const sm = {
 
 // Contexto compartido que recibe cada juego.
 const ctx = {
-  VW, VH, rnd,
+  // Getters, no copias: con resolucion variable un valor copiado al arrancar
+  // se quedaria en 270x600 aunque el juego activo pida 540x1200.
+  get VW() { return VW; },
+  get VH() { return VH; },
+  rnd,
   gameOver(score) {
     const id = sm.cur.meta.id;
     const isRecord = Save.submit(id, Math.floor(score));
