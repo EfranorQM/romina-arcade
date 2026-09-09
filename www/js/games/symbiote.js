@@ -49,6 +49,7 @@ export default {
     id:'symbiote', title:'SYMBIOTE', tag:'ESCAPA DEL LAB',
     colors:['#ff2d55','#6b3a94'],
     vw: VW, vh: VH,          // este juego corre al doble de resolucion
+    rotates: true,           // unico juego que se adapta al giro del telefono
   },
 
   init(ctx, args) {

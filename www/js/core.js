@@ -14,8 +14,8 @@ export function initCanvas(el) {
   g = canvas.getContext('2d', { alpha: false, desynchronized: true });
   g.imageSmoothingEnabled = false;
   fit();
-  window.addEventListener('resize', fit);
-  window.addEventListener('orientationchange', () => setTimeout(fit, 100));
+  window.addEventListener('resize', fitAndOrient);
+  window.addEventListener('orientationchange', () => setTimeout(fitAndOrient, 100));
   return g;
 }
 
@@ -27,6 +27,51 @@ export function setVirtual(w, h) {
   VW = w; VH = h;
   canvas.width = VW; canvas.height = VH;
   g.imageSmoothingEnabled = false;
+  fit();
+}
+
+// ---------- Rotacion ----------
+// Un juego puede declarar meta.rotates: entonces intercambia ancho y alto
+// cuando el telefono se pone horizontal. Los demas se quedan verticales.
+let rotatable = false;
+let onRotate = null;
+
+export function setRotatable(on, cb) {
+  rotatable = !!on;
+  onRotate = cb || null;
+  // El manifest deja girar el APK; el bloqueo por software es lo que mantiene
+  // verticales a los tres juegos que estan disenados solo para vertical.
+  // lock() suele rechazar fuera de pantalla completa: se ignora sin romper nada.
+  try {
+    const so = screen.orientation;
+    if (so) {
+      if (rotatable) { if (so.unlock) so.unlock(); }
+      else if (so.lock) { const p = so.lock('portrait'); if (p && p.catch) p.catch(() => {}); }
+    }
+  } catch (e) { /* navegador sin la API: se queda como este */ }
+  if (rotatable) applyOrientation();
+}
+
+export function isLandscape() {
+  return window.innerWidth > window.innerHeight;
+}
+
+// Ajusta la resolucion virtual al giro del telefono, manteniendo el area
+// (mismo coste de relleno) y la proporcion de la pantalla.
+function applyOrientation() {
+  if (!rotatable) return;
+  const land = isLandscape();
+  const long = Math.max(VW, VH), short = Math.min(VW, VH);
+  const w = land ? long : short;
+  const h = land ? short : long;
+  if (w !== VW || h !== VH) {
+    setVirtual(w, h);
+    if (onRotate) onRotate(w, h, land);
+  }
+}
+
+export function fitAndOrient() {
+  applyOrientation();
   fit();
 }
 

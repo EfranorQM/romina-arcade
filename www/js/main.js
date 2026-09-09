@@ -1,5 +1,5 @@
 // ROMINA'S ARCADE — arranque, bucle de tiempo fijo, gestor de escenas y menu.
-import { VW, VH, BASE_VW, BASE_VH, setVirtual, initCanvas, view, makeRng, Save, cam } from './core.js';
+import { VW, VH, BASE_VW, BASE_VH, setVirtual, setRotatable, initCanvas, view, makeRng, Save, cam } from './core.js';
 import { initInput } from './input.js';
 import { initAudio, unlockAudio, SFX, toggleMute, suspendAudio, resumeAudio, playMusic, stopMusic, SONGS } from './audio.js';
 import { text, textCenter, measure } from './font.js';
@@ -22,6 +22,8 @@ const sm = {
     // calculan posiciones contra VW/VH, asi que deben leer ya el valor nuevo.
     const m = this.cur.meta;
     setVirtual(m.vw || BASE_VW, m.vh || BASE_VH);
+    // Solo los juegos que lo declaran giran; el resto queda fijo en vertical.
+    setRotatable(!!m.rotates, () => { if (this.cur && this.cur.onResize) this.cur.onResize(); });
     if (this.cur.init) this.cur.init(ctx, this.nextArgs);
     // La musica vive en la capa compartida: cada juego solo declara su cancion.
     const song = SONGS[this.cur.meta.id];
