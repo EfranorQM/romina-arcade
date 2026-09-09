@@ -50,21 +50,25 @@ export function isSolidTile(t) {
 // ---------------------------------------------------------------------------
 // Paleta (subconjunto del documento de diseno usado por este modulo)
 // ---------------------------------------------------------------------------
+// Paleta CARRION: laboratorio oscuro e industrial. Todo el entorno vive entre
+// 8% y 38% de luminancia en grises azulados, y NADA de aqui puede ser rojo:
+// esa separacion de tono es lo que deja legible a la criatura de carne sobre
+// el fondo sin necesidad de contornos ni brillos falsos.
 const P = {
-  out:      '#141820',
-  labWhite: '#f2f6f8',
-  labLight: '#dfe7ec',
-  floor:    '#e8ecf0',
-  grout:    '#c3ccd6',
-  wall:     '#9fb0c0',
-  wallMid:  '#74828f',
-  wallDark: '#6b7d8f',
-  shadow:   '#515c68',
-  deep:     '#363f49',
-  nearBlk:  '#1d242c',
-  darkest:  '#0b1015',
-  pipeIn:   '#0d1014',
-  pipeMet:  '#2a3138',
+  out:      '#05070a',
+  labWhite: '#4a5866',
+  labLight: '#36434f',
+  floor:    '#0c1015',
+  grout:    '#080b10',
+  wall:     '#1e2733',
+  wallMid:  '#161d26',
+  wallDark: '#12171d',
+  shadow:   '#0d1119',
+  deep:     '#0a0e14',
+  nearBlk:  '#070a0f',
+  darkest:  '#05070a',
+  pipeIn:   '#05070a',
+  pipeMet:  '#1a212a',
   green:    '#4ade9a',
   greenMid: '#22a06a',
   greenDeep:'#12603f',
