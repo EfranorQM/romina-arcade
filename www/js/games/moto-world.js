@@ -133,8 +133,12 @@ export function placeObstacles(T, rnd, levelIndex) {
 // sale de la diferencia de alturas entre ruedas, asi que la moto se inclina
 // sola al subir una loma: no hay que animar nada.
 
-export const WHEELBASE = 46;     // distancia entre ejes
-export const WHEEL_R = 13;
+// Proporciones tomadas de una moto de cross real (KTM / Honda CRF): wheelbase
+// ~1480mm con rueda delantera de 21 pulgadas (533mm de diametro), o sea un
+// ratio de 2.78. Con 46/26 el ratio era 1.77 y el conjunto leia como minimoto
+// de circo, que es lo que se veia mal. 64/24 da 2.67, dentro de lo real.
+export const WHEELBASE = 64;     // distancia entre ejes
+export const WHEEL_R = 12;
 const SUSP_REST = 16;            // largo en reposo de la suspension
 const SUSP_K = 620, SUSP_D = 26; // rigidez y amortiguacion
 

@@ -104,3 +104,52 @@ referencia: si ese completa el nivel 1, la curva está bien.
 `playMusic` solo entiende `tri`, `pulse` y `noise`. La onda `saw` existe solo
 para efectos puntuales (`sfx`): ponerla en una canción la degrada a cuadrada
 **sin ningún aviso**.
+
+---
+
+# Rediseño de la moto
+
+La usuaria vio la primera versión y la rechazó: "qué diseño tan feo". Preguntó
+si hacían falta referencias de internet. **No hacían falta**: el problema era
+medible contra proporciones reales, y sobre todo era que nunca se había MIRADO
+el resultado. Se construyeron herramientas para verlo (`tools/`, ver su LEEME)
+y se hicieron seis rondas de ver-corregir-ver.
+
+## Defectos encontrados, todos midiendo o mirando
+
+| Defecto | Medida | Corrección |
+|---|---|---|
+| Ruedas gigantes | ratio wheelbase/diámetro 1.77 (real: 2.78) | 46/26 → 64/24 = 2.67 |
+| Piloto del doble | 50px de alto con wheelbase 64 (real: 0.37×) | agachado, 24px |
+| Horquilla 4× gruesa | 6px con rueda de radio 12 = 0.50× (real: 0.10-0.15×) | 3.4px |
+| Horquilla larguísima | 35px = 2.9× el radio (real ~1.6×) | pipa más baja: 26px = 2.15× |
+| Motor era lo más claro | `#5a6474` + 3 aletas claras encima | `#39424f`→`#1a1f27`, 2 aletas tenues |
+| Colín caído | anclado a `ayR` (el eje, que se mueve); 11px bajo el asiento | anclado a `pivY`; 2px de diferencia |
+| Piloto invisible | torso rojo sobre carrocería roja | piloto azul |
+| Manillar como antena | trazo largo hacia atrás | barra corta vertical + puño |
+| Carrocería flotante | franja de 10px sin tocar nada | depósito con volumen que baja al motor |
+| Piezas sueltas | no había chasis | tres tubos: superior, descendente, subchasis |
+
+## Anatomía: lo que hace legible una moto de perfil
+
+No es la silueta general sino media docena de piezas concretas. La primera
+versión era un blob rosa curvo, y por eso no leía como moto por más suave que
+estuviera dibujado. Ahora se dibujan por separado: horquilla inclinada ~27°,
+basculante desde un pivote, bloque de motor, depósito, asiento plano, colín,
+guardabarros, manillar, y disco de freno en cada rueda.
+
+## Las ruedas parecían engranajes
+
+10 tacos largos que **sobresalían** del radio rompían el perfil circular. Ahora
+son 16 tacos cortos que quedan dentro del borde.
+
+## Trampa: el rasterizador mentía
+
+La primera versión de `tools/raster.py` ignoraba los degradados y los pintaba
+gris plano. El motor y la carrocería salían blancos y se estuvo juzgando el
+diseño sobre una imagen falsa. Al implementarlos aparecieron los colores reales
+y con ellos los defectos que importaban. Si el arte usa una función de canvas
+nueva, hay que soportarla ahí o la vista previa engaña.
+
+Coste tras el rediseño: 535 llamadas de dibujo por frame (antes 398), física
+sin cambios (8/8 niveles completables).
