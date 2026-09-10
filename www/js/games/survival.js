@@ -984,9 +984,13 @@ export default {
     if (this.combo >= 3) {
       const m = comboMult(this.combo);
       const txt = 'COMBO ' + this.combo + (m > 1 ? '  x' + m : '');
-      // Si hay jefe, su barra ocupa el centro de arriba: el combo se aparta.
-      const cy = this.enemies.some(e => e.boss) ? 40 : 12;
-      textCenter(g, txt, VW / 2, cy, m >= 3 ? '#ffe14d' : '#8a7ab8', 1);
+      // Con un jefe en pantalla el centro de arriba lo ocupan su nombre y su
+      // barra, asi que el combo se va a la izquierda, bajo las vidas.
+      if (this.enemies.some(e => e.boss)) {
+        text(g, txt, 12, 38, m >= 3 ? '#ffe14d' : '#8a7ab8', 1);
+      } else {
+        textCenter(g, txt, VW / 2, 12, m >= 3 ? '#ffe14d' : '#8a7ab8', 1);
+      }
     }
 
     // Poderes activos, en fila bajo el puntaje.
