@@ -1,6 +1,6 @@
 # ROMINA'S ARCADE
 
-Cinco juegos de acción, 100% offline, para el Redmi Note 10.
+Seis juegos de acción, 100% offline, para el Redmi Note 10.
 
 ---
 
@@ -58,6 +58,7 @@ La app queda con su ícono (una marquesina de arcade en neón) y ya no pide nada
 | **LAST WAVE** | Sobrevive oleadas, elige mejoras entre ronda y ronda | Un dedo mueve; dispara sola · Entre oleadas, tocar una carta |
 | **SYMBIOTE** | Criatura de carne que trepa un laboratorio | Arrastrar el dedo = fluir · Botón = agarrar y matar · Gira con el teléfono |
 | **FURIA** | Moto de montaña: 8 niveles con meta | Derecha = acelerar · Izquierda = saltar (tocar) y frenar (mantener) · En el aire, las dos zonas giran la moto |
+| **SURVIVAL** | Roma defiende su línea de todo lo que amenaza una relación | **Se juega de lado.** Pulgar izquierdo = mover · Pulgar derecho = disparar (se puede dejar pulsado) · Botón de la estrella = bomba |
 
 Sin tutoriales, sin diálogos, sin historia. Se toca y se juega.
 Los récords se guardan solos. El sonido se activa y desactiva desde el menú.
@@ -78,7 +79,9 @@ www/                  el juego (esto es todo lo que corre)
     audio.js          sonido y música, todo sintetizado
     gfx.js            sprites, partículas
     font.js           fuente pixel 5x7
-    games/            los tres juegos
+    games/            los seis juegos
+      surv-defs.js    SURVIVAL: enemigos, jefes y reglas
+      surv-art.js     SURVIVAL: las criaturas, dibujadas por código
 docs/                 investigación técnica y diseños
 tools/                utilidades de desarrollo (no entran en el APK)
   icono.py            dibuja el ícono del APK en las cinco densidades
@@ -126,6 +129,42 @@ suave en lugar de escalonado, sin usar ni una imagen.
   rechaza — aparece un aviso de **GIRA EL TELÉFONO** y el juego se pausa, así
   que nunca se pierde una partida por estar girando el aparato.
 - La pantalla no se apaga jugando.
+
+## SURVIVAL
+
+Es el port del juego que ya existía en HTML (`Romina-main/`), donde cada
+enemigo era un `<div>` animado con GSAP. Aquí corre en canvas, sin
+dependencias, como el resto de la app.
+
+Se conserva todo lo que tenía: los **siete enemigos** con sus patrones, los
+**diez jefes** con su habilidad propia, los cuatro poderes, los combos con
+multiplicador y la bomba. Las vidas y los puntos son los mismos números,
+porque estaban probados jugando.
+
+**Es el único juego que se juega de lado**, como el original. Los pulgares caen
+en las esquinas de abajo: el izquierdo mueve (el control nace donde apoyas el
+dedo) y el derecho dispara sin soltar.
+
+Qué cambió respecto al original, y por qué:
+
+- **Los enemigos van al doble de velocidad.** Traídos tal cual, un enemigo
+  tardaba quince segundos en cruzar y una ola entera veinticinco: la arena de
+  aquí es mucho más baja en proporción. Medido: ahora cruza en ocho.
+- **Las balas rebotan** en las paredes y el techo, como en el original. Allí se
+  apuntaba con el ratón; aquí no hay dónde apuntar, así que el rebote es lo que
+  da alcance.
+- **El escudo del MURO cubre solo su frente.** Bloqueando todo lo que subía era
+  inmatable — las balas rebotadas vuelven por el mismo sitio y nunca lo pillan
+  de lado. Ahora hay que ponerse a un costado, que es lo que su dibujo promete.
+- **La barra de vida del jefe va arriba del todo**, fija: un jefe patrulla
+  pegado al techo y encima de él no cabe ni su nombre.
+- Los emojis (👻💀🌑⚡) son ahora criaturas dibujadas por código.
+
+```
+node tools/ver.js tools/ver-survival.html criaturas.png 1150 1500   # ver el arte
+node tools/ver-app.js x.png "...;archivo:tools/prueba-jefes.js;..."  # los 10 jefes
+node tools/ver-app.js x.png "...;archivo:tools/prueba-partida.js;..." # jugar sola
+```
 
 ## El menú
 

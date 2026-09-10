@@ -12,6 +12,9 @@
 //     tocaX:Y        toque corto en (X,Y), en pixeles de PANTALLA
 //     arrastraX:Y:X2:Y2   arrastra de (X,Y) a (X2,Y2)
 //     tiroX:Y:X2:Y2  arrastra rapido y suelta (gesto de impulso)
+//     pulsaX:Y       apoya el dedo y lo DEJA puesto
+//     mueveX:Y       mueve el dedo apoyado
+//     sueltaX:Y      levanta el dedo
 //     js:EXPR        evalua EXPR en la pagina (para llegar a una escena)
 //     archivo:RUTA   evalua un .js del proyecto (para guiones con ';' dentro)
 //     disparo        guarda una captura numerada
@@ -190,6 +193,19 @@ async function drag(cdp, x1, y1, x2, y2, steps, stepMs) {
     }
     else if ((m = step.match(/^tiro(-?\d+):(-?\d+):(-?\d+):(-?\d+)$/))) {
       await drag(cdp, +m[1], +m[2], +m[3], +m[4], 5, 8);
+    }
+    // Mantener pulsado y soltar son pasos SEPARADOS: un juego que dispara
+    // mientras el boton esta apretado no se puede probar con un toque suelto,
+    // porque para cuando se lee el estado el dedo ya se levanto.
+    else if ((m = step.match(/^pulsa(-?\d+):(-?\d+)$/))) {
+      await touch(cdp, +m[1], +m[2], 'mousePressed');
+    }
+    else if ((m = step.match(/^suelta(-?\d+):(-?\d+)$/))) {
+      await touch(cdp, +m[1], +m[2], 'mouseReleased');
+    }
+    // Mueve un dedo ya apoyado, sin soltarlo (para la cruceta).
+    else if ((m = step.match(/^mueve(-?\d+):(-?\d+)$/))) {
+      await touch(cdp, +m[1], +m[2], 'mouseMoved');
     }
     else if ((m = step.match(/^archivo:(.+)$/))) {
       // Evalua un archivo .js del proyecto en la pagina. Sirve para guiones que

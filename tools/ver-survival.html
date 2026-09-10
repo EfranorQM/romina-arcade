@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<!-- Hoja de contactos de las criaturas de SURVIVAL. Importa surv-art.js REAL y
+     dibuja cada una al tamano al que se ve JUGANDO (que es como hay que
+     juzgarlas) y ampliada, para revisar el detalle.
+     Se abre con: node tools/ver.js tools/ver-survival.html salida.png 1100 1700 -->
+<meta charset="utf-8">
+<title>criaturas de survival</title>
+<style>
+  body { margin:0; background:#0d0620; font:11px/1.4 monospace; color:#c8b8ff; }
+  #hoja { padding:12px; }
+  h2 { font-size:12px; color:#ff5c9d; margin:14px 0 8px; letter-spacing:2px; }
+  .fila { display:flex; flex-wrap:wrap; gap:10px; }
+  .col { text-align:center; background:#150a2e; padding:6px 4px 4px; border:1px solid #2a1a54; }
+  .col span { display:block; margin-top:3px; color:#7a6aa8; font-size:9px; }
+  canvas { display:block; margin:0 auto; }
+</style>
+<div id="hoja"></div>
+<script type="module">
+import { sprite, roma } from '../www/js/games/surv-art.js';
+
+const hoja = document.getElementById('hoja');
+
+// La tropa se ve a ~34 px de alto jugando; los jefes a ~52.
+const TROPA = ['duda', 'olvido', 'tristeza', 'dasher', 'tracker', 'muro', 'divisor'];
+const JEFES = ['celos', 'rutina', 'inseguridad', 'miedo', 'mentira',
+               'silencio', 'vicio', 'tiempo', 'abandono', 'ego'];
+const ROMAS = ['normal', 'mega', 'turbo', 'shield', 'double'];
+
+function seccion(titulo, ids, hJuego, hDetalle, get) {
+  const h = document.createElement('h2');
+  h.textContent = titulo;
+  hoja.appendChild(h);
+  const fila = document.createElement('div');
+  fila.className = 'fila';
+  for (const id of ids) {
+    const src = get(id);
+    for (const [k, hh] of [['jugando', hJuego], ['x3', hDetalle]]) {
+      const col = document.createElement('div');
+      col.className = 'col';
+      const cv = document.createElement('canvas');
+      const w = Math.round(src.width * (hh / src.height));
+      cv.width = w; cv.height = hh;
+      const d = cv.getContext('2d');
+      d.imageSmoothingEnabled = true;
+      d.drawImage(src, 0, 0, w, hh);
+      col.appendChild(cv);
+      const s = document.createElement('span');
+      s.textContent = id + ' ' + k;
+      col.appendChild(s);
+      fila.appendChild(col);
+    }
+  }
+  hoja.appendChild(fila);
+}
+
+seccion('TROPA — como se ve jugando y ampliada', TROPA, 34, 102, sprite);
+seccion('JEFES', JEFES, 52, 130, sprite);
+seccion('ROMA — normal y con cada poder', ROMAS, 34, 100, roma);
+document.title = 'listo';
+</script>

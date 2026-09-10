@@ -233,10 +233,15 @@ function boot() {
   initAudio();
   initInput(el, ev => {
     if (ev.type === 'down') unlockAudio();   // desbloqueo de audio en el primer toque
-    // Con el aviso de girar puesto sobre un juego pausado, los toques se
-    // descartan: si se dejaran pasar, la escena acumularia pulsaciones que
+    // Con el aviso de girar puesto sobre un juego pausado se descartan los
+    // toques nuevos: si se dejaran pasar, la escena acumularia pulsaciones que
     // update() no consume y se aplicarian todas de golpe al reanudar.
-    if (orientationMismatch() && !(sm.cur && sm.cur.meta.wide)) return;
+    //
+    // Pero el 'up' SIEMPRE pasa. Un dedo apoyado en el boton de disparo cuando
+    // entra la pausa tiene que poder soltarse; si se le come el 'up', el juego
+    // se queda creyendo que sigue pulsado y el boton no vuelve a responder.
+    if (ev.type !== 'up' && orientationMismatch()
+        && !(sm.cur && sm.cur.meta.wide)) return;
     if (sm.cur && sm.cur.onInput) sm.cur.onInput(ev, ctx);
   });
   document.addEventListener('visibilitychange', () => {
@@ -250,7 +255,7 @@ function boot() {
 
 // Gancho para las herramientas de tools/: permite llevar la app a una escena
 // concreta sin jugar hasta ella. No lo usa nada del juego.
-window.__arcade = { sm, ctx, Menu, GameOver, GAMES };
+window.__arcade = { sm, ctx, Menu, GameOver, GAMES, view };
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();

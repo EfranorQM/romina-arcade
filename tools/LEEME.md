@@ -49,6 +49,30 @@ VERTICAL=1 node tools/ver-app.js x.png "espera1200;archivo:tools/prueba-juegos.j
 node tools/ver-app.js x.png "espera1500;archivo:tools/medir-menu.js;espera3500;archivo:tools/medir-menu.js"
 ```
 
+## Probar SURVIVAL
+
+```
+node tools/ver.js tools/ver-survival.html criaturas.png 1150 1500
+```
+
+Hoja de contactos de las diecisiete criaturas (siete enemigos y diez jefes) más
+las cinco caras de Roma, cada una al tamaño al que se ve **jugando** y ampliada.
+A tamaño de juego salieron los defectos: el RELÁMPAGO era una mancha amarilla,
+el escudo del MURO parecía un paraguas flotando, y el SILENCIO no tenía figura.
+
+```
+# los diez jefes, cada uno con su habilidad
+node tools/ver-app.js x.png "espera900;js:__arcade.sm.go(__arcade.GAMES[5],{seed:3});espera800;archivo:tools/prueba-jefes.js;espera50000;archivo:tools/prueba-jefes.js"
+
+# jugar sola muchas olas: caza olas que no cierran, fugas y atascos
+node tools/ver-app.js x.png "espera900;js:__arcade.sm.go(__arcade.GAMES[5],{seed:11});espera700;archivo:tools/prueba-partida.js;espera90000;archivo:tools/prueba-partida.js"
+```
+
+`prueba-partida.js` juega con un piloto tonto (se pone bajo el enemigo más bajo
+y dispara siempre) y vigila que ninguna lista crezca sin freno, que la ola
+avance y que el puntaje suba. Con ella se descubrió que las olas duraban
+veinticinco segundos.
+
 ## Ver las carátulas del menú
 
 ```

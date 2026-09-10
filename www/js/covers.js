@@ -296,7 +296,77 @@ const furia = () => make(d => {
   frame(d, '#ff5c7a');
 });
 
-const BUILDERS = { skyline, neonfist, lastwave, symbiote, furia };
+// ---------- SURVIVAL: Roma sola contra todo, defendiendo su linea ----------
+// Lo que hay que leer es el ASEDIO: el corazon pequeño abajo, su linea de luz,
+// y la horda cayendole encima desde arriba.
+const survival = () => make(d => {
+  sky(d, '#2a0b3e', '#0a0416');
+  // Estrellas del fondo.
+  d.fillStyle = 'rgba(180,140,255,0.5)';
+  for (let i = 0; i < 22; i++) d.fillRect((i * 41) % CW, (i * 29) % 74, 1, 1);
+
+  // La horda que baja: fantasmas a tres profundidades. Los de arriba, mas
+  // pequeños y apagados, dan la sensacion de que vienen muchos mas.
+  const horda = [
+    [16, 22, 5, 0.45], [46, 14, 5, 0.4], [78, 24, 5, 0.45],
+    [30, 40, 7, 0.75], [64, 38, 7, 0.75],
+    [48, 58, 9, 1],
+  ];
+  for (const [x, y, r, a] of horda) {
+    d.globalAlpha = a;
+    d.fillStyle = '#d9c2ff';
+    d.beginPath(); d.arc(x, y, r, Math.PI, 0); d.fill();
+    d.fillRect(x - r, y, r * 2, r * 0.8);
+    // El borde ondeado de la sabana: tres bultos repartidos DENTRO del ancho
+    // del cuerpo. La formula anterior se salia por la derecha y dejaba un
+    // trozo de sabana suelto flotando al lado del fantasma.
+    for (let k = 0; k < 3; k++) {
+      const bx = x - r + r * (k + 0.5) * (2 / 3);
+      d.beginPath();
+      d.arc(bx, y + r * 0.8, r / 3, 0, Math.PI);
+      d.fill();
+    }
+    // Ojos.
+    d.fillStyle = '#2a1442';
+    d.beginPath(); d.arc(x - r * 0.35, y - r * 0.15, r * 0.2, 0, 7); d.fill();
+    d.beginPath(); d.arc(x + r * 0.35, y - r * 0.15, r * 0.2, 0, 7); d.fill();
+  }
+  d.globalAlpha = 1;
+
+  // Balas de Roma subiendo a su encuentro.
+  d.fillStyle = '#ff8ad4';
+  for (const [x, y] of [[40, 74], [56, 68], [48, 84]]) d.fillRect(x, y, 2, 6);
+
+  // La linea que defiende: el corazon de la portada.
+  d.fillStyle = '#ff3ec9';
+  d.fillRect(0, 100, CW, 2);
+  const lg = d.createLinearGradient(0, 102, 0, CH);
+  lg.addColorStop(0, 'rgba(255,62,201,0.35)');
+  lg.addColorStop(1, 'rgba(255,62,201,0)');
+  d.fillStyle = lg;
+  d.fillRect(0, 102, CW, CH - 102);
+
+  // Roma: el corazon, con su resplandor.
+  const hg = d.createRadialGradient(48, 110, 0, 48, 110, 18);
+  hg.addColorStop(0, 'rgba(255,62,201,0.55)');
+  hg.addColorStop(1, 'rgba(255,62,201,0)');
+  d.fillStyle = hg;
+  d.beginPath(); d.arc(48, 110, 18, 0, 7); d.fill();
+  d.fillStyle = '#ff3ec9';
+  d.beginPath();
+  d.moveTo(48, 118);
+  d.bezierCurveTo(37, 110, 40, 101, 45, 101);
+  d.bezierCurveTo(47, 101, 48, 103, 48, 104);
+  d.bezierCurveTo(48, 103, 49, 101, 51, 101);
+  d.bezierCurveTo(56, 101, 59, 110, 48, 118);
+  d.fill();
+  d.fillStyle = 'rgba(255,255,255,0.5)';
+  d.beginPath(); d.ellipse(45, 106, 2, 1.4, -0.5, 0, 7); d.fill();
+
+  frame(d, '#ff3ec9');
+});
+
+const BUILDERS = { skyline, neonfist, lastwave, symbiote, furia, survival };
 
 // Portada generica: si algun dia se suma un juego y nadie le dibuja caratula,
 // sale una caja con sus colores y su inicial en vez de un hueco.

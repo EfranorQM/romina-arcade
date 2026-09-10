@@ -1,0 +1,1170 @@
+// SURVIVAL — Roma defiende la linea contra todo lo que amenaza una relacion.
+//
+// Es el port del juego que ya existia en HTML (Romina-main/): mismos enemigos,
+// mismos diez jefes con sus habilidades, mismos poderes y combos. Lo que cambia
+// es como corre: alli cada enemigo era un <div> animado con GSAP; aqui todo se
+// dibuja en canvas, sin dependencias, como el resto de la app.
+//
+// Se juega APAISADO, que es como estaba pensado el original y como se agarra el
+// telefono con las dos manos: pulgar izquierdo mueve, pulgar derecho dispara.
+//
+// Reparto de archivos: las definiciones en surv-defs.js, el arte en
+// surv-art.js, y aqui el juego.
+
+import { Pool, clamp, cam, makeRng } from '../core.js';
+import { text, textCenter, measure } from '../font.js';
+import { SFX, sfx } from '../audio.js';
+import { burst, particles } from '../gfx.js';
+import { vibrate } from '../input.js';
+import * as A from './surv-art.js';
+import {
+  VW, VH, LINE_Y, ROMA_Y, ENEMIES, BOSSES, BOSS_IDS, POWERUPS, RULES,
+  WAVE_PHRASES, GAMEOVER_MSGS, comboMult, poolForWave,
+} from './surv-defs.js';
+
+// ---------- Los controles tactiles ----------
+// En apaisado los pulgares caen en las esquinas de abajo, asi que ahi van los
+// controles: la mitad izquierda mueve y la derecha dispara. El area de cada uno
+// es MUCHO mas grande que su dibujo, porque un pulgar no apunta fino.
+const PAD_X = 52, PAD_Y = VH - 48, PAD_R = 30;      // cruceta virtual
+const FIRE_X = VW - 48, FIRE_Y = VH - 44, FIRE_R = 26;
+const BOMB_X = VW - 104, BOMB_Y = VH - 32, BOMB_R = 18;
+
+export default {
+  meta: {
+    id: 'survival', title: 'SURVIVAL', tag: 'DEFIENDE LA LINEA',
+    colors: ['#ff3ec9', '#6bf0ff'],
+    vw: VW, vh: VH, wide: true, smooth: true,
+  },
+
+  init(ctx, args) {
+    const rnd = this.rnd = makeRng((args && args.seed) >>> 0 || 1);
+
+    this.roma = { x: VW / 2, inv: 0, lastShot: 0, hurt: 0 };
+    this.lives = RULES.lives;
+    this.score = 0;
+    this.wave = 0;
+    this.combo = 0;
+    this.comboT = 0;
+    this.t = 0;
+    this.shake = 0;
+
+    this.enemies = [];
+    this.bullets = [];        // balas de Roma
+    this.ebullets = [];       // balas enemigas
+    this.drops = [];
+    this.floats = [];         // textos que suben y se desvanecen
+
+    this.power = { double: 0, mega: 0, shield: 0, turbo: 0 };
+    this.bomb = { ready: true, cd: 0 };
+    this.silenced = false;
+
+    // Estado de la ola.
+    this.waveActive = false;
+    this.spawned = 0;
+    this.toSpawn = 0;
+    this.spawnT = 0;
+    this.banner = null;
+    this.nextWaveT = 0.8;
+
+    // Jefes: se barajan para que no salgan siempre en el mismo orden, y no se
+    // repite ninguno hasta haberlos visto todos.
+    this.bossBag = [];
+    this.lastBoss = null;
+
+    // Controles: cada dedo se queda con UN control (por pointerId).
+    this.padId = null; this.padX = 0; this.padDX = 0;
+    this.fireId = null; this.firing = false;
+
+    this.over = false;
+    this.overT = 0;
+    this.tutorial = 3.2;
+
+    // Estas tres se reinician a proposito: la escena es un objeto unico que se
+    // reutiliza en cada partida. Si Roma muere en el segundo y medio que pasa
+    // entre el aviso de un jefe y su entrada, bossPending se quedaba puesto y
+    // la partida siguiente arrancaba con ese jefe suelto en la ola 1.
+    this.bossPending = null;
+    this.bossT = 0;
+    this.flash = 0;
+  },
+
+  // ---------- Bucle ----------
+  update(dt, ctx) {
+    this.t += dt;
+    if (this.shake > 0) this.shake -= dt;
+    if (this.tutorial > 0) this.tutorial -= dt;
+
+    if (this.over) {
+      this.overT += dt;
+      this._updateFloats(dt);
+      if (this.overT > 1.6) ctx.gameOver(this.score);
+      return;
+    }
+
+    this._updateRoma(dt);
+    this._updatePowers(dt);
+    this._updateWave(dt);
+    this._updateEnemies(dt, ctx);
+    this._updateBullets(dt);
+    this._updateEBullets(dt, ctx);
+    this._updateDrops(dt);
+    this._updateFloats(dt);
+
+    if (this.comboT > 0) {
+      this.comboT -= dt;
+      if (this.comboT <= 0) this.combo = 0;
+    }
+    if (!this.bomb.ready) {
+      this.bomb.cd -= dt;
+      if (this.bomb.cd <= 0) { this.bomb.ready = true; this._float('BOMBA LISTA', VW / 2, 60, '#ffe14d'); }
+    }
+  },
+
+  // ---------- Roma ----------
+  _updateRoma(dt) {
+    const r = this.roma;
+    r.x = clamp(r.x + this.padDX * RULES.romaSpeed * dt, 16, VW - 16);
+    if (r.inv > 0) r.inv -= dt;
+    if (r.hurt > 0) r.hurt -= dt;
+
+    // Disparo. El SILENCIO duplica el tiempo entre tiros si estas en su aura.
+    if (this.firing) {
+      let cd = this.power.turbo > 0 ? RULES.turboCooldown : RULES.shotCooldown;
+      if (this.silenced) cd *= 2;
+      if (this.t - r.lastShot >= cd) {
+        r.lastShot = this.t;
+        this._fire();
+      }
+    }
+  },
+
+  _fire() {
+    const r = this.roma;
+    const mega = this.power.mega > 0;
+    const dmg = mega ? 3 : 1;
+    const sp = RULES.bulletSpeed;
+    // DOBLE dispara dos balas en paralelo; sin el, una sola centrada.
+    if (this.power.double > 0) {
+      this.bullets.push(mkBullet(r.x - 7, ROMA_Y - 10, 0, -sp, dmg, mega));
+      this.bullets.push(mkBullet(r.x + 7, ROMA_Y - 10, 0, -sp, dmg, mega));
+    } else {
+      this.bullets.push(mkBullet(r.x, ROMA_Y - 12, 0, -sp, dmg, mega));
+    }
+    SFX.shoot();
+  },
+
+  _hurtRoma(ctx) {
+    const r = this.roma;
+    if (r.inv > 0) return 'inv';
+    if (this.power.shield > 0) {
+      this.power.shield = 0;
+      this._float('ESCUDO!', r.x, ROMA_Y - 30, '#6bf0ff');
+      SFX.coin();
+      return 'shield';
+    }
+    this.lives--;
+    r.inv = RULES.invulnerable;
+    r.hurt = 0.5;
+    this.combo = 0;
+    this.shake = 0.4;
+    cam.shake(5, 0.35);
+    vibrate(60);
+    SFX.hurt();
+    burst(r.x, ROMA_Y, 18, {
+      rnd: this.rnd, speed: 110, life: 0.5, size: 2, grav: 160,
+      colors: ['#ff3ec9', '#ffffff', '#ff8ad4'],
+    });
+    if (this.lives <= 0) { this._gameOver(); return 'dead'; }
+    return 'hit';
+  },
+
+  _gameOver() {
+    this.over = true;
+    this.overT = 0;
+    this.msg = GAMEOVER_MSGS[(this.rnd() * GAMEOVER_MSGS.length) | 0];
+    cam.shake(8, 0.6);
+    SFX.gameover();
+  },
+
+  // ---------- Poderes ----------
+  _updatePowers(dt) {
+    for (const k in this.power) if (this.power[k] > 0) this.power[k] -= dt;
+  },
+
+  _grantPower(type) {
+    const def = POWERUPS.find(p => p.type === type);
+    this.power[type] = def.dur;
+    this._float(def.label, this.roma.x, ROMA_Y - 34, def.color);
+    SFX.powerup();
+  },
+
+  // ---------- Olas ----------
+  _updateWave(dt) {
+    if (this.banner) {
+      this.banner.t -= dt;
+      if (this.banner.t <= 0) this.banner = null;
+    }
+
+    // Entre olas: cuenta atras para la siguiente.
+    if (!this.waveActive) {
+      this.nextWaveT -= dt;
+      if (this.nextWaveT <= 0) this._startWave();
+      return;
+    }
+
+    // Soltando enemigos poco a poco.
+    if (this.spawned < this.toSpawn) {
+      this.spawnT -= dt;
+      if (this.spawnT <= 0) {
+        this._spawnFromPool();
+        this.spawned++;
+        // Los enemigos salen mas juntos segun avanza la partida.
+        const base = Math.max(0.32, 1.0 - this.wave * 0.05);
+        this.spawnT = base + this.rnd() * 0.4;
+      }
+      return;
+    }
+
+    // Todos fuera y ninguno vivo: ola superada.
+    if (this.enemies.length === 0) {
+      this.waveActive = false;
+      const bonus = 50 * this.wave;
+      this.score += bonus;
+      this._float('+' + bonus, VW / 2, 76, '#5cffd8');
+      this.nextWaveT = 1.5;
+    }
+  },
+
+  _startWave() {
+    this.wave++;
+    this.waveActive = true;
+    this.spawned = 0;
+    this.spawnT = 0.3;
+
+    const isBoss = this.wave % 5 === 0;
+    this.toSpawn = isBoss
+      ? Math.floor(6 + this.wave * 0.25)
+      : 4 + Math.floor(this.wave * 1.1);
+
+    if (isBoss) {
+      const id = this._pickBoss();
+      this.lastBoss = id;
+      this.banner = { t: 2, wave: this.wave, sub: BOSSES[id].announce, boss: true };
+      // El jefe entra en cuanto acaba el aviso.
+      this.bossPending = id;
+      this.bossT = 1.6;
+    } else {
+      this.banner = {
+        t: 1.8, wave: this.wave,
+        sub: WAVE_PHRASES[(this.rnd() * WAVE_PHRASES.length) | 0], boss: false,
+      };
+      this.bossPending = null;
+    }
+    SFX.wave();
+  },
+
+  // Bolsa barajada: no repite jefe hasta que salieron todos.
+  _pickBoss() {
+    if (this.bossBag.length === 0) {
+      this.bossBag = BOSS_IDS.slice();
+      for (let i = this.bossBag.length - 1; i > 0; i--) {
+        const j = (this.rnd() * (i + 1)) | 0;
+        [this.bossBag[i], this.bossBag[j]] = [this.bossBag[j], this.bossBag[i]];
+      }
+    }
+    return this.bossBag.pop();
+  },
+
+  _spawnFromPool() {
+    const pool = poolForWave(this.wave);
+    const id = pool[(this.rnd() * pool.length) | 0];
+    this._spawn(id, ENEMIES[id]);
+  },
+
+  _spawn(id, def, x, y) {
+    // Los jefes ganan vida con la ola; la tropa no (crece en numero, no en
+    // dureza, que es como estaba equilibrado el juego original).
+    const scale = 1 + Math.max(0, this.wave - 5) * RULES.bossHpPerWave;
+    const e = {
+      id, def,
+      x: x !== undefined ? x : 24 + this.rnd() * (VW - 48),
+      y: y !== undefined ? y : -20,
+      hp: Math.ceil(def.hp * (def.boss ? scale : 1)),
+      maxHp: Math.ceil(def.hp * (def.boss ? scale : 1)),
+      speed: def.speed * (1 + (this.wave - 1) * 0.04),
+      r: def.r,
+      boss: !!def.boss,
+      dead: false,
+      t: this.rnd() * 6.28,
+      baseX: 0,
+      shootT: 1 + this.rnd() * 2,
+      // Dash del RELAMPAGO.
+      dashT: def.dash ? def.dash.every : 0,
+      dashing: 0,
+      // Estado de las habilidades de jefe.
+      abT: def.cd || 0,
+      invisible: false,
+      invisT: def.visible || 0,
+      phase2: false,
+      summoned: {},
+      hit: 0,
+      spawnT: 0.35,          // aparicion: crece desde pequenito
+    };
+    e.baseX = e.x;
+    this.enemies.push(e);
+    return e;
+  },
+
+  // ---------- Enemigos ----------
+  _updateEnemies(dt, ctx) {
+    // El aura del SILENCIO se recalcula cada frame; si no hay silencio activo
+    // se apaga sola.
+    this.silenced = false;
+
+    // El jefe entra tras su aviso.
+    if (this.bossPending) {
+      this.bossT -= dt;
+      if (this.bossT <= 0) {
+        const id = this.bossPending;
+        this.bossPending = null;
+        // La vida del jefe la escala _spawn(); aqui solo se ajustan los puntos.
+        // Antes se multiplicaba en los dos sitios y la RUTINA llegaba a 394 de
+        // vida en la ola 50 en vez de 114: imposible de matar.
+        const def = { ...BOSSES[id] };
+        def.score = Math.floor(def.score * (1 + Math.max(0, this.wave - 5) * 0.04));
+        this._spawn(id, def, VW / 2, -30);
+        cam.shake(6, 0.5);
+      }
+    }
+
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const e = this.enemies[i];
+      if (e.spawnT > 0) e.spawnT -= dt;
+      if (e.hit > 0) e.hit -= dt;
+      e.t += dt;
+
+      if (e.boss) this._bossAbility(e, dt);
+
+      // Movimiento.
+      let mult = 1;
+      if (e.def.dash) {
+        if (e.dashing > 0) { e.dashing -= dt; mult = e.def.dash.mult; }
+        else {
+          e.dashT -= dt;
+          if (e.dashT <= 0) { e.dashing = e.def.dash.dur; e.dashT = e.def.dash.every; }
+        }
+      }
+      this._move(e, dt, mult);
+      // Los jefes patrullan en una franja, sin bajar nunca a la linea: son un
+      // duelo, no algo que se cuele. El techo son 62 px y no menos porque su
+      // barra de vida vive arriba del todo y el dibujo (de hasta 62 px de lado)
+      // se le montaba encima tapando el nombre.
+      if (e.boss) {
+        e.y = clamp(e.y, 62, 108);
+        // Flotan despacio dentro de su franja, para que no queden clavados.
+        e.y += Math.sin(e.t * 0.8) * 8 * dt;
+      }
+
+      // Kamikaze: cuando ya esta cerca de la linea, se lanza hacia Roma.
+      if (e.def.kamikaze && e.y > VH * 0.45) {
+        e.x += Math.sign(this.roma.x - e.x) * 26 * dt;
+      }
+      e.x = clamp(e.x, 14, VW - 14);
+
+      // Disparo, con su aviso previo (el original lo llamaba telegraph).
+      if (e.def.shoots && !e.invisible) {
+        e.shootT -= dt;
+        if (e.shootT <= 0) {
+          this._enemyShoot(e);
+          e.shootT = (1 / e.def.shoots) * (0.7 + this.rnd() * 0.8);
+        }
+      }
+
+      // Cruzo la linea: Roma pierde una vida.
+      if (e.y > LINE_Y) {
+        this._killEnemy(e, i, false);
+        const res = this._hurtRoma(ctx);
+        this._float('-1', e.x, LINE_Y - 14, '#ff5c5c');
+        if (res === 'dead') return;
+        continue;
+      }
+
+      // Choco con Roma.
+      if (Math.abs(e.x - this.roma.x) < e.r + 11 && Math.abs(e.y - ROMA_Y) < e.r + 11) {
+        this._killEnemy(e, i, true);
+        const res = this._hurtRoma(ctx);
+        if (res === 'dead') return;
+        continue;                 // `e` ya no esta en la lista: no seguir con el
+      }
+    }
+  },
+
+  _move(e, dt, mult) {
+    const m = e.def.move;
+    e.y += e.speed * mult * dt;
+    if (m === 'zigzag') {
+      e.x = e.baseX + Math.sin(e.t * 2.2) * 42;
+    } else if (m === 'sine') {
+      e.x = e.baseX + Math.sin(e.t * 1.5) * 60;
+    }
+    // El TRACKER se desliza hacia Roma sin prisa.
+    if (e.def.tracks) {
+      e.x += Math.sign(this.roma.x - e.x) * 22 * dt;
+      e.baseX = e.x - Math.sin(e.t * 1.5) * 60;
+    }
+  },
+
+  _enemyShoot(e) {
+    const sp = RULES.enemyBulletSpeed;
+    const n = e.def.burst || 1;
+    for (let k = 0; k < n; k++) {
+      let vx = 0, vy = sp;
+      if (e.def.aims || e.boss) {
+        const dx = this.roma.x - e.x, dy = ROMA_Y - e.y;
+        const d = Math.hypot(dx, dy) || 1;
+        vx = dx / d * sp; vy = dy / d * sp;
+      }
+      // Una rafaga abre un poco el angulo de cada bala.
+      if (n > 1) {
+        const a = (k - (n - 1) / 2) * 0.26;
+        const c = Math.cos(a), s = Math.sin(a);
+        [vx, vy] = [vx * c - vy * s, vx * s + vy * c];
+      }
+      this.ebullets.push(mkEBullet(e.x, e.y + e.r * 0.6, vx, vy));
+    }
+    sfx({ type: 'saw', f0: 340, f1: 190, dur: 0.07, vol: 0.14 });
+  },
+
+  // ---------- Las diez habilidades de jefe ----------
+  _bossAbility(e, dt) {
+    switch (e.def.ability) {
+      case 'fanShot':
+        e.abT -= dt;
+        if (e.abT <= 0) {
+          e.abT = e.def.cd;
+          for (let i = -2; i <= 2; i++) this._angledShot(e, i * 0.26);
+          this._float('RAFAGA', e.x, e.y - 26, '#ff4400');
+        }
+        break;
+
+      case 'parallelLines':
+        e.abT -= dt;
+        if (e.abT <= 0) {
+          e.abT = e.def.cd;
+          // Tres balas en fila, separadas en el tiempo.
+          e.lineShots = 3; e.lineT = 0;
+        }
+        if (e.lineShots > 0) {
+          e.lineT -= dt;
+          if (e.lineT <= 0) {
+            e.lineT = 0.25; e.lineShots--;
+            for (const dx of [-26, 0, 26]) {
+              this.ebullets.push(mkEBullet(e.x + dx, e.y, 0, RULES.enemyBulletSpeed));
+            }
+          }
+        }
+        break;
+
+      case 'circleBurst':
+        e.abT -= dt;
+        if (e.abT <= 0) {
+          e.abT = e.def.cd;
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            const sp = RULES.enemyBulletSpeed;
+            this.ebullets.push(mkEBullet(e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp));
+          }
+          cam.shake(4, 0.3);
+        }
+        break;
+
+      case 'summonDudas': {
+        // Invoca dudas al bajar de cada umbral de vida.
+        const pct = e.hp / e.maxHp;
+        for (const th of [0.75, 0.5, 0.25]) {
+          if (pct <= th && !e.summoned[th]) {
+            e.summoned[th] = true;
+            for (let i = 0; i < 3; i++) {
+              this._spawn('duda', ENEMIES.duda, e.x + (i - 1) * 34, e.y + 16);
+            }
+            this._float('INVOCA DUDAS', e.x, e.y - 26, '#b98cff');
+            cam.shake(3, 0.25);
+            break;
+          }
+        }
+        break;
+      }
+
+      case 'invisibility':
+        e.invisT -= dt;
+        if (e.invisT <= 0) {
+          e.invisible = !e.invisible;
+          e.invisT = e.invisible ? e.def.invisible : e.def.visible;
+        }
+        break;
+
+      case 'silenceAura': {
+        const d = Math.hypot(this.roma.x - e.x, ROMA_Y - e.y);
+        if (d < e.def.aura) this.silenced = true;
+        break;
+      }
+
+      case 'snakeMove':
+        // Recorre la pantalla de lado a lado, como una serpiente.
+        e.baseX = VW / 2 + Math.sin(e.t * 0.7) * (VW * 0.35);
+        e.x += (e.baseX - e.x) * Math.min(1, 2.4 * dt);
+        break;
+
+      case 'rewindBullets':
+        e.abT -= dt;
+        if (e.abT <= 0) {
+          e.abT = e.def.cd;
+          if (this.bullets.length > 0) {
+            // Las balas de Roma se le vuelven en contra.
+            for (const b of this.bullets) {
+              b.vx = -b.vx; b.vy = -b.vy; b.hostile = true;
+            }
+            this._float('REWIND', e.x, e.y - 26, '#ff66ff');
+            cam.shake(4, 0.3);
+          }
+        }
+        break;
+
+      case 'twoPhases':
+        if (!e.phase2 && e.hp <= e.maxHp * 0.5) {
+          e.phase2 = true;
+          e.def = { ...e.def, shoots: e.def.shoots * 3 };
+          e.speed *= 1.35;
+          this._float('ENFURECIDO', e.x, e.y - 26, '#ff0044');
+          cam.shake(6, 0.5);
+        }
+        break;
+
+      case 'spawnClone':
+        e.abT -= dt;
+        if (e.abT <= 0) {
+          e.abT = e.def.cd;
+          const clone = this._spawn('tracker', { ...ENEMIES.tracker, name: 'CLON', score: 100 },
+                                    e.x, e.y + 18);
+          clone.isClone = true;
+          this._float('UN CLON', e.x, e.y - 26, '#ff8ad4');
+        }
+        break;
+    }
+  },
+
+  _angledShot(e, ang) {
+    const sp = RULES.enemyBulletSpeed;
+    const dx = this.roma.x - e.x, dy = ROMA_Y - e.y;
+    const base = Math.atan2(dy, dx) + ang;
+    this.ebullets.push(mkEBullet(e.x, e.y, Math.cos(base) * sp, Math.sin(base) * sp));
+  },
+
+  // ---------- Balas de Roma ----------
+  _updateBullets(dt) {
+    for (let i = this.bullets.length - 1; i >= 0; i--) {
+      const b = this.bullets[i];
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      b.life -= dt;
+
+      // Las balas REBOTAN en las paredes y el techo, como en el juego
+      // original. No es un adorno: es lo unico que permite matar al MURO, que
+      // para de frente todo lo que le sube. Un rebote lateral lo pilla por el
+      // costado. Cada bala tiene un numero limitado de rebotes.
+      if (!b.hostile && b.bounces > 0) {
+        let rebota = false;
+        if (b.x < 3) { b.x = 3; b.vx = Math.abs(b.vx); rebota = true; }
+        else if (b.x > VW - 3) { b.x = VW - 3; b.vx = -Math.abs(b.vx); rebota = true; }
+        if (b.y < 3) { b.y = 3; b.vy = Math.abs(b.vy); rebota = true; }
+        if (rebota) {
+          b.bounces--;
+          // Al rebotar pierde algo de fuerza vertical y gana lateral: sin esto
+          // una bala disparada recta rebotaria en el techo y volveria por el
+          // mismo sitio, sin llegar nunca a los lados.
+          if (Math.abs(b.vx) < 40) b.vx = (this.rnd() < 0.5 ? -1 : 1) * 90;
+        }
+      }
+
+      if (b.y < -12 || b.y > VH + 12 || b.x < -12 || b.x > VW + 12 || b.life <= 0) {
+        this.bullets.splice(i, 1);
+        continue;
+      }
+
+      // Rewind del TIEMPO: la bala se volvio hostil y ahora puede herir a Roma.
+      if (b.hostile) {
+        if (Math.abs(b.x - this.roma.x) < 12 && Math.abs(b.y - ROMA_Y) < 12) {
+          this.bullets.splice(i, 1);
+          this._hurtRoma();
+          continue;
+        }
+        continue;                 // una bala revertida ya no daña enemigos
+      }
+
+      for (let k = this.enemies.length - 1; k >= 0; k--) {
+        const e = this.enemies[k];
+        if (e.dead || e.invisible) continue;      // la MENTIRA invisible no recibe daño
+        if (Math.hypot(b.x - e.x, b.y - e.y) > e.r + 3) continue;
+
+        // El escudo del MURO cubre su FRENTE, no todo el cuerpo: para lo que
+        // le entra por el centro, y deja los costados descubiertos.
+        //
+        // Se probo la version que bloqueaba todo lo que subiera y el MURO se
+        // volvia inmatable: las balas rebotadas vuelven por el mismo sitio y
+        // nunca lo pillaban de lado. Asi, colocarse a un costado es la forma
+        // de matarlo, que es lo que su dibujo (el escudo por delante) promete.
+        if (e.def.shielded && b.vy < 0 && Math.abs(b.x - e.x) < e.r * 0.62) {
+          this._float('BLOCK', e.x, e.y - e.r - 6, '#6bf0ff');
+          this.bullets.splice(i, 1);
+          break;
+        }
+        this.bullets.splice(i, 1);
+        this._damage(e, k, b.dmg);
+        break;
+      }
+    }
+  },
+
+  _damage(e, idx, dmg) {
+    e.hp -= dmg;
+    e.hit = 0.12;
+    this.combo++;
+    this.comboT = 3;
+    burst(e.x, e.y, 4, {
+      rnd: this.rnd, speed: 60, life: 0.25, size: 2,
+      colors: ['#ffffff', '#ff8ad4'],
+    });
+    SFX.hit();
+    if (e.hp <= 0) this._killEnemy(e, idx, true);
+  },
+
+  _killEnemy(e, idx, scored) {
+    if (e.dead) return;
+    e.dead = true;
+    this.enemies.splice(idx, 1);
+
+    if (scored) {
+      const mult = comboMult(this.combo);
+      const pts = Math.floor(e.def.score * mult);
+      this.score += pts;
+      if (mult > 1) this._float('x' + mult, e.x, e.y - 18, '#ffe14d');
+    }
+
+    burst(e.x, e.y, e.boss ? 34 : 12, {
+      rnd: this.rnd, speed: e.boss ? 150 : 90, life: 0.55, size: 2, grav: 60,
+      colors: e.boss ? ['#ffe14d', '#ff5c9d', '#ffffff'] : ['#ff8ad4', '#ffffff'],
+    });
+    if (e.boss) { cam.shake(7, 0.6); SFX.explode(); }
+    else SFX.brick();
+
+    // El DIVISOR se parte en dos al morir.
+    if (e.def.splits && !e.isSplit) {
+      for (let i = 0; i < e.def.splitCount; i++) {
+        const c = this._spawn(e.def.splits, ENEMIES[e.def.splits],
+                              e.x + (i ? 18 : -18), e.y);
+        c.isSplit = true;
+      }
+    }
+
+    // Suelta un poder.
+    const chance = e.boss ? RULES.bossDropChance : RULES.dropChance;
+    if (this.rnd() < chance) {
+      const p = POWERUPS[(this.rnd() * POWERUPS.length) | 0];
+      this.drops.push({ x: e.x, y: e.y, vy: 42, type: p.type, color: p.color, t: 0 });
+    }
+  },
+
+  // ---------- Balas enemigas ----------
+  _updateEBullets(dt, ctx) {
+    for (let i = this.ebullets.length - 1; i >= 0; i--) {
+      const b = this.ebullets[i];
+      b.x += b.vx * dt; b.y += b.vy * dt; b.t += dt;
+      if (b.y > VH + 12 || b.y < -12 || b.x < -12 || b.x > VW + 12) {
+        this.ebullets.splice(i, 1);
+        continue;
+      }
+      if (Math.abs(b.x - this.roma.x) < 11 && Math.abs(b.y - ROMA_Y) < 11) {
+        this.ebullets.splice(i, 1);
+        if (this._hurtRoma(ctx) === 'dead') return;
+      }
+    }
+  },
+
+  // ---------- Poderes que caen ----------
+  _updateDrops(dt) {
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const d = this.drops[i];
+      d.y += d.vy * dt; d.t += dt;
+      if (d.y > VH + 14) { this.drops.splice(i, 1); continue; }
+      // Se recogen con un area generosa: son un premio, no otro reto.
+      if (Math.abs(d.x - this.roma.x) < 20 && Math.abs(d.y - ROMA_Y) < 20) {
+        this.drops.splice(i, 1);
+        this._grantPower(d.type);
+      }
+    }
+  },
+
+  // ---------- Textos flotantes ----------
+  _float(txt, x, y, col) {
+    this.floats.push({ txt, x, y, col, t: 0.9 });
+  },
+
+  _updateFloats(dt) {
+    for (let i = this.floats.length - 1; i >= 0; i--) {
+      const f = this.floats[i];
+      f.t -= dt; f.y -= 18 * dt;
+      if (f.t <= 0) this.floats.splice(i, 1);
+    }
+  },
+
+  // ---------- La bomba ----------
+  _useBomb() {
+    if (!this.bomb.ready || this.over) return;
+    this.bomb.ready = false;
+    this.bomb.cd = RULES.bombCooldown;
+    this.flash = 0.35;
+    cam.shake(9, 0.5);
+    vibrate(90);
+    SFX.explode();
+    // Mata todo lo que no sea jefe; a los jefes les hace un buen mordisco.
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const e = this.enemies[i];
+      if (e.boss) this._damage(e, i, 8);
+      else this._killEnemy(e, i, true);
+    }
+    this.ebullets.length = 0;
+  },
+
+  // ---------- Controles ----------
+  onInput(ev) {
+    if (this.over) return;
+
+    if (ev.type === 'down') {
+      // Mitad derecha: disparar, o la bomba si cae en su boton.
+      if (ev.x > VW * 0.5) {
+        if (Math.hypot(ev.x - BOMB_X, ev.y - BOMB_Y) < BOMB_R + 14) {
+          this._useBomb();
+          return;
+        }
+        if (this.fireId === null) {
+          this.fireId = ev.id;
+          this.firing = true;
+          // El primer toque dispara ya, sin esperar la cadencia.
+          this.roma.lastShot = -99;
+        }
+        return;
+      }
+      // Mitad izquierda: la cruceta nace donde cae el pulgar.
+      if (this.padId === null) {
+        this.padId = ev.id;
+        this.padX = ev.x;
+        this.padDX = 0;
+      }
+      return;
+    }
+
+    if (ev.type === 'move') {
+      if (ev.id === this.padId) {
+        // Zona muerta de 4px para que un pulgar quieto no la arrastre sola.
+        const d = ev.x - this.padX;
+        this.padDX = Math.abs(d) < 4 ? 0 : clamp(d / 26, -1, 1);
+        // El centro sigue al dedo si se aleja mucho: asi nunca topa.
+        if (Math.abs(d) > 26) this.padX = ev.x - Math.sign(d) * 26;
+      }
+      return;
+    }
+
+    if (ev.type === 'up') {
+      if (ev.id === this.padId) { this.padId = null; this.padDX = 0; }
+      if (ev.id === this.fireId) { this.fireId = null; this.firing = false; }
+    }
+  },
+
+  // ---------- Dibujado ----------
+  draw(g) {
+    this._drawBg(g);
+    this._drawDrops(g);
+    this._drawEnemies(g);
+    this._drawBullets(g);
+    this._drawRoma(g);
+    this._drawFloats(g);
+    this._drawHUD(g);
+    this._drawControls(g);
+    if (this.banner) this._drawBanner(g);
+    if (this.tutorial > 0 && this.wave <= 1 && !this.banner) this._drawTutorial(g);
+    if (this.over) this._drawOver(g);
+
+    // Destello de la bomba, por encima de todo.
+    if (this.flash > 0) {
+      this.flash -= 1 / 60;
+      g.fillStyle = 'rgba(255,245,251,' + Math.max(0, this.flash * 2).toFixed(2) + ')';
+      g.fillRect(0, 0, VW, VH);
+    }
+  },
+
+  _drawBg(g) {
+    const bg = g.createLinearGradient(0, 0, 0, VH);
+    bg.addColorStop(0, '#16082e');
+    bg.addColorStop(0.6, '#0d0620');
+    bg.addColorStop(1, '#1a0a26');
+    g.fillStyle = bg;
+    g.fillRect(0, 0, VW, VH);
+
+    // Rejilla en fuga: da profundidad sin costar casi nada.
+    g.strokeStyle = 'rgba(120,60,180,0.16)';
+    g.lineWidth = 1;
+    g.beginPath();
+    for (let x = 0; x <= VW; x += 40) { g.moveTo(x, 0); g.lineTo(x, LINE_Y); }
+    for (let y = 0; y <= LINE_Y; y += 34) { g.moveTo(0, y); g.lineTo(VW, y); }
+    g.stroke();
+
+    // La linea que Roma defiende: late despacio.
+    const pulse = 0.55 + Math.sin(this.t * 2.4) * 0.2;
+    g.strokeStyle = 'rgba(255,62,201,' + pulse.toFixed(2) + ')';
+    g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0, LINE_Y); g.lineTo(VW, LINE_Y); g.stroke();
+    const lg = g.createLinearGradient(0, LINE_Y, 0, VH);
+    lg.addColorStop(0, 'rgba(255,62,201,0.18)');
+    lg.addColorStop(1, 'rgba(255,62,201,0)');
+    g.fillStyle = lg;
+    g.fillRect(0, LINE_Y, VW, VH - LINE_Y);
+  },
+
+  _drawEnemies(g) {
+    for (const e of this.enemies) {
+      const s = A.sprite(e.id);
+      // Al aparecer crecen desde pequenito, para que no salgan de golpe.
+      let k = 1;
+      if (e.spawnT > 0) k = 0.35 + (1 - e.spawnT / 0.35) * 0.65;
+      const w = e.r * 2.4 * k, h = w;
+
+      g.save();
+      if (e.invisible) g.globalAlpha = 0.16;          // la MENTIRA, casi borrada
+      if (e.hit > 0) {
+        // Destello blanco al recibir un golpe.
+        g.globalAlpha *= 1;
+        g.drawImage(s, e.x - w / 2, e.y - h / 2, w, h);
+        g.globalCompositeOperation = 'lighter';
+        g.globalAlpha = 0.75;
+        g.drawImage(s, e.x - w / 2, e.y - h / 2, w, h);
+      } else {
+        g.drawImage(s, e.x - w / 2, e.y - h / 2, w, h);
+      }
+      g.restore();
+
+      // El aura del SILENCIO, para que se vea donde no puedes disparar bien.
+      if (e.def.ability === 'silenceAura') {
+        g.strokeStyle = 'rgba(154,134,216,' + (0.25 + Math.sin(this.t * 3) * 0.1).toFixed(2) + ')';
+        g.lineWidth = 1.5;
+        g.beginPath(); g.arc(e.x, e.y, e.def.aura, 0, 7); g.stroke();
+      }
+
+      // Barra de vida de la tropa. La del jefe NO va aqui: va fija en el HUD,
+      // porque un jefe patrulla pegado al techo y encima de el no queda sitio
+      // ni para la barra ni para su nombre.
+      if (e.maxHp > 1 && !e.boss && !e.invisible) {
+        const bw = 26, bh = 2.5, by = e.y - e.r - 8;
+        g.fillStyle = 'rgba(0,0,0,0.55)';
+        g.fillRect(e.x - bw / 2, by, bw, bh);
+        g.fillStyle = '#7de0d0';
+        g.fillRect(e.x - bw / 2, by, bw * Math.max(0, e.hp / e.maxHp), bh);
+      }
+    }
+  },
+
+  _drawBullets(g) {
+    // Las de Roma.
+    for (const b of this.bullets) {
+      const col = b.hostile ? '#ff4444' : (b.mega ? '#ffe66d' : '#ff8ad4');
+      g.fillStyle = col;
+      if (b.mega) {
+        g.beginPath(); g.arc(b.x, b.y, 4.5, 0, 7); g.fill();
+        g.fillStyle = '#ffffff';
+        g.beginPath(); g.arc(b.x, b.y, 2, 0, 7); g.fill();
+      } else {
+        // Una bala que ya reboto va girada en su direccion: asi se ve que
+        // ahora viaja en diagonal y puede pillar a un MURO por el costado.
+        const ang = Math.atan2(b.vy, b.vx) + Math.PI / 2;
+        g.save();
+        g.translate(b.x, b.y);
+        g.rotate(ang);
+        g.fillRect(-1.5, -6, 3, 9);
+        g.fillStyle = 'rgba(255,255,255,0.85)';
+        g.fillRect(-0.7, -5, 1.4, 5);
+        g.restore();
+      }
+    }
+    // Las enemigas: rombos, para no confundirlas con las de Roma.
+    for (const b of this.ebullets) {
+      // Halo: una bala enemiga tiene que verse venir sobre la rejilla del
+      // fondo. Sin el, a 4 px se perdian entre las lineas.
+      g.fillStyle = 'rgba(255,60,60,0.22)';
+      g.beginPath(); g.arc(b.x, b.y, 7, 0, 7); g.fill();
+      g.save();
+      g.translate(b.x, b.y);
+      g.rotate(b.t * 6);
+      g.fillStyle = '#ff3b3b';
+      g.fillRect(-4, -4, 8, 8);
+      g.fillStyle = '#ffd0d0';
+      g.fillRect(-1.8, -1.8, 3.6, 3.6);
+      g.restore();
+    }
+  },
+
+  _drawDrops(g) {
+    for (const d of this.drops) {
+      const bob = Math.sin(d.t * 6) * 2;
+      g.save();
+      g.translate(d.x, d.y + bob);
+      // Halo del color del poder.
+      const gr = g.createRadialGradient(0, 0, 0, 0, 0, 16);
+      gr.addColorStop(0, d.color); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.globalAlpha = 0.4;
+      g.fillStyle = gr;
+      g.beginPath(); g.arc(0, 0, 16, 0, 7); g.fill();
+      g.globalAlpha = 1;
+      // Caja del poder.
+      g.fillStyle = d.color;
+      g.rotate(d.t * 1.6);
+      g.fillRect(-6, -6, 12, 12);
+      g.fillStyle = 'rgba(255,255,255,0.85)';
+      g.fillRect(-3, -3, 6, 6);
+      g.restore();
+    }
+  },
+
+  _drawRoma(g) {
+    const r = this.roma;
+    // Parpadea mientras es invulnerable.
+    if (r.inv > 0 && Math.sin(this.t * 30) < 0) return;
+
+    let mode = 'normal';
+    if (this.power.mega > 0) mode = 'mega';
+    else if (this.power.turbo > 0) mode = 'turbo';
+    else if (this.power.shield > 0) mode = 'shield';
+    else if (this.power.double > 0) mode = 'double';
+
+    const s = A.roma(mode);
+    const k = r.hurt > 0 ? 1.15 : 1;
+    const w = 30 * k;
+    g.drawImage(s, r.x - w / 2, ROMA_Y - w / 2, w, w);
+
+    // Burbuja del escudo.
+    if (this.power.shield > 0) {
+      g.strokeStyle = 'rgba(107,240,255,' + (0.5 + Math.sin(this.t * 8) * 0.25).toFixed(2) + ')';
+      g.lineWidth = 2;
+      g.beginPath(); g.arc(r.x, ROMA_Y, 20, 0, 7); g.stroke();
+    }
+    // Su nombre debajo, como en el original.
+    textCenter(g, 'ROMA', r.x, ROMA_Y + 13, 'rgba(255,62,201,0.75)', 1);
+  },
+
+  _drawFloats(g) {
+    for (const f of this.floats) {
+      const a = Math.min(1, f.t / 0.4);
+      g.globalAlpha = a;
+      textCenter(g, f.txt, f.x, f.y, f.col, 1);
+      g.globalAlpha = 1;
+    }
+  },
+
+  // ---------- HUD ----------
+  _drawHUD(g) {
+    // Vidas: corazoncitos arriba a la izquierda.
+    for (let i = 0; i < RULES.lives; i++) {
+      const on = i < this.lives;
+      drawMiniHeart(g, 12 + i * 13, 12, on ? '#ff3ec9' : 'rgba(90,74,136,0.5)');
+    }
+    // Ola y puntaje.
+    text(g, 'OLA ' + Math.max(1, this.wave), 12, 24, '#6bf0ff', 1);
+    const sc = String(this.score);
+    text(g, sc, VW - measure(sc, 2) - 12, 10, '#ffffff', 2);
+
+    // Combo, cuando esta vivo.
+    if (this.combo >= 3) {
+      const m = comboMult(this.combo);
+      const txt = 'COMBO ' + this.combo + (m > 1 ? '  x' + m : '');
+      // Si hay jefe, su barra ocupa el centro de arriba: el combo se aparta.
+      const cy = this.enemies.some(e => e.boss) ? 40 : 12;
+      textCenter(g, txt, VW / 2, cy, m >= 3 ? '#ffe14d' : '#8a7ab8', 1);
+    }
+
+    // Poderes activos, en fila bajo el puntaje.
+    let py = 26;
+    for (const p of POWERUPS) {
+      const left = this.power[p.type];
+      if (left <= 0) continue;
+      const w = measure(p.label, 1);
+      text(g, p.label, VW - w - 12, py, p.color, 1);
+      // Barrita que se vacia.
+      const def = POWERUPS.find(q => q.type === p.type);
+      g.fillStyle = p.color;
+      g.globalAlpha = 0.5;
+      g.fillRect(VW - w - 12, py + 9, w * (left / def.dur), 1.5);
+      g.globalAlpha = 1;
+      py += 14;
+    }
+
+    if (this.silenced) {
+      textCenter(g, 'SILENCIADA', VW / 2, VH - 62, '#c9b6ff', 1);
+    }
+
+    // Barra del jefe: ancha, centrada arriba, con su nombre. Es la unica forma
+    // de seguir cuanta vida le queda a algo que vive pegado al techo.
+    const boss = this.enemies.find(e => e.boss);
+    if (boss) {
+      // Va ARRIBA, no abajo: abajo esta Roma con su nombre y la barra se le
+      // montaba encima justo donde ella tiene que mirar para esquivar.
+      const bw = 200, bx = VW / 2 - bw / 2, by = 26;
+      textCenter(g, boss.def.name, VW / 2, by - 12,
+                 boss.phase2 ? '#ff0044' : '#ffe14d', 1);
+      g.fillStyle = 'rgba(0,0,0,0.6)';
+      g.fillRect(bx - 1, by - 1, bw + 2, 7);
+      const f = Math.max(0, boss.hp / boss.maxHp);
+      const bg2 = g.createLinearGradient(bx, 0, bx + bw, 0);
+      if (boss.phase2) { bg2.addColorStop(0, '#ff0044'); bg2.addColorStop(1, '#ff8a4d'); }
+      else { bg2.addColorStop(0, '#ff3ec9'); bg2.addColorStop(1, '#ffe14d'); }
+      g.fillStyle = bg2;
+      g.fillRect(bx, by, bw * f, 5);
+      g.strokeStyle = 'rgba(255,225,77,0.55)'; g.lineWidth = 1;
+      g.strokeRect(bx - 0.5, by - 0.5, bw + 1, 6);
+    }
+  },
+
+  // ---------- Los controles, dibujados ----------
+  _drawControls(g) {
+    g.save();
+    g.globalAlpha = 0.5;
+
+    // Cruceta: el aro base y, si hay dedo, el punto donde esta.
+    g.strokeStyle = '#6bf0ff'; g.lineWidth = 2;
+    g.beginPath(); g.arc(PAD_X, PAD_Y, PAD_R, 0, 7); g.stroke();
+    // Flechitas a los lados del aro.
+    g.fillStyle = '#6bf0ff';
+    for (const s of [-1, 1]) {
+      const ax = PAD_X + s * (PAD_R - 9);
+      g.beginPath();
+      g.moveTo(ax + s * 5, PAD_Y);
+      g.lineTo(ax - s * 3, PAD_Y - 6);
+      g.lineTo(ax - s * 3, PAD_Y + 6);
+      g.fill();
+    }
+    if (this.padId !== null) {
+      g.globalAlpha = 0.85;
+      g.fillStyle = '#6bf0ff';
+      g.beginPath();
+      g.arc(PAD_X + this.padDX * (PAD_R - 8), PAD_Y, 10, 0, 7);
+      g.fill();
+      g.globalAlpha = 0.5;
+    }
+
+    // Boton de disparo.
+    g.strokeStyle = '#ff3ec9'; g.lineWidth = 2;
+    g.beginPath(); g.arc(FIRE_X, FIRE_Y, FIRE_R, 0, 7); g.stroke();
+    if (this.firing) {
+      g.globalAlpha = 0.5;
+      g.fillStyle = '#ff3ec9';
+      g.beginPath(); g.arc(FIRE_X, FIRE_Y, FIRE_R - 3, 0, 7); g.fill();
+      g.globalAlpha = 0.5;
+    }
+    g.globalAlpha = 0.9;
+    textCenter(g, 'FUEGO', FIRE_X, FIRE_Y - 3, '#ff8ad4', 1);
+    g.globalAlpha = 0.5;
+
+    // Boton de bomba: apagado mientras se recarga, con su cuenta atras.
+    const ready = this.bomb.ready;
+    g.strokeStyle = ready ? '#ffe14d' : 'rgba(120,110,90,0.8)';
+    g.lineWidth = 2;
+    g.beginPath(); g.arc(BOMB_X, BOMB_Y, BOMB_R, 0, 7); g.stroke();
+    if (!ready) {
+      // Arco que se va cerrando segun se recarga.
+      g.strokeStyle = 'rgba(255,225,77,0.55)';
+      g.beginPath();
+      g.arc(BOMB_X, BOMB_Y, BOMB_R, -Math.PI / 2,
+            -Math.PI / 2 + (1 - this.bomb.cd / RULES.bombCooldown) * Math.PI * 2);
+      g.stroke();
+    }
+    g.globalAlpha = 0.9;
+    drawStar(g, BOMB_X, BOMB_Y, ready ? '#ffe14d' : 'rgba(140,130,100,0.8)');
+    g.restore();
+  },
+
+  _drawBanner(g) {
+    const b = this.banner;
+    const a = Math.min(1, b.t / 0.4);
+    g.globalAlpha = a;
+    g.fillStyle = 'rgba(8,4,20,0.72)';
+    g.fillRect(0, VH / 2 - 44, VW, 88);
+    g.fillStyle = b.boss ? '#ff4400' : '#ff3ec9';
+    g.fillRect(0, VH / 2 - 44, VW, 2);
+    g.fillRect(0, VH / 2 + 42, VW, 2);
+    textCenter(g, b.boss ? 'JEFE' : 'OLA ' + b.wave, VW / 2, VH / 2 - 32,
+               b.boss ? '#ff4400' : '#ffe14d', 3);
+    textCenter(g, b.sub, VW / 2, VH / 2 + 4, b.boss ? '#ffe14d' : '#5cffd8', 2);
+    g.globalAlpha = 1;
+  },
+
+  _drawTutorial(g) {
+    const a = Math.min(1, this.tutorial / 0.6);
+    g.globalAlpha = a * 0.9;
+    textCenter(g, 'PULGAR IZQUIERDO: MOVER', VW / 2, VH - 116, '#6bf0ff', 1);
+    textCenter(g, 'PULGAR DERECHO: DISPARAR', VW / 2, VH - 102, '#ff8ad4', 1);
+    textCenter(g, 'PROTEGE LA LINEA', VW / 2, VH - 86, '#ffe14d', 1);
+    g.globalAlpha = 1;
+  },
+
+  _drawOver(g) {
+    const a = Math.min(1, this.overT / 0.5);
+    g.globalAlpha = a * 0.85;
+    g.fillStyle = '#0d0620';
+    g.fillRect(0, 0, VW, VH);
+    g.globalAlpha = a;
+    textCenter(g, this.msg[0], VW / 2, VH / 2 - 20, '#ff5c9d', 2);
+    textCenter(g, this.msg[1], VW / 2, VH / 2 + 2, '#ff5c9d', 2);
+    textCenter(g, 'OLA ' + this.wave + '   ' + this.score, VW / 2, VH / 2 + 32, '#8a7ab8', 2);
+    g.globalAlpha = 1;
+  },
+
+  destroy() {
+    this.enemies.length = 0;
+    this.bullets.length = 0;
+    this.ebullets.length = 0;
+    this.drops.length = 0;
+    this.floats.length = 0;
+  },
+};
+
+// ---------- Ayudas ----------
+function mkBullet(x, y, vx, vy, dmg, mega) {
+  // Una MEGA rebota mas veces: es el premio de haberla recogido.
+  return { x, y, vx, vy, dmg, mega, life: 3, hostile: false, bounces: mega ? 3 : 1 };
+}
+
+function mkEBullet(x, y, vx, vy) {
+  return { x, y, vx, vy, t: 0 };
+}
+
+// Un corazoncito para las vidas del HUD.
+function drawMiniHeart(g, x, y, col) {
+  g.fillStyle = col;
+  g.beginPath();
+  g.moveTo(x, y + 5);
+  g.bezierCurveTo(x - 6, y - 1, x - 4.5, y - 6, x - 1.7, y - 6);
+  g.bezierCurveTo(x - 0.6, y - 6, x, y - 4.5, x, y - 3.5);
+  g.bezierCurveTo(x, y - 4.5, x + 0.6, y - 6, x + 1.7, y - 6);
+  g.bezierCurveTo(x + 4.5, y - 6, x + 6, y - 1, x, y + 5);
+  g.fill();
+}
+
+// La estrella del boton de bomba.
+function drawStar(g, x, y, col) {
+  g.fillStyle = col;
+  g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+    const r = i % 2 ? 4 : 9;
+    const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+    i ? g.lineTo(px, py) : g.moveTo(px, py);
+  }
+  g.closePath(); g.fill();
+}
