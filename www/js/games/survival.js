@@ -74,7 +74,13 @@ export default {
 
     // Controles: cada dedo se queda con UN control (por pointerId).
     this.padId = null; this.padX = 0; this.padDX = 0;
+    // El pulgar derecho dispara Y apunta: nace donde se apoya, y arrastrarlo
+    // desde ahi inclina el disparo, como el raton en el juego original.
+    // `aim` es el angulo en radianes; -PI/2 es recto hacia arriba.
     this.fireId = null; this.firing = false;
+    this.fireX = 0; this.fireY = 0;
+    this.aim = -Math.PI / 2;
+    this.aiming = false;
 
     this.over = false;
     this.overT = 0;
@@ -144,12 +150,17 @@ export default {
     const mega = this.power.mega > 0;
     const dmg = mega ? 3 : 1;
     const sp = RULES.bulletSpeed;
-    // DOBLE dispara dos balas en paralelo; sin el, una sola centrada.
+    // Las balas salen hacia donde apunta el pulgar derecho.
+    const vx = Math.cos(this.aim) * sp, vy = Math.sin(this.aim) * sp;
+    // Perpendicular al disparo: es por donde se separan las dos balas del
+    // poder DOBLE, para que salgan en paralelo sea cual sea el angulo.
+    const px = -Math.sin(this.aim) * 7, py = Math.cos(this.aim) * 7;
+    const ox = Math.cos(this.aim) * 12, oy = Math.sin(this.aim) * 12;
     if (this.power.double > 0) {
-      this.bullets.push(mkBullet(r.x - 7, ROMA_Y - 10, 0, -sp, dmg, mega));
-      this.bullets.push(mkBullet(r.x + 7, ROMA_Y - 10, 0, -sp, dmg, mega));
+      this.bullets.push(mkBullet(r.x + ox - px, ROMA_Y + oy - py, vx, vy, dmg, mega));
+      this.bullets.push(mkBullet(r.x + ox + px, ROMA_Y + oy + py, vx, vy, dmg, mega));
     } else {
-      this.bullets.push(mkBullet(r.x, ROMA_Y - 12, 0, -sp, dmg, mega));
+      this.bullets.push(mkBullet(r.x + ox, ROMA_Y + oy, vx, vy, dmg, mega));
     }
     SFX.shoot();
   },
@@ -309,6 +320,8 @@ export default {
       phase2: false,
       summoned: {},
       hit: 0,
+      // Golpes que aguanta el escudo del MURO antes de romperse.
+      shield: def.shielded ? (def.shieldHp || 4) : 0,
       spawnT: 0.35,          // aparicion: crece desde pequenito
     };
     e.baseX = e.x;
@@ -606,15 +619,28 @@ export default {
         if (e.dead || e.invisible) continue;      // la MENTIRA invisible no recibe daño
         if (Math.hypot(b.x - e.x, b.y - e.y) > e.r + 3) continue;
 
-        // El escudo del MURO cubre su FRENTE, no todo el cuerpo: para lo que
-        // le entra por el centro, y deja los costados descubiertos.
+        // El escudo del MURO SE ROMPE a golpes: aguanta unos cuantos impactos
+        // y despues cae, dejando al muro expuesto.
         //
-        // Se probo la version que bloqueaba todo lo que subiera y el MURO se
-        // volvia inmatable: las balas rebotadas vuelven por el mismo sitio y
-        // nunca lo pillaban de lado. Asi, colocarse a un costado es la forma
-        // de matarlo, que es lo que su dibujo (el escudo por delante) promete.
-        if (e.def.shielded && b.vy < 0 && Math.abs(b.x - e.x) < e.r * 0.62) {
-          this._float('BLOCK', e.x, e.y - e.r - 6, '#6bf0ff');
+        // Se probaron tres alternativas antes de esta y ninguna funcionaba,
+        // porque Roma solo se mueve de lado y siempre queda DEBAJO del muro:
+        // bloquear todo lo que sube lo hacia inmatable; dejar los costados al
+        // aire no servia porque al apuntar se apunta al centro y la bala entra
+        // igual por el centro; y con un solo rebote la bala nunca vuelve a
+        // caerle encima. Romper el escudo si funciona y ademas se entiende
+        // solo: se ve como se agrieta.
+        if (e.shield > 0 && b.vy < 0) {
+          e.shield--;
+          e.hit = 0.12;
+          this._float(e.shield > 0 ? 'BLOCK' : 'ESCUDO ROTO',
+                      e.x, e.y - e.r - 6, e.shield > 0 ? '#6bf0ff' : '#ffe14d');
+          if (e.shield === 0) {
+            burst(e.x, e.y - e.r * 0.5, 10, {
+              rnd: this.rnd, speed: 80, life: 0.4, size: 2, grav: 90,
+              colors: ['#6bf0ff', '#ffffff'],
+            });
+            SFX.brick();
+          }
           this.bullets.splice(i, 1);
           break;
         }
@@ -666,11 +692,16 @@ export default {
       }
     }
 
-    // Suelta un poder.
-    const chance = e.boss ? RULES.bossDropChance : RULES.dropChance;
-    if (this.rnd() < chance) {
+    // Suelta poderes. Un jefe suelta varios de golpe, repartidos en abanico:
+    // es el premio de haber aguantado la pelea entera.
+    const n = e.boss ? RULES.bossDropCount : (this.rnd() < RULES.dropChance ? 1 : 0);
+    for (let i = 0; i < n; i++) {
       const p = POWERUPS[(this.rnd() * POWERUPS.length) | 0];
-      this.drops.push({ x: e.x, y: e.y, vy: 42, type: p.type, color: p.color, t: 0 });
+      const off = n > 1 ? (i - (n - 1) / 2) * 26 : 0;
+      this.drops.push({
+        x: clamp(e.x + off, 14, VW - 14), y: e.y,
+        vy: 58, type: p.type, color: p.color, t: 0,
+      });
     }
   },
 
@@ -749,6 +780,11 @@ export default {
         if (this.fireId === null) {
           this.fireId = ev.id;
           this.firing = true;
+          // El apuntado nace donde cae el pulgar: desde ese punto se mide
+          // hacia donde se arrastra. Empieza recto arriba.
+          this.fireX = ev.x; this.fireY = ev.y;
+          this.aim = -Math.PI / 2;
+          this.aiming = false;
           // El primer toque dispara ya, sin esperar la cadencia.
           this.roma.lastShot = -99;
         }
@@ -770,13 +806,33 @@ export default {
         this.padDX = Math.abs(d) < 4 ? 0 : clamp(d / 26, -1, 1);
         // El centro sigue al dedo si se aleja mucho: asi nunca topa.
         if (Math.abs(d) > 26) this.padX = ev.x - Math.sign(d) * 26;
+        return;
+      }
+      if (ev.id === this.fireId) {
+        // Apuntado: el angulo sale de cuanto se arrastro el pulgar desde donde
+        // se apoyo. Con menos de 6 px no se considera apuntado (un pulgar
+        // apretando nunca esta del todo quieto y el disparo bailaria solo).
+        const dx = ev.x - this.fireX, dy = ev.y - this.fireY;
+        const d = Math.hypot(dx, dy);
+        if (d < 6) { this.aiming = false; this.aim = -Math.PI / 2; return; }
+        this.aiming = true;
+        // Solo se apunta hacia ARRIBA: disparar hacia abajo no sirve de nada
+        // (los enemigos vienen de arriba) y con el pulgar es facil hacerlo sin
+        // querer. El angulo se limita a +-75 grados de la vertical.
+        let a = Math.atan2(dy, dx);
+        const LIM = Math.PI * 75 / 180;
+        const off = clamp(normalizar(a + Math.PI / 2), -LIM, LIM);
+        this.aim = -Math.PI / 2 + off;
       }
       return;
     }
 
     if (ev.type === 'up') {
       if (ev.id === this.padId) { this.padId = null; this.padDX = 0; }
-      if (ev.id === this.fireId) { this.fireId = null; this.firing = false; }
+      if (ev.id === this.fireId) {
+        this.fireId = null; this.firing = false; this.aiming = false;
+        this.aim = -Math.PI / 2;
+      }
     }
   },
 
@@ -786,6 +842,7 @@ export default {
     this._drawDrops(g);
     this._drawEnemies(g);
     this._drawBullets(g);
+    this._drawAim(g);
     this._drawRoma(g);
     this._drawFloats(g);
     this._drawHUD(g);
@@ -851,6 +908,17 @@ export default {
         g.drawImage(s, e.x - w / 2, e.y - h / 2, w, h);
       }
       g.restore();
+
+      // El escudo del MURO, dibujado aparte del cuerpo: se va apagando segun
+      // recibe golpes, y asi se entiende sin leer nada que se puede romper.
+      if (e.def.shielded && e.shield > 0) {
+        const f = e.shield / (e.def.shieldHp || 4);
+        g.strokeStyle = 'rgba(107,240,255,' + (0.35 + f * 0.5).toFixed(2) + ')';
+        g.lineWidth = 1 + f * 2;
+        g.beginPath();
+        g.arc(e.x, e.y + 4, e.r + 6, Math.PI * 1.12, Math.PI * 1.88);
+        g.stroke();
+      }
 
       // El aura del SILENCIO, para que se vea donde no puedes disparar bien.
       if (e.def.ability === 'silenceAura') {
@@ -930,6 +998,30 @@ export default {
       g.fillStyle = 'rgba(255,255,255,0.85)';
       g.fillRect(-3, -3, 6, 6);
       g.restore();
+    }
+  },
+
+  // La linea de puntos que sale de Roma hacia donde apunta. Sin ella no hay
+  // forma de saber por donde va a salir la bala hasta que sale.
+  _drawAim(g) {
+    if (!this.firing) return;
+    const r = this.roma;
+    const cx = Math.cos(this.aim), cy = Math.sin(this.aim);
+    const col = this.aiming ? 'rgba(255,138,212,0.85)' : 'rgba(255,138,212,0.35)';
+    g.fillStyle = col;
+    for (let d = 20; d < 92; d += 9) {
+      const k = 1 - d / 110;
+      g.globalAlpha = k;
+      g.fillRect(r.x + cx * d - 1.2, ROMA_Y + cy * d - 1.2, 2.4, 2.4);
+    }
+    g.globalAlpha = 1;
+    // Punta de la mira, mas marcada cuando se esta apuntando de verdad.
+    if (this.aiming) {
+      g.strokeStyle = 'rgba(255,138,212,0.75)';
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.arc(r.x + cx * 96, ROMA_Y + cy * 96, 4.5, 0, 7);
+      g.stroke();
     }
   },
 
@@ -1069,6 +1161,15 @@ export default {
       g.globalAlpha = 0.5;
       g.fillStyle = '#ff3ec9';
       g.beginPath(); g.arc(FIRE_X, FIRE_Y, FIRE_R - 3, 0, 7); g.fill();
+      // Aguja dentro del boton apuntando a donde saldra la bala: confirma el
+      // gesto ahi donde esta el pulgar, sin tener que mirar a Roma.
+      g.globalAlpha = 0.95;
+      g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(FIRE_X, FIRE_Y);
+      g.lineTo(FIRE_X + Math.cos(this.aim) * (FIRE_R - 7),
+               FIRE_Y + Math.sin(this.aim) * (FIRE_R - 7));
+      g.stroke();
       g.globalAlpha = 0.5;
     }
     g.globalAlpha = 0.9;
@@ -1112,7 +1213,7 @@ export default {
     const a = Math.min(1, this.tutorial / 0.6);
     g.globalAlpha = a * 0.9;
     textCenter(g, 'PULGAR IZQUIERDO: MOVER', VW / 2, VH - 116, '#6bf0ff', 1);
-    textCenter(g, 'PULGAR DERECHO: DISPARAR', VW / 2, VH - 102, '#ff8ad4', 1);
+    textCenter(g, 'PULGAR DERECHO: DISPARAR Y APUNTAR', VW / 2, VH - 102, '#ff8ad4', 1);
     textCenter(g, 'PROTEGE LA LINEA', VW / 2, VH - 86, '#ffe14d', 1);
     g.globalAlpha = 1;
   },
@@ -1139,6 +1240,14 @@ export default {
 };
 
 // ---------- Ayudas ----------
+// Lleva un angulo al rango -PI..PI. Hace falta para medir cuanto se desvia el
+// apuntado de la vertical sin que el salto de +PI a -PI lo mande al otro lado.
+function normalizar(a) {
+  while (a > Math.PI) a -= Math.PI * 2;
+  while (a < -Math.PI) a += Math.PI * 2;
+  return a;
+}
+
 function mkBullet(x, y, vx, vy, dmg, mega) {
   // Una MEGA rebota mas veces: es el premio de haberla recogido.
   return { x, y, vx, vy, dmg, mega, life: 3, hostile: false, bounces: mega ? 3 : 1 };

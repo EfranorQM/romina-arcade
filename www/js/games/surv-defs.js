@@ -43,7 +43,7 @@ export const ENEMIES = {
   },
   muro: {
     name: 'MURO', hp: 4, speed: 13, score: 80, r: 18,
-    move: 'straight', shielded: true,
+    move: 'straight', shielded: true, shieldHp: 4,
   },
   divisor: {
     name: 'DIVISOR', hp: 3, speed: 21, score: 70, r: 16,
@@ -122,8 +122,14 @@ export const RULES = {
   lives: 3,
   invulnerable: 1.5,        // segundos de gracia tras recibir un golpe
   bombCooldown: 25,
-  dropChance: 0.10,
+  // Uno de cada tres enemigos suelta un poder. Con el 0.10 del original salia
+  // MEDIO poder por ola en las primeras y casi nunca se veia uno: alli las
+  // olas eran mucho mas largas y daba tiempo. Medido: con 0.33 salen dos por
+  // ola desde el principio y cinco o seis en las olas altas.
+  dropChance: 0.33,
   bossDropChance: 1,
+  // Los jefes sueltan varios de golpe: es el premio de una pelea larga.
+  bossDropCount: 3,
   bossHpPerWave: 0.08,       // solo los jefes endurecen con la ola
   shotCooldown: 0.25,
   turboCooldown: 0.10,

@@ -58,7 +58,7 @@ La app queda con su ícono (una marquesina de arcade en neón) y ya no pide nada
 | **LAST WAVE** | Sobrevive oleadas, elige mejoras entre ronda y ronda | Un dedo mueve; dispara sola · Entre oleadas, tocar una carta |
 | **SYMBIOTE** | Criatura de carne que trepa un laboratorio | Arrastrar el dedo = fluir · Botón = agarrar y matar · Gira con el teléfono |
 | **FURIA** | Moto de montaña: 8 niveles con meta | Derecha = acelerar · Izquierda = saltar (tocar) y frenar (mantener) · En el aire, las dos zonas giran la moto |
-| **SURVIVAL** | Roma defiende su línea de todo lo que amenaza una relación | **Se juega de lado.** Pulgar izquierdo = mover · Pulgar derecho = disparar (se puede dejar pulsado) · Botón de la estrella = bomba |
+| **SURVIVAL** | Roma defiende su línea de todo lo que amenaza una relación | **Se juega de lado.** Pulgar izquierdo = mover · Pulgar derecho = disparar; **arrastrándolo se apunta** · Botón de la estrella = bomba |
 
 Sin tutoriales, sin diálogos, sin historia. Se toca y se juega.
 Los récords se guardan solos. El sonido se activa y desactiva desde el menú.
@@ -150,12 +150,21 @@ Qué cambió respecto al original, y por qué:
 - **Los enemigos van al doble de velocidad.** Traídos tal cual, un enemigo
   tardaba quince segundos en cruzar y una ola entera veinticinco: la arena de
   aquí es mucho más baja en proporción. Medido: ahora cruza en ocho.
-- **Las balas rebotan** en las paredes y el techo, como en el original. Allí se
-  apuntaba con el ratón; aquí no hay dónde apuntar, así que el rebote es lo que
-  da alcance.
-- **El escudo del MURO cubre solo su frente.** Bloqueando todo lo que subía era
-  inmatable — las balas rebotadas vuelven por el mismo sitio y nunca lo pillan
-  de lado. Ahora hay que ponerse a un costado, que es lo que su dibujo promete.
+- **Se apunta con el pulgar derecho**, como con el ratón en el original: el
+  control nace donde apoyas el dedo y arrastrarlo inclina el disparo. Solo se
+  apunta hacia arriba (±75° de la vertical): los enemigos vienen de ahí, y con
+  el pulgar es fácil apuntar al suelo sin querer.
+- **Las balas rebotan** en las paredes y el techo, también como el original.
+- **El escudo del MURO se rompe a golpes** (aguanta cuatro y cae). Se probaron
+  tres diseños antes: bloquear todo lo que sube lo hacía inmatable; dejarle los
+  costados al aire no servía porque al apuntar se apunta al centro y la bala
+  entra igual por el centro; y con un rebote la bala nunca vuelve a caerle
+  encima. Roma solo se mueve de lado y siempre queda debajo de él, así que
+  romper el escudo es lo único que funciona — y se entiende solo, porque se ve
+  cómo se apaga.
+- **Los poderes caen tres veces más.** Con el 10% del original salía medio poder
+  por ola y casi nunca se veía uno; allí las olas eran mucho más largas. Ahora
+  cae uno de cada tres enemigos, y un jefe suelta tres de golpe en abanico.
 - **La barra de vida del jefe va arriba del todo**, fija: un jefe patrulla
   pegado al techo y encima de él no cabe ni su nombre.
 - Los emojis (👻💀🌑⚡) son ahora criaturas dibujadas por código.
