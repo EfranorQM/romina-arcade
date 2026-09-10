@@ -3,8 +3,9 @@
 import { view, VW, VH, clamp } from './core.js';
 
 export const pointers = new Map();   // pointerId -> {x,y,sx,sy,owner}
-let listeners = [];
 
+// Pasa un toque de la pantalla al lienzo, deshaciendo el escalado y el centrado
+// que fit() aplico al canvas.
 function toVirtual(e) {
   return {
     x: (e.clientX - view.ox) / view.scale,

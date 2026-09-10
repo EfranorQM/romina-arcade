@@ -70,7 +70,9 @@ Los récords se guardan solos. El sonido se activa y desactiva desde el menú.
 www/                  el juego (esto es todo lo que corre)
   index.html
   js/
-    main.js           bucle, menú, pantallas
+    main.js           bucle, escenas, fin de partida
+    menu.js           la estantería de carátulas (horizontal)
+    covers.js         las carátulas, dibujadas por código
     core.js           canvas, tiempo, pools, guardado
     input.js          controles táctiles
     audio.js          sonido y música, todo sintetizado
@@ -111,17 +113,52 @@ suave en lugar de escalonado, sin usar ni una imagen.
 
 ## Notas técnicas
 
-- **Resolución virtual 270x600**, escalada a pantalla completa. Es 20:9 exacto,
-  que es la proporción del Note 10, así que no quedan barras negras.
+- **La app tiene dos orientaciones.** El menú es apaisado (600x270) y los
+  juegos son verticales (270x600, o 540x1200 los que piden detalle). Al entrar
+  a un juego la app le pide al teléfono que gire, y al volver al menú también.
+  Las dos resoluciones son 20:9 exacto, la proporción del Note 10, así que no
+  quedan barras negras en ninguna de las dos.
 - **Se necesita Java 21** para compilar (Capacitor lo exige). Java 17 no sirve.
 - El APK **no tiene permiso de internet**: se elimina a la fuerza del manifest,
   porque Capacitor lo reinyecta si solo se borra la línea.
-- Orientación vertical fija y la pantalla no se apaga jugando.
+- El giro lo pide el software (`screen.orientation.lock`), no el manifest: por
+  eso el manifest deja girar (`fullUser`). Si el bloqueo falla — MIUI a veces lo
+  rechaza — aparece un aviso de **GIRA EL TELÉFONO** y el juego se pausa, así
+  que nunca se pierde una partida por estar girando el aparato.
+- La pantalla no se apaga jugando.
+
+## El menú
+
+Es una estantería de carátulas que se arrastra de lado, al estilo de una PSP.
+La del centro está de frente e iluminada; las de los lados se encogen, se
+estrechan y se oscurecen, con su reflejo debajo. La fila **da la vuelta**: tras
+el último juego viene el primero, así que nunca hay un lado vacío.
+
+- Arrastrar mueve la fila siguiendo al dedo; al soltar, encaja sola.
+- Un gesto rápido cruza hasta tres carátulas.
+- Tocar una carátula lateral la trae al centro; tocar la del centro, juega.
+
+Las carátulas **se dibujan por código** (`www/js/covers.js`), como todo lo demás
+en esta app: son 96x128 y se hornean una vez al entrar al menú.
+
+```
+node tools/ver.js tools/ver-portadas.html portadas.png     # verlas todas
+node tools/prueba-menu.mjs                                 # simular la física
+```
+
+La física del carrusel es un muelle **críticamente amortiguado** hacia la
+carátula de destino, que se elige una sola vez al soltar el dedo. Los números
+salen de `tools/prueba-menu.mjs`, que simula el modelo miles de pasos: el peor
+encaje tarda 0,92 s y no rebota nunca. La primera versión usaba un muelle libre
+peleando contra la fricción y tardaba casi cuatro segundos, además de quedarse
+una carátula corta al tocar una lateral.
 
 ## Agregar un juego nuevo
 
 1. Crear `www/js/games/nombre.js` con la forma:
    `{ meta:{id,title,tag,colors}, init, update, draw, onInput, destroy }`
 2. Importarlo y añadirlo al array en `www/js/games.js`.
+3. Dibujarle una carátula en `www/js/covers.js` (si no, sale una genérica con
+   su inicial y sus colores).
 
 El menú, los récords, la música y la pantalla de fin de partida ya lo cubren solos.

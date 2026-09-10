@@ -1,9 +1,20 @@
 // Nucleo del motor: canvas virtual, bucle de tiempo fijo, RNG, pools, guardado.
-// Resolucion virtual por defecto 270x600 = 20:9 exacto, calza el 1080x2400 del
-// Redmi Note 10 sin barras negras. Un juego puede pedir mas detalle declarando
-// meta.vw/meta.vh; 540x1200 mantiene el 20:9 y escala x2 exacto en pantalla.
-export let VW = 270, VH = 600;
-export const BASE_VW = 270, BASE_VH = 600;
+//
+// LA APP TIENE DOS ORIENTACIONES, y cada escena declara la suya con meta.wide:
+//
+//   El MENU es apaisado (600x270). Es la cara de la app: la estanteria de
+//   caratulas necesita ancho para que la fila se lea.
+//
+//   Los JUEGOS son verticales (270x600, o 540x1200 los que piden detalle).
+//   Estan medidos asi -- sus saltos, sus oleadas, su terreno -- y ademas un
+//   lienzo de pie dentro de una pantalla acostada solo podria ocupar una franja
+//   de 122px de ancho: la mitad del espacio para el que fueron dibujados.
+//
+// Por eso al entrar a un juego se pide vertical al telefono y al volver al menu
+// se pide horizontal. El giro es parte del diseno, no un efecto secundario.
+export let VW = 600, VH = 270;
+export const BASE_VW = 270, BASE_VH = 600;      // lienzo vertical de un juego
+export const MENU_VW = 600, MENU_VH = 270;      // lienzo apaisado del menu
 
 export const view = { scale: 1, ox: 0, oy: 0 };
 export let canvas = null, g = null;
@@ -14,8 +25,8 @@ export function initCanvas(el) {
   g = canvas.getContext('2d', { alpha: false, desynchronized: true });
   g.imageSmoothingEnabled = false;
   fit();
-  window.addEventListener('resize', fitAndOrient);
-  window.addEventListener('orientationchange', () => setTimeout(fitAndOrient, 100));
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', () => setTimeout(fit, 100));
   return g;
 }
 
@@ -40,51 +51,23 @@ export function setVirtual(w, h) {
   fit();
 }
 
-// ---------- Rotacion ----------
-// Un juego puede declarar meta.rotates: entonces intercambia ancho y alto
-// cuando el telefono se pone horizontal. Los demas se quedan verticales.
-let rotatable = false;
-let onRotate = null;
-
-export function setRotatable(on, cb) {
-  rotatable = !!on;
-  onRotate = cb || null;
-  // El manifest deja girar el APK; el bloqueo por software es lo que mantiene
-  // verticales a los tres juegos que estan disenados solo para vertical.
-  // lock() suele rechazar fuera de pantalla completa: se ignora sin romper nada.
+// ---------- Orientacion ----------
+// Se le PIDE al telefono que gire: horizontal para el menu, vertical para los
+// juegos. lock() solo funciona en pantalla completa y en algunos navegadores
+// rechaza siempre; cuando falla, la app se sigue viendo bien (fit() la centra
+// con barras), solo que el usuario tiene que girar el telefono el mismo.
+export function requestOrientation(wide) {
   try {
     const so = screen.orientation;
-    if (so) {
-      if (rotatable) { if (so.unlock) so.unlock(); }
-      else if (so.lock) { const p = so.lock('portrait'); if (p && p.catch) p.catch(() => {}); }
+    if (so && so.lock) {
+      const p = so.lock(wide ? 'landscape' : 'portrait');
+      if (p && p.catch) p.catch(() => {});
     }
   } catch (e) { /* navegador sin la API: se queda como este */ }
-  if (rotatable) applyOrientation();
 }
 
 export function isLandscape() {
   return window.innerWidth > window.innerHeight;
-}
-
-// Ajusta la resolucion virtual al giro del telefono, manteniendo el area
-// (mismo coste de relleno) y la proporcion de la pantalla.
-function applyOrientation() {
-  if (!rotatable) return;
-  const land = isLandscape();
-  const long = Math.max(VW, VH), short = Math.min(VW, VH);
-  const w = land ? long : short;
-  const h = land ? short : long;
-  const changed = (w !== VW || h !== VH);
-  if (changed) setVirtual(w, h);
-  // Se avisa SIEMPRE, no solo cuando cambia el tamano: al armar la rotacion la
-  // resolucion puede coincidir ya, y sin este aviso el juego nunca recolocaria
-  // su HUD ni sus botones para la orientacion actual.
-  if (onRotate) onRotate(VW, VH, land);
-}
-
-export function fitAndOrient() {
-  applyOrientation();
-  fit();
 }
 
 export function fit() {

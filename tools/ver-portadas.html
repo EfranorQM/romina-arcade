@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<!-- Hoja de contactos de las caratulas del menu. Importa el covers.js REAL y
+     dibuja cada portada tres veces: al tamano al que se ve en el cover flow
+     (la del centro y una de las laterales) y ampliada x3 para revisar detalle.
+     Se abre con Chrome headless desde tools/ver-portadas.ps1. -->
+<meta charset="utf-8">
+<title>portadas</title>
+<style>
+  body { margin:0; background:#0d0620; font:12px/1.4 monospace; color:#c8b8ff; }
+  #hoja { padding:14px; }
+  .fila { display:flex; align-items:flex-end; gap:14px; margin-bottom:14px; }
+  .col { text-align:center; }
+  .col span { display:block; margin-top:4px; color:#7a6aa8; }
+  canvas { image-rendering:pixelated; display:block; }
+</style>
+<div id="hoja"></div>
+<script type="module">
+import { cover, CW, CH } from '../www/js/covers.js';
+
+// Las metas se repiten aqui a proposito: importar games.js arrastraria los
+// cinco juegos enteros (y con ellos el canvas y el audio) solo para leer cinco
+// titulos. Si se agrega un juego, se agrega su linea.
+const GAMES = [
+  { meta: { id:'skyline',  title:'SKYLINE',  colors:['#4de0f0','#e0249a'] } },
+  { meta: { id:'neonfist', title:'NEON FIST', colors:['#ff5c9d','#ffe14d'] } },
+  { meta: { id:'lastwave', title:'LAST WAVE', colors:['#5cffd8','#ff5c9d'] } },
+  { meta: { id:'symbiote', title:'SYMBIOTE', colors:['#c9203a','#8e1224'] } },
+  { meta: { id:'furia',    title:'FURIA',    colors:['#ff5c7a','#f0b45a'] } },
+];
+
+const hoja = document.getElementById('hoja');
+
+// Tamanos a los que se juzga: el del centro del cover flow (alto 150 sobre un
+// escenario de 270 de alto), el de una portada lateral, y x3 para el detalle.
+const VISTAS = [
+  { k: 'centro', h: 150 },
+  { k: 'lateral', h: 104 },
+  { k: 'detalle x3', h: CH * 3 },
+];
+
+for (const G of GAMES) {
+  const src = cover(G.meta);
+  const fila = document.createElement('div');
+  fila.className = 'fila';
+  for (const v of VISTAS) {
+    const w = Math.round(CW * (v.h / CH));
+    const col = document.createElement('div');
+    col.className = 'col';
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = v.h;
+    const d = cv.getContext('2d');
+    d.imageSmoothingEnabled = false;
+    d.drawImage(src, 0, 0, w, v.h);
+    col.appendChild(cv);
+    const s = document.createElement('span');
+    s.textContent = G.meta.id + ' · ' + v.k;
+    col.appendChild(s);
+    fila.appendChild(col);
+  }
+  hoja.appendChild(fila);
+}
+document.title = 'listo';
+</script>

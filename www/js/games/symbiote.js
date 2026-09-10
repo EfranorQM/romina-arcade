@@ -30,7 +30,6 @@ export default {
     id:'symbiote', title:'SYMBIOTE', tag:'ESCAPA DEL LAB',
     colors:['#c9203a','#8e1224'],
     vw: BASE_W, vh: BASE_H,
-    rotates: true,
   },
 
   init(ctx, args) {

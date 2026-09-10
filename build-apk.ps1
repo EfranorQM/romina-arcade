@@ -130,11 +130,18 @@ if (Test-Path $manifest) {
     `$1
 "@
   }
-  if ($m -notmatch 'screenOrientation') {
-    $m = $m -replace '(<activity\s)', '$1android:screenOrientation="portrait" android:resizeableActivity="false" '
+  # La orientacion la elige CADA ESCENA por software (screen.orientation.lock):
+  # el menu se pone horizontal y los juegos verticales. Por eso el manifest debe
+  # dejar girar -- con una orientacion fija aqui, el lock del navegador no haria
+  # nada y la mitad de la app se veria de lado.
+  # 'fullUser' respeta ademas el bloqueo de giro del sistema si ella lo activa.
+  if ($m -match 'screenOrientation="[a-zA-Z]+"') {
+    $m = $m -replace 'screenOrientation="[a-zA-Z]+"', 'screenOrientation="fullUser"'
+  } else {
+    $m = $m -replace '(<activity\s)', '$1android:screenOrientation="fullUser" android:resizeableActivity="false" '
   }
   Set-Content $manifest $m -Encoding utf8
-  Write-Host 'Manifest parcheado: sin INTERNET, vertical fijo' -ForegroundColor Green
+  Write-Host 'Manifest parcheado: sin INTERNET, giro por software' -ForegroundColor Green
 }
 
 # --- 6. Compilar ---
