@@ -21,6 +21,8 @@ import {
   VW, VH, LINE_Y, ROMA_Y, ENEMIES, BOSSES, BOSS_IDS, POWERUPS, RULES,
   WAVE_PHRASES, GAMEOVER_MSGS, comboMult, poolForWave,
 } from './surv-defs.js';
+import { SKILLS, offerCards } from './surv-skills.js';
+import { drawPicker, cardAt } from './surv-cards.js';
 
 // ---------- Los controles tactiles ----------
 // En apaisado los pulgares caen en las esquinas de abajo, asi que ahi van los
@@ -58,6 +60,14 @@ export default {
     this.power = { double: 0, mega: 0, shield: 0, turbo: 0 };
     this.bomb = { ready: true, cd: 0 };
     this.silenced = false;
+
+    // ---------- Roguelike ----------
+    // `skills` es {id: nivel}. Empieza vacio en CADA partida: las habilidades
+    // no se guardan entre partidas, que es lo que hace que cada una sea
+    // distinta. `picker` es la pantalla de eleccion mientras esta abierta.
+    this.skills = {};
+    this.picks = 0;              // cuantas elecciones lleva (sube la rareza)
+    this.picker = null;
 
     // Estado de la ola.
     this.waveActive = false;
@@ -108,6 +118,10 @@ export default {
       return;
     }
 
+    // Eligiendo recompensa: el juego se queda quieto detras. Sin cuenta atras a
+    // proposito, que pueda leer las tres cartas con calma.
+    if (this.picker) { this._updatePicker(dt); return; }
+
     this._updateRoma(dt);
     this._updatePowers(dt);
     this._updateWave(dt);
@@ -156,11 +170,15 @@ export default {
     // poder DOBLE, para que salgan en paralelo sea cual sea el angulo.
     const px = -Math.sin(this.aim) * 7, py = Math.cos(this.aim) * 7;
     const ox = Math.cos(this.aim) * 12, oy = Math.sin(this.aim) * 12;
+    // PERFORANTE: cuantos enemigos puede atravesar cada bala de este disparo.
+    const pn = this._lvl('perforante');
+    const pierce = pn ? SKILLS.perforante.pierce(pn) : 0;
+
     if (this.power.double > 0) {
-      this.bullets.push(mkBullet(r.x + ox - px, ROMA_Y + oy - py, vx, vy, dmg, mega));
-      this.bullets.push(mkBullet(r.x + ox + px, ROMA_Y + oy + py, vx, vy, dmg, mega));
+      this.bullets.push(mkBullet(r.x + ox - px, ROMA_Y + oy - py, vx, vy, dmg, mega, pierce));
+      this.bullets.push(mkBullet(r.x + ox + px, ROMA_Y + oy + py, vx, vy, dmg, mega, pierce));
     } else {
-      this.bullets.push(mkBullet(r.x + ox, ROMA_Y + oy, vx, vy, dmg, mega));
+      this.bullets.push(mkBullet(r.x + ox, ROMA_Y + oy, vx, vy, dmg, mega, pierce));
     }
     SFX.shoot();
   },
@@ -648,8 +666,20 @@ export default {
           this.bullets.splice(i, 1);
           break;
         }
-        this.bullets.splice(i, 1);
+        // PERFORANTE: la bala sigue si MATA. Si el enemigo aguanta el disparo,
+        // la bala se para igual: atravesar a un vivo la volveria un laser.
+        const alive = this.enemies.length;
         this._damage(e, k, b.dmg);
+        const murio = this.enemies.length < alive;
+
+        if (murio && b.pierce > 0) {
+          b.pierce--;
+          // Sigue buscando a quien mas alcanzar en este mismo fotograma. El
+          // bucle de enemigos va hacia atras, asi que al salir el muerto del
+          // array los indices que quedan por mirar no se mueven.
+          continue;
+        }
+        this.bullets.splice(i, 1);
         break;
       }
     }
@@ -688,7 +718,10 @@ export default {
       cam.shake(7, 0.6); SFX.explode();
       // Se acabo la pelea: vuelve el tema de las olas. Si el EGO dejo un clon
       // vivo la pelea sigue, asi que solo se cambia cuando no queda ningun jefe.
-      if (!this.enemies.some(o => o.boss && !o.dead)) playMusic(SONGS.survival);
+      if (!this.enemies.some(o => o.boss && !o.dead)) {
+        playMusic(SONGS.survival);
+        this._openPicker(e.def.name);
+      }
     }
     else SFX.brick();
 
@@ -732,9 +765,25 @@ export default {
 
   // ---------- Poderes que caen ----------
   _updateDrops(dt) {
+    // IMAN: el radio se mira una vez por fotograma, no una por poder.
+    const im = this._lvl('iman');
+    const imR = im ? SKILLS.iman.range(im) : 0;
+
     for (let i = this.drops.length - 1; i >= 0; i--) {
       const d = this.drops[i];
       d.y += d.vy * dt; d.t += dt;
+
+      // Dentro del radio, el poder deja de caer y se va hacia Roma.
+      if (im) {
+        const dx = this.roma.x - d.x, dy = ROMA_Y - d.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < imR && dist > 0.5) {
+          const pull = 210 * dt;
+          d.x += (dx / dist) * pull;
+          d.y += (dy / dist) * pull;
+        }
+      }
+
       if (d.y > VH + 14) { this.drops.splice(i, 1); continue; }
       // Se recogen con un area generosa: son un premio, no otro reto.
       if (Math.abs(d.x - this.roma.x) < 20 && Math.abs(d.y - ROMA_Y) < 20) {
@@ -742,6 +791,58 @@ export default {
         this._grantPower(d.type);
       }
     }
+  },
+
+  // ---------- Roguelike: la pantalla de recompensa ----------
+  _openPicker(bossName) {
+    this.picks++;
+    const cards = offerCards(this.picks, this.skills, this.rnd);
+    // Si absolutamente todo esta al tope, no hay nada que ofrecer: la partida
+    // sigue sin pantalla en vez de enseñar un panel vacio.
+    if (cards.length === 0) return;
+    this.picker = {
+      cards, anim: 0, sel: -1, selT: 0,
+      title: 'HAS VENCIDO A ' + bossName,
+    };
+    // Soltar los controles: si el dedo estaba disparando al morir el jefe, su
+    // 'up' se lo traga la pantalla de eleccion y Roma se quedaria disparando
+    // sola al volver al juego.
+    this.fireId = null; this.firing = false; this.aiming = false;
+    this.padId = null; this.padDX = 0;
+    SFX.record();
+  },
+
+  _updatePicker(dt) {
+    const p = this.picker;
+    p.anim = Math.min(1.4, p.anim + dt * 1.6);
+    // Ya elegida: el saltito de la carta y fuera.
+    if (p.sel >= 0) {
+      p.selT += dt * 3.2;
+      if (p.selT >= 1) {
+        this._takeSkill(p.cards[p.sel]);
+        this.picker = null;
+      }
+    }
+  },
+
+  _takeSkill(card) {
+    this.skills[card.id] = card.level;
+    // El aviso sale a media altura y no donde estaban las cartas: ahi quedaria
+    // flotando sobre un hueco vacio justo cuando la pantalla se cierra.
+    this._float(card.skill.name + (card.level > 1 ? ' NIV ' + card.level : ''),
+                VW / 2, VH * 0.52, card.rarity.color);
+    SFX.powerup();
+    vibrate(60);
+  },
+
+  // Nivel de una habilidad, o 0 si no se tiene. Es la puerta por la que pasan
+  // TODOS los efectos: asi una habilidad que no se tiene no cuesta nada.
+  _lvl(id) { return this.skills[id] || 0; },
+
+  // MECHA CORTA acorta la recarga de la bomba.
+  _bombCd() {
+    const n = this._lvl('mecha');
+    return n ? SKILLS.mecha.cooldown(n) : RULES.bombCooldown;
   },
 
   // ---------- Textos flotantes ----------
@@ -761,7 +862,7 @@ export default {
   _useBomb() {
     if (!this.bomb.ready || this.over) return;
     this.bomb.ready = false;
-    this.bomb.cd = RULES.bombCooldown;
+    this.bomb.cd = this._bombCd();
     this.flash = 0.35;
     cam.shake(9, 0.5);
     vibrate(90);
@@ -778,6 +879,20 @@ export default {
   // ---------- Controles ----------
   onInput(ev) {
     if (this.over) return;
+
+    // Eligiendo recompensa: el toque elige carta y NO llega a los controles.
+    // Si no, el mismo dedo que elige dispararia al soltar.
+    if (this.picker) {
+      if (ev.type === 'down' && this.picker.sel < 0) {
+        const i = cardAt(ev.x, ev.y, VW);
+        if (i >= 0 && i < this.picker.cards.length) {
+          this.picker.sel = i;
+          this.picker.selT = 0;
+          SFX.select();
+        }
+      }
+      return;
+    }
 
     if (ev.type === 'down') {
       // Mitad derecha: disparar, o la bomba si cae en su boton.
@@ -858,6 +973,7 @@ export default {
     this._drawControls(g);
     if (this.banner) this._drawBanner(g);
     if (this.tutorial > 0 && this.wave <= 1 && !this.banner) this._drawTutorial(g);
+    if (this.picker) drawPicker(g, this.picker, VW, VH, this.t);
     if (this.over) this._drawOver(g);
 
     // Destello de la bomba, por encima de todo.
@@ -1195,7 +1311,7 @@ export default {
       g.strokeStyle = 'rgba(255,225,77,0.55)';
       g.beginPath();
       g.arc(BOMB_X, BOMB_Y, BOMB_R, -Math.PI / 2,
-            -Math.PI / 2 + (1 - this.bomb.cd / RULES.bombCooldown) * Math.PI * 2);
+            -Math.PI / 2 + (1 - this.bomb.cd / this._bombCd()) * Math.PI * 2);
       g.stroke();
     }
     g.globalAlpha = 0.9;
@@ -1257,9 +1373,10 @@ function normalizar(a) {
   return a;
 }
 
-function mkBullet(x, y, vx, vy, dmg, mega) {
+function mkBullet(x, y, vx, vy, dmg, mega, pierce = 0) {
   // Una MEGA rebota mas veces: es el premio de haberla recogido.
-  return { x, y, vx, vy, dmg, mega, life: 3, hostile: false, bounces: mega ? 3 : 1 };
+  // `pierce` = cuantos enemigos MAS puede atravesar tras matar (PERFORANTE).
+  return { x, y, vx, vy, dmg, mega, life: 3, hostile: false, bounces: mega ? 3 : 1, pierce };
 }
 
 function mkEBullet(x, y, vx, vy) {
