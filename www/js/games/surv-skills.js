@@ -58,7 +58,7 @@ export function rarityWeights(pick) {
 export const SKILLS = {
   // ----- COMUNES -----
   perforante: {
-    id: 'perforante', name: 'PERFORANTE', rarity: 'comun', max: 3,
+    id: 'perforante', ready: true, name: 'PERFORANTE', rarity: 'comun', max: 3,
     desc: n => n >= 3
       ? ['LA BALA NO SE', 'DETIENE NUNCA']
       : ['LA BALA ATRAVIESA', 'A ' + n + ' ENEMIGO' + (n > 1 ? 'S' : '')],
@@ -67,7 +67,7 @@ export const SKILLS = {
   },
 
   iman: {
-    id: 'iman', name: 'IMAN', rarity: 'comun', max: 3,
+    id: 'iman', ready: true, name: 'IMAN', rarity: 'comun', max: 3,
     desc: n => n >= 3
       ? ['LOS PODERES VUELAN', 'DESDE TODA LA ARENA']
       : ['LOS PODERES VUELAN', 'HACIA TI'],
@@ -82,14 +82,14 @@ export const SKILLS = {
   },
 
   mecha: {
-    id: 'mecha', name: 'MECHA CORTA', rarity: 'comun', max: 3,
+    id: 'mecha', ready: true, name: 'MECHA CORTA', rarity: 'comun', max: 3,
     desc: n => ['LA BOMBA RECARGA', 'EN ' + [21, 17, 13][n - 1] + ' SEGUNDOS'],
     cooldown: n => [21, 17, 13][n - 1],
   },
 
   // ----- RARAS -----
   piel: {
-    id: 'piel', name: 'SEGUNDA PIEL', rarity: 'rara', max: 3,
+    id: 'piel', ready: true, name: 'SEGUNDA PIEL', rarity: 'rara', max: 3,
     desc: n => n >= 3
       ? ['ESCUDO CADA OLA', 'AGUANTA DOS GOLPES']
       : n === 2
@@ -100,7 +100,7 @@ export const SKILLS = {
   },
 
   memoria: {
-    id: 'memoria', name: 'MEMORIA', rarity: 'rara', max: 3,
+    id: 'memoria', ready: true, name: 'MEMORIA', rarity: 'rara', max: 3,
     desc: n => n >= 3
       ? ['EL COMBO YA NO', 'BAJA NUNCA']
       : ['UN GOLPE SOLO QUITA', (n === 1 ? 'LA MITAD' : 'UN TERCIO') + ' DEL COMBO'],
@@ -109,17 +109,22 @@ export const SKILLS = {
   },
 
   linea: {
-    id: 'linea', name: 'LA LINEA RESISTE', rarity: 'rara', max: 3,
+    id: 'linea', ready: true, name: 'LA LINEA RESISTE', rarity: 'rara', max: 3,
+    // El N3 no dice "y el que cruza muere" porque el que cruza YA moria: al
+    // cruzar, el juego lo mata siempre. Lo que da de verdad es que ese cruce
+    // bloqueado ademas PUNTUA, que si es distinto.
     desc: n => n >= 3
-      ? ['AGUANTA 2 CRUCES', 'Y EL QUE CRUZA MUERE']
+      ? ['AGUANTA 3 CRUCES', 'Y ENCIMA PUNTUAN']
       : ['LA LINEA AGUANTA', n + ' CRUCE' + (n > 1 ? 'S' : '') + ' POR OLA'],
-    blocks: n => (n >= 2 ? 2 : 1),
-    kills: n => n >= 3,
+    // El N3 sube a tres cruces ademas de puntuar: medido, con dos se quedaba
+    // igual que el N2 y el tope de la habilidad no se notaba al subirlo.
+    blocks: n => [1, 2, 3][n - 1],
+    scores: n => n >= 3,
   },
 
   // ----- EPICAS -----
   ardiente: {
-    id: 'ardiente', name: 'COMBO ARDIENTE', rarity: 'epica', max: 2,
+    id: 'ardiente', ready: true, name: 'COMBO ARDIENTE', rarity: 'epica', max: 2,
     desc: n => n >= 2
       ? ['COMBO 10: BALAS', 'MEGA Y DOBLES']
       : ['COMBO 20: TUS BALAS', 'SON MEGA SOLAS'],
@@ -128,7 +133,7 @@ export const SKILLS = {
   },
 
   rebote: {
-    id: 'rebote', name: 'REBOTE', rarity: 'epica', max: 2,
+    id: 'rebote', ready: true, name: 'REBOTE', rarity: 'epica', max: 2,
     desc: n => n >= 2
       ? ['REBOTAN 2 VECES', 'Y PEGAN MAS FUERTE']
       : ['LAS BALAS REBOTAN', 'EN EL TECHO'],
@@ -138,7 +143,7 @@ export const SKILLS = {
 
   // ----- LEGENDARIA -----
   otra: {
-    id: 'otra', name: 'OTRA OPORTUNIDAD', rarity: 'legendaria', max: 1,
+    id: 'otra', ready: true, name: 'OTRA OPORTUNIDAD', rarity: 'legendaria', max: 1,
     desc: () => ['AL CAER REVIVES', 'UNA VEZ POR PARTIDA'],
     // No aparece en las dos primeras elecciones: de salir pronto, se llevaria
     // por delante toda la tension de las primeras olas.
@@ -163,6 +168,10 @@ export function offerCards(pick, have, rnd) {
   // Candidatas de una rareza: las que no esten al tope y cumplan su ola minima.
   const poolOf = (rar) => SKILL_IDS.filter(id => {
     const s = SKILLS[id];
+    // Solo se ofrece lo que de verdad HACE algo. Las que aun no tienen su
+    // efecto enganchado en survival.js estan definidas aqui pero no salen:
+    // una carta que se elige y no cambia nada es peor que no ofrecerla.
+    if (!s.ready) return false;
     if (s.rarity !== rar) return false;
     if (used.has(id)) return false;
     if ((have[id] || 0) >= s.max) return false;

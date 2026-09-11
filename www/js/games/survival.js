@@ -68,6 +68,9 @@ export default {
     this.skills = {};
     this.picks = 0;              // cuantas elecciones lleva (sube la rareza)
     this.picker = null;
+    this.skinShield = 0;         // cargas de SEGUNDA PIEL que quedan esta ola
+    this.lineBlocks = 0;         // cruces que aguanta LA LINEA RESISTE esta ola
+    this.revived = false;        // si ya se gasto OTRA OPORTUNIDAD
 
     // Estado de la ola.
     this.waveActive = false;
@@ -161,7 +164,12 @@ export default {
 
   _fire() {
     const r = this.roma;
-    const mega = this.power.mega > 0;
+    // COMBO ARDIENTE: con el combo alto las balas son MEGA por si solas, sin
+    // haber recogido el poder. El N2 ademas las dobla.
+    const ar = this._lvl('ardiente');
+    const ardiendo = ar > 0 && this.combo >= SKILLS.ardiente.at(ar);
+    const mega = this.power.mega > 0 || ardiendo;
+    const doble = this.power.double > 0 || (ardiendo && SKILLS.ardiente.dbl(ar));
     const dmg = mega ? 3 : 1;
     const sp = RULES.bulletSpeed;
     // Las balas salen hacia donde apunta el pulgar derecho.
@@ -173,12 +181,23 @@ export default {
     // PERFORANTE: cuantos enemigos puede atravesar cada bala de este disparo.
     const pn = this._lvl('perforante');
     const pierce = pn ? SKILLS.perforante.pierce(pn) : 0;
+    // REBOTE: cuantas veces vuelve a entrar una bala que se va por el techo.
+    const rb = this._lvl('rebote');
 
-    if (this.power.double > 0) {
-      this.bullets.push(mkBullet(r.x + ox - px, ROMA_Y + oy - py, vx, vy, dmg, mega, pierce));
-      this.bullets.push(mkBullet(r.x + ox + px, ROMA_Y + oy + py, vx, vy, dmg, mega, pierce));
+    const mk = (bx, by) => {
+      const b = mkBullet(bx, by, vx, vy, dmg, mega, pierce);
+      if (rb) {
+        b.bounces = Math.max(b.bounces, SKILLS.rebote.bounces(rb) + 1);
+        b.reboteLvl = rb;
+      }
+      return b;
+    };
+
+    if (doble) {
+      this.bullets.push(mk(r.x + ox - px, ROMA_Y + oy - py));
+      this.bullets.push(mk(r.x + ox + px, ROMA_Y + oy + py));
     } else {
-      this.bullets.push(mkBullet(r.x + ox, ROMA_Y + oy, vx, vy, dmg, mega, pierce));
+      this.bullets.push(mk(r.x + ox, ROMA_Y + oy));
     }
     SFX.shoot();
   },
@@ -192,10 +211,22 @@ export default {
       SFX.coin();
       return 'shield';
     }
+    // SEGUNDA PIEL: su escudo aguanta hasta que te golpean, a diferencia del
+    // poder ESCUDO que se cuenta en segundos. Por eso va en su propio contador.
+    if (this.skinShield > 0) {
+      this.skinShield--;
+      r.inv = RULES.invulnerable;
+      this._float('SEGUNDA PIEL', r.x, ROMA_Y - 30, '#6bf0ff');
+      SFX.coin();
+      cam.shake(3, 0.2);
+      return 'shield';
+    }
     this.lives--;
     r.inv = RULES.invulnerable;
     r.hurt = 0.5;
-    this.combo = 0;
+    // MEMORIA: el golpe ya no borra el combo entero, solo se lleva un trozo.
+    const mem = this._lvl('memoria');
+    this.combo = mem ? Math.floor(this.combo * SKILLS.memoria.keep(mem)) : 0;
     this.shake = 0.4;
     cam.shake(5, 0.35);
     vibrate(60);
@@ -204,7 +235,26 @@ export default {
       rnd: this.rnd, speed: 110, life: 0.5, size: 2, grav: 160,
       colors: ['#ff3ec9', '#ffffff', '#ff8ad4'],
     });
-    if (this.lives <= 0) { this._gameOver(); return 'dead'; }
+    if (this.lives <= 0) {
+      // OTRA OPORTUNIDAD: una sola vez por partida, la caida no es el final.
+      // Revive con una vida, limpia la pantalla y da un respiro largo, que si
+      // reviviera en medio del mismo enjambre no serviria de nada.
+      if (this._lvl('otra') && !this.revived) {
+        this.revived = true;
+        this.lives = 1;
+        r.inv = 3;
+        this.enemies.length = 0;
+        this.ebullets.length = 0;
+        this.flash = 0.5;
+        cam.shake(10, 0.7);
+        vibrate(140);
+        SFX.record();
+        this._float('OTRA OPORTUNIDAD', VW / 2, VH * 0.45, '#ffe14d');
+        return 'revive';
+      }
+      this._gameOver();
+      return 'dead';
+    }
     return 'hit';
   },
 
@@ -272,6 +322,16 @@ export default {
     this.waveActive = true;
     this.spawned = 0;
     this.spawnT = 0.3;
+
+    // Lo que se recarga con cada ola. Va aqui y no al recibir el golpe para que
+    // ella empiece la ola sabiendo con que cuenta.
+    const pi = this._lvl('piel');
+    if (pi) {
+      this.skinShield = SKILLS.piel.charges(pi) * SKILLS.piel.hits(pi);
+      this._float('SEGUNDA PIEL', VW / 2, 92, '#6bf0ff');
+    }
+    const li = this._lvl('linea');
+    if (li) this.lineBlocks = SKILLS.linea.blocks(li);
 
     const isBoss = this.wave % 5 === 0;
     this.toSpawn = isBoss
@@ -418,10 +478,22 @@ export default {
 
       // Cruzo la linea: Roma pierde una vida.
       if (e.y > LINE_Y) {
+        // LA LINEA RESISTE: se come el cruce sin cobrar vida. El enemigo muere
+        // igual (ya moria al cruzar); lo que cambia es que no duele.
+        if (this.lineBlocks > 0) {
+          this.lineBlocks--;
+          this._killEnemy(e, i, this._lvl('linea') >= 3);
+          this._float('LA LINEA AGUANTA', e.x, LINE_Y - 14, '#6bf0ff');
+          cam.shake(3, 0.25);
+          SFX.brick();
+          continue;
+        }
         this._killEnemy(e, i, false);
         const res = this._hurtRoma(ctx);
         this._float('-1', e.x, LINE_Y - 14, '#ff5c5c');
-        if (res === 'dead') return;
+        // 'revive' vacia la lista de enemigos: hay que salir del bucle igual
+        // que con 'dead', o se sigue recorriendo un array ya vaciado.
+        if (res === 'dead' || res === 'revive') return;
         continue;
       }
 
@@ -429,7 +501,7 @@ export default {
       if (Math.abs(e.x - this.roma.x) < e.r + 11 && Math.abs(e.y - ROMA_Y) < e.r + 11) {
         this._killEnemy(e, i, true);
         const res = this._hurtRoma(ctx);
-        if (res === 'dead') return;
+        if (res === 'dead' || res === 'revive') return;
         continue;                 // `e` ya no esta en la lista: no seguir con el
       }
     }
@@ -618,6 +690,9 @@ export default {
           // una bala disparada recta rebotaria en el techo y volveria por el
           // mismo sitio, sin llegar nunca a los lados.
           if (Math.abs(b.vx) < 40) b.vx = (this.rnd() < 0.5 ? -1 : 1) * 90;
+          // REBOTE N2: la bala rebotada pega mas fuerte, una sola vez. Asi el
+          // tiro dificil (buscar la pared) es el que mas premia.
+          if (b.reboteLvl >= 2 && !b.reforzada) { b.reforzada = true; b.dmg += 1; }
         }
       }
 
@@ -630,7 +705,7 @@ export default {
       if (b.hostile) {
         if (Math.abs(b.x - this.roma.x) < 12 && Math.abs(b.y - ROMA_Y) < 12) {
           this.bullets.splice(i, 1);
-          this._hurtRoma();
+          if (this._hurtRoma() === 'revive') return;   // revivir limpia la arena
           continue;
         }
         continue;                 // una bala revertida ya no daña enemigos
@@ -758,7 +833,8 @@ export default {
       }
       if (Math.abs(b.x - this.roma.x) < 11 && Math.abs(b.y - ROMA_Y) < 11) {
         this.ebullets.splice(i, 1);
-        if (this._hurtRoma(ctx) === 'dead') return;
+        const res = this._hurtRoma(ctx);
+        if (res === 'dead' || res === 'revive') return;
       }
     }
   },
