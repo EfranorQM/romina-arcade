@@ -228,6 +228,48 @@ export const SONGS = {
     { wave:'pulse', duty:0.25, pattern:'a.c.e.c.a.c.e.c.f.a.c.a.e.g.b.g.', vol:0.065 },
     { wave:'noise', pattern:'H...h...H...h...', vol:0.05 },
   ]},
+  // ---------- SURVIVAL: un tema por bioma ----------
+  // El de arriba (`survival`) es el de LA DUDA y se queda como estaba: es el
+  // que ella ya conoce. Los otros cuatro bajan de tonalidad y de tempo o suben,
+  // segun lo que tenga que sentir el tramo. Todos comparten la misma estructura
+  // (bajo en tri, arpegio en pulse, percusion en noise) para que suenen del
+  // mismo juego y no de cinco juegos distintos.
+
+  // EL VACIO: Re menor, mas lenta que ninguna. El bajo deja compases enteros en
+  // silencio y la percusion casi desaparece: aqui no hay nada a lo que
+  // agarrarse, y el hueco entre notas es lo que lo cuenta.
+  bioVacio: { bpm: 116, tracks: [
+    { wave:'tri',   pattern:'D.......A.......F.......C.......', vol:0.15 },
+    { wave:'pulse', duty:0.5, pattern:'d...a...f...c...d...f...a...d...', vol:0.06 },
+    { wave:'noise', pattern:'H.......h.......', vol:0.035 },
+  ]},
+
+  // LA MENTIRA: Mi menor con el arpegio a contratiempo del bajo. Suena
+  // agradable pero nunca termina de cuadrar, que es de lo que va el bioma.
+  bioMentira: { bpm: 144, tracks: [
+    { wave:'tri',   pattern:'E...E...C...C...G...G...B...B...', vol:0.16 },
+    { wave:'pulse', duty:0.125, pattern:'.e.g.b.e.g.b.e.g.c.e.g.c.b.d.g..', vol:0.07 },
+    { wave:'noise', pattern:'H..hH..h.H..hH.h', vol:0.05 },
+  ]},
+
+  // EL SILENCIO: la mas vacia de las cinco. Solo bajo y un arpegio que aparece
+  // de vez en cuando; la percusion es un golpe suelto por compas. Un bioma que
+  // se llama silencio no puede sonar lleno.
+  bioSilencio: { bpm: 104, tracks: [
+    { wave:'tri',   pattern:'C.......G.......A.......E.......', vol:0.14 },
+    { wave:'pulse', duty:0.5, pattern:'........c...e.......g...b.......', vol:0.055 },
+    { wave:'noise', pattern:'h...............', vol:0.03 },
+  ]},
+
+  // EL ABANDONO: La menor otra vez, como el primer bioma, pero rapida y con el
+  // bajo en corcheas sin descanso. Cierra el circulo: el mismo sitio, ya sin
+  // nada. Es la mas dura de las cinco.
+  bioAbandono: { bpm: 158, tracks: [
+    { wave:'tri',   pattern:'A.A.A.A.G.G.G.G.F.F.F.F.E.E.E.E.', vol:0.17 },
+    { wave:'pulse', duty:0.25, pattern:'a.c.e.a.g.b.d.g.f.a.c.f.e.g.b.e.', vol:0.07 },
+    { wave:'noise', pattern:'H.hHH.hHH.hHH.hH', vol:0.055 },
+  ]},
+
   // SURVIVAL, pelea de jefe. Misma tonalidad que las olas (La menor) para que
   // el cambio no suene a otro juego, pero 30 bpm mas rapida, el bajo en
   // corcheas y la percusion densa. El arpegio sube en vez de bajar: aqui la que

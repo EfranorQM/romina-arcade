@@ -194,7 +194,19 @@ export const RULES = {
   bossDropChance: 1,
   // Los jefes sueltan varios de golpe: es el premio de una pelea larga.
   bossDropCount: 3,
-  bossHpPerWave: 0.08,       // solo los jefes endurecen con la ola
+  bossHpPerWave: 0.08,       // cuanto endurece un JEFE por ola
+  // La tropa tambien endurece, pero MUCHO mas despacio y a partir de la ola 20.
+  // Antes no lo hacia nada: una DUDA tenia 1 de vida en la ola 1 y en la 90, y
+  // con las habilidades del roguelike (PERFORANTE, REFLEJO, COMBO ARDIENTE) las
+  // olas altas se barrian solas. Medido: sin esto la dureza de una ola iba a
+  // saltos segun que enemigos tocaran al azar (57 impactos en la ola 15, 33 en
+  // la 25); con esto sube de verdad y sigue siendo justa.
+  //
+  // 0.02 por ola desde la 20 = +60% de vida en la ola 50, +140% en la 90. Se
+  // redondea hacia arriba, asi que una DUDA de 1 de vida no pasa a 2 hasta la
+  // ola 45: los enemigos de un tiro siguen siendo de un tiro un buen rato.
+  troopHpPerWave: 0.02,
+  troopHpFromWave: 20,
   shotCooldown: 0.25,
   turboCooldown: 0.10,
   romaSpeed: 190,           // px/s

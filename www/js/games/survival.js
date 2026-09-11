@@ -337,6 +337,11 @@ export default {
     // El bioma de esta ola. Si estrena tramo, el aviso lo anuncia a lo grande.
     const antes = this.bioma;
     this.bioma = biomaFor(this.wave);
+    // Cada bioma suena distinto. Solo se cambia si de verdad cambio el tramo y
+    // no hay un jefe en la arena: en plena pelea manda el tema del jefe.
+    if (this.bioma !== antes && !this.enemies.some(e => e.boss)) {
+      playMusic(SONGS[this.bioma.song] || SONGS.survival);
+    }
     this.estrena = this.bioma !== antes && entraBioma(this.wave) ? 2.6 : 0;
     // El cartel del bioma SUSTITUYE al aviso de ola, no se suma: los dos a la
     // vez se pisaban en mitad de la pantalla y no se leia ninguno.
@@ -412,12 +417,14 @@ export default {
     // Los jefes ganan vida con la ola; la tropa no (crece en numero, no en
     // dureza, que es como estaba equilibrado el juego original).
     const scale = 1 + Math.max(0, this.wave - 5) * RULES.bossHpPerWave;
+    // La tropa endurece aparte de los jefes: mas tarde y mucho mas despacio.
+    const tScale = 1 + Math.max(0, this.wave - RULES.troopHpFromWave) * RULES.troopHpPerWave;
     const e = {
       id, def,
       x: x !== undefined ? x : 24 + this.rnd() * (VW - 48),
       y: y !== undefined ? y : -20,
-      hp: Math.ceil(def.hp * (def.boss ? scale : 1)),
-      maxHp: Math.ceil(def.hp * (def.boss ? scale : 1)),
+      hp: Math.ceil(def.hp * (def.boss ? scale : tScale)),
+      maxHp: Math.ceil(def.hp * (def.boss ? scale : tScale)),
       speed: def.speed * (1 + (this.wave - 1) * 0.04),
       r: def.r,
       boss: !!def.boss,
@@ -838,7 +845,8 @@ export default {
       // Se acabo la pelea: vuelve el tema de las olas. Si el EGO dejo un clon
       // vivo la pelea sigue, asi que solo se cambia cuando no queda ningun jefe.
       if (!this.enemies.some(o => o.boss && !o.dead)) {
-        playMusic(SONGS.survival);
+        // Vuelve el tema DEL BIOMA en el que esta, no el de la primera ola.
+        playMusic(SONGS[(this.bioma && this.bioma.song) || 'survival'] || SONGS.survival);
         this._openPicker(e.def.name);
       }
     }
@@ -1106,26 +1114,32 @@ export default {
   },
 
   _drawBg(g) {
+    const b = this.bioma;
+    // El cielo lo pone el bioma: es lo que hace que cambie la ARENA entera y no
+    // solo el fondo animado de encima. El violeta original es el de LA DUDA.
+    const sky = (b && b.sky) || ['#16082e', '#0d0620', '#1a0a26'];
     const bg = g.createLinearGradient(0, 0, 0, VH);
-    bg.addColorStop(0, '#16082e');
-    bg.addColorStop(0.6, '#0d0620');
-    bg.addColorStop(1, '#1a0a26');
+    bg.addColorStop(0, sky[0]);
+    bg.addColorStop(0.6, sky[1]);
+    bg.addColorStop(1, sky[2]);
     g.fillStyle = bg;
     g.fillRect(0, 0, VW, VH);
 
     // El fondo propio del bioma va aqui: sobre el degradado y bajo la rejilla,
     // para que la rejilla siga leyendose como el suelo de la arena.
-    if (this.bioma) drawBioma(g, this.bioma, VW, VH, this.t);
+    if (b) drawBioma(g, b, VW, VH, this.t);
 
-    // Rejilla en fuga: da profundidad sin costar casi nada.
-    g.strokeStyle = 'rgba(120,60,180,0.16)';
+    // Rejilla en fuga: da profundidad sin costar casi nada. Se tiñe del bioma.
+    g.strokeStyle = 'rgba(' + ((b && b.grid) || '120,60,180') + ',0.16)';
     g.lineWidth = 1;
     g.beginPath();
     for (let x = 0; x <= VW; x += 40) { g.moveTo(x, 0); g.lineTo(x, LINE_Y); }
     for (let y = 0; y <= LINE_Y; y += 34) { g.moveTo(0, y); g.lineTo(VW, y); }
     g.stroke();
 
-    // La linea que Roma defiende: late despacio.
+    // La linea que Roma defiende: late despacio. Se queda ROSA en los cinco
+    // biomas a proposito — es lo suyo, lo unico que no cambia de sitio a sitio,
+    // y teñirla de cada bioma le quitaria justo eso.
     const pulse = 0.55 + Math.sin(this.t * 2.4) * 0.2;
     g.strokeStyle = 'rgba(255,62,201,' + pulse.toFixed(2) + ')';
     g.lineWidth = 2;

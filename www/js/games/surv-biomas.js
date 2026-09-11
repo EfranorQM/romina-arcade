@@ -15,7 +15,7 @@
 
 export const BIOMAS = [
   {
-    id: 'duda',
+    id: 'duda', song: 'survival',
     name: 'LA DUDA',
     // Donde empieza. El ultimo no tiene fin: la partida sigue ahi para siempre.
     from: 1,
@@ -27,9 +27,13 @@ export const BIOMAS = [
     // Enemigos propios del bioma. Se suman a los comunes de poolForWave.
     own: ['susurro', 'espejismo'],
     sub: 'TODO EMPIEZA CON UNA PREGUNTA',
+    // El degradado del cielo y el tinte de la rejilla: son lo que hace que
+    // la ARENA cambie de sitio, no solo el fondo animado de encima.
+    sky: ['#16082e', '#0d0620', '#1a0a26'],
+    grid: '120,60,180',
   },
   {
-    id: 'vacio',
+    id: 'vacio', song: 'bioVacio',
     name: 'EL VACIO',
     from: 11,
     col: ['#4d7fff', '#c9b8e8'],
@@ -37,9 +41,13 @@ export const BIOMAS = [
     bosses: ['inseguridad', 'miedo'],
     own: ['hueco', 'peso'],
     sub: 'AQUI NO HAY NADA A LO QUE AGARRARSE',
+    // El degradado del cielo y el tinte de la rejilla: son lo que hace que
+    // la ARENA cambie de sitio, no solo el fondo animado de encima.
+    sky: ['#0a1030', '#060a1c', '#0d1228'],
+    grid: '70,110,200',
   },
   {
-    id: 'mentira',
+    id: 'mentira', song: 'bioMentira',
     name: 'LA MENTIRA',
     from: 21,
     col: ['#ff3ec9', '#ffe14d'],
@@ -47,9 +55,13 @@ export const BIOMAS = [
     bosses: ['mentira', 'ego'],
     own: ['reflejo', 'mascara'],
     sub: 'NADA DE LO QUE VES ES CIERTO',
+    // El degradado del cielo y el tinte de la rejilla: son lo que hace que
+    // la ARENA cambie de sitio, no solo el fondo animado de encima.
+    sky: ['#2e0a24', '#1a0616', '#2a0c1e'],
+    grid: '200,60,150',
   },
   {
-    id: 'silencio',
+    id: 'silencio', song: 'bioSilencio',
     name: 'EL SILENCIO',
     from: 31,
     col: ['#5cffd8', '#2a6a7a'],
@@ -57,9 +69,13 @@ export const BIOMAS = [
     bosses: ['silencio', 'vicio'],
     own: ['ahogo', 'eco'],
     sub: 'LO QUE NO SE DICE TAMBIEN PESA',
+    // El degradado del cielo y el tinte de la rejilla: son lo que hace que
+    // la ARENA cambie de sitio, no solo el fondo animado de encima.
+    sky: ['#04201f', '#031414', '#05211d'],
+    grid: '60,180,160',
   },
   {
-    id: 'abandono',
+    id: 'abandono', song: 'bioAbandono',
     name: 'EL ABANDONO',
     from: 41,
     col: ['#ff5c5c', '#ffb86b'],
@@ -67,6 +83,10 @@ export const BIOMAS = [
     bosses: ['tiempo', 'abandono'],
     own: ['olvidado', 'grieta'],
     sub: 'LO ULTIMO QUE QUEDA ES AGUANTAR',
+    // El degradado del cielo y el tinte de la rejilla: son lo que hace que
+    // la ARENA cambie de sitio, no solo el fondo animado de encima.
+    sky: ['#2a0c08', '#170605', '#240a06'],
+    grid: '200,80,50',
   },
 ];
 
