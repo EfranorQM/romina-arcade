@@ -49,6 +49,70 @@ export const ENEMIES = {
     name: 'DIVISOR', hp: 3, speed: 21, score: 70, r: 16,
     move: 'zigzag', splits: 'duda', splitCount: 2, kamikaze: true,
   },
+
+  // ---------- Los propios de cada bioma ----------
+  // Dos por bioma. NO sustituyen a los siete comunes de arriba: se suman a la
+  // mezcla cuando su bioma esta activo, asi el juego no se vuelve mas simple
+  // segun avanza. Ver surv-biomas.js para el reparto.
+  //
+  // Todos reusan los comportamientos que ya existen (straight/zigzag/sine,
+  // shoots, dash, tracks, shielded, splits): un enemigo nuevo que ademas
+  // necesitase codigo nuevo tardaria el doble y se podria medir la mitad.
+
+  // -- LA DUDA: lo que molesta sin hacer daño todavia --
+  susurro: {
+    name: 'SUSURRO', hp: 1, speed: 33, score: 20, r: 12,
+    move: 'zigzag',            // rapido y escurridizo, pero muere de un tiro
+  },
+  espejismo: {
+    name: 'ESPEJISMO', hp: 2, speed: 20, score: 45, r: 15,
+    move: 'sine', shoots: 0.25, aims: true, splits: 'susurro', splitCount: 1,
+  },
+
+  // -- EL VACIO: lo que pesa y lo que no esta --
+  hueco: {
+    name: 'HUECO', hp: 3, speed: 16, score: 55, r: 17,
+    move: 'straight', tracks: true,   // te sigue sin prisa y no se aparta
+  },
+  peso: {
+    name: 'PESO', hp: 5, speed: 9, score: 90, r: 19,
+    move: 'straight', shielded: true, shieldHp: 3, shoots: 0.5,
+  },
+
+  // -- LA MENTIRA: lo que no es lo que parece --
+  reflejo: {
+    name: 'REFLEJO', hp: 2, speed: 24, score: 60, r: 14,
+    move: 'sine', tracks: true, shoots: 0.35, aims: true,
+  },
+  mascara: {
+    name: 'MASCARA', hp: 3, speed: 18, score: 75, r: 16,
+    move: 'zigzag', shoots: 0.45, aims: true, burst: 2,
+  },
+
+  // -- EL SILENCIO: lo que aprieta --
+  ahogo: {
+    name: 'AHOGO', hp: 4, speed: 14, score: 85, r: 18,
+    move: 'sine', shoots: 0.6, burst: 3,
+  },
+  eco: {
+    name: 'ECO', hp: 2, speed: 26, score: 70, r: 13,
+    move: 'zigzag', splits: 'eco2', splitCount: 2, kamikaze: true,
+  },
+  // El ECO se parte en dos ecos pequeños; estos ya no se parten mas.
+  eco2: {
+    name: 'ECO', hp: 1, speed: 30, score: 25, r: 10,
+    move: 'zigzag', kamikaze: true,
+  },
+
+  // -- EL ABANDONO: lo que ya no vuelve --
+  olvidado: {
+    name: 'OLVIDADO', hp: 3, speed: 23, score: 95, r: 15,
+    move: 'straight', dash: { every: 1.8, dur: 0.5, mult: 5 }, kamikaze: true,
+  },
+  grieta: {
+    name: 'GRIETA', hp: 6, speed: 11, score: 120, r: 20,
+    move: 'straight', shielded: true, shieldHp: 4, shoots: 0.7, aims: true, burst: 2,
+  },
 };
 
 // ---------- Los diez jefes ----------

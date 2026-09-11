@@ -10,6 +10,8 @@
 // Todo se dibuja dentro de una caja de SZ x SZ centrada en (SZ/2, SZ/2), asi
 // el motor puede colocarlos por su centro sin saber nada de cada dibujo.
 
+import { BUILDERS2 } from './surv-art2.js';
+
 const SZ = 64;                     // lado de la lamina de cada criatura
 
 // Cada sprite se hornea a su propio canvas. `f` recibe el contexto ya centrado.
@@ -582,9 +584,12 @@ function romaHeart(col, glow) {
 // ---------- Cache ----------
 // Los sprites se hornean la PRIMERA vez que se piden y se guardan. Asi entrar
 // y salir del juego no vuelve a dibujarlos.
+// La tropa de los biomas vive en surv-art2.js: treinta criaturas en un solo
+// archivo no se pueden leer.
 const BUILDERS = {
   duda, olvido, tristeza, dasher, tracker, muro, divisor,
   celos, rutina, inseguridad, miedo, mentira, silencio, vicio, tiempo, abandono, ego,
+  ...BUILDERS2,
 };
 
 const cache = new Map();

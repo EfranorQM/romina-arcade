@@ -22,6 +22,7 @@ import {
   WAVE_PHRASES, GAMEOVER_MSGS, comboMult, poolForWave,
 } from './surv-defs.js';
 import { SKILLS, offerCards } from './surv-skills.js';
+import { biomaFor, bossFor, entraBioma, drawBioma } from './surv-biomas.js';
 import { drawPicker, cardAt } from './surv-cards.js';
 
 // ---------- Los controles tactiles ----------
@@ -68,6 +69,8 @@ export default {
     this.skills = {};
     this.picks = 0;              // cuantas elecciones lleva (sube la rareza)
     this.picker = null;
+    this.bioma = biomaFor(1);    // en que tramo esta la partida
+    this.estrena = 0;            // segundos de aviso al entrar en un bioma
     this.skinShield = 0;         // cargas de SEGUNDA PIEL que quedan esta ola
     this.lineBlocks = 0;         // cruces que aguanta LA LINEA RESISTE esta ola
     this.revived = false;        // si ya se gasto OTRA OPORTUNIDAD
@@ -293,6 +296,7 @@ export default {
       this.banner.t -= dt;
       if (this.banner.t <= 0) this.banner = null;
     }
+    if (this.estrena > 0) this.estrena -= dt;
 
     // Entre olas: cuenta atras para la siguiente.
     if (!this.waveActive) {
@@ -330,6 +334,13 @@ export default {
     this.spawned = 0;
     this.spawnT = 0.3;
 
+    // El bioma de esta ola. Si estrena tramo, el aviso lo anuncia a lo grande.
+    const antes = this.bioma;
+    this.bioma = biomaFor(this.wave);
+    this.estrena = this.bioma !== antes && entraBioma(this.wave) ? 2.6 : 0;
+    // El cartel del bioma SUSTITUYE al aviso de ola, no se suma: los dos a la
+    // vez se pisaban en mitad de la pantalla y no se leia ninguno.
+
     // Lo que se recarga con cada ola. Va aqui y no al recibir el golpe para que
     // ella empiece la ola sabiendo con que cuenta.
     const pi = this._lvl('piel');
@@ -346,17 +357,23 @@ export default {
       : 4 + Math.floor(this.wave * 1.1);
 
     if (isBoss) {
-      const id = this._pickBoss();
+      // El jefe lo dicta el BIOMA: cada uno tiene los suyos dos, el primero en
+      // su quinta ola y el segundo en la decima. Antes salian barajados de una
+      // bolsa comun y no habia forma de saber donde estabas.
+      const id = bossFor(this.wave);
       this.lastBoss = id;
       this.banner = { t: 2, wave: this.wave, sub: BOSSES[id].announce, boss: true };
       // El jefe entra en cuanto acaba el aviso.
       this.bossPending = id;
       this.bossT = 1.6;
-    } else {
+    } else if (!this.estrena) {
       this.banner = {
         t: 1.8, wave: this.wave,
         sub: WAVE_PHRASES[(this.rnd() * WAVE_PHRASES.length) | 0], boss: false,
       };
+      this.bossPending = null;
+    } else {
+      this.banner = null;
       this.bossPending = null;
     }
     SFX.wave();
@@ -375,7 +392,18 @@ export default {
   },
 
   _spawnFromPool() {
-    const pool = poolForWave(this.wave);
+    // La mezcla = los comunes de siempre MAS los propios del bioma. El bioma
+    // nunca quita enemigos, solo añade: si sustituyese la tropa, las olas
+    // altas tendrian menos variedad que las bajas y el juego se volveria mas
+    // facil segun avanza, justo al reves de lo que toca.
+    //
+    // Los propios van repetidos para que pesen mas que un comun cualquiera:
+    // son los que tienen que dar color al tramo. Con una sola copia de cada
+    // uno se perdian entre los siete comunes y el bioma no se notaba.
+    const pool = poolForWave(this.wave).slice();
+    const b = this.bioma;
+    if (b) for (const id of b.own) { pool.push(id, id); }
+
     const id = pool[(this.rnd() * pool.length) | 0];
     this._spawn(id, ENEMIES[id]);
   },
@@ -1065,6 +1093,7 @@ export default {
     this._drawControls(g);
     if (this.banner) this._drawBanner(g);
     if (this.tutorial > 0 && this.wave <= 1 && !this.banner) this._drawTutorial(g);
+    if (this.estrena > 0) this._drawBioma(g);
     if (this.picker) drawPicker(g, this.picker, VW, VH, this.t);
     if (this.over) this._drawOver(g);
 
@@ -1083,6 +1112,10 @@ export default {
     bg.addColorStop(1, '#1a0a26');
     g.fillStyle = bg;
     g.fillRect(0, 0, VW, VH);
+
+    // El fondo propio del bioma va aqui: sobre el degradado y bajo la rejilla,
+    // para que la rejilla siga leyendose como el suelo de la arena.
+    if (this.bioma) drawBioma(g, this.bioma, VW, VH, this.t);
 
     // Rejilla en fuga: da profundidad sin costar casi nada.
     g.strokeStyle = 'rgba(120,60,180,0.16)';
@@ -1427,6 +1460,31 @@ export default {
                b.boss ? '#ff4400' : '#ffe14d', 3);
     textCenter(g, b.sub, VW / 2, VH / 2 + 4, b.boss ? '#ffe14d' : '#5cffd8', 2);
     g.globalAlpha = 1;
+  },
+
+  // El cartel de entrada a un bioma. Es mas grande que el aviso de ola normal
+  // porque marca un cambio de sitio, no una ola mas: nombre en grande y su
+  // frase debajo, sobre dos barras del color del bioma.
+  _drawBioma(g) {
+    const b = this.bioma;
+    // Entra y sale con un fundido; en medio se queda quieto para poder leerlo.
+    const a = Math.min(1, Math.min(this.estrena, 2.6 - this.estrena) * 2.5);
+    if (a <= 0) return;
+    g.save();
+    g.globalAlpha = a;
+
+    const cy = VH * 0.38;
+    g.fillStyle = 'rgba(6,3,16,0.78)';
+    g.fillRect(0, cy - 30, VW, 62);
+    // Dos filos del color del bioma, arriba y abajo del cartel.
+    g.fillStyle = b.col[0];
+    g.fillRect(0, cy - 30, VW, 2);
+    g.fillStyle = b.col[1];
+    g.fillRect(0, cy + 30, VW, 2);
+
+    textCenter(g, b.name, VW / 2, cy - 20, b.col[0], 3);
+    textCenter(g, b.sub, VW / 2, cy + 14, b.col[1], 1);
+    g.restore();
   },
 
   _drawTutorial(g) {
