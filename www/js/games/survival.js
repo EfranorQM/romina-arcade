@@ -23,6 +23,7 @@ import {
 } from './surv-defs.js';
 import { SKILLS, offerCards } from './surv-skills.js';
 import { biomaFor, bossFor, entraBioma, drawBioma } from './surv-biomas.js';
+import { pose, carga, mkCorpse, updateCorpse, posarCorpse } from './surv-anim.js';
 import { drawPicker, cardAt } from './surv-cards.js';
 
 // ---------- Los controles tactiles ----------
@@ -56,6 +57,7 @@ export default {
     this.bullets = [];        // balas de Roma
     this.ebullets = [];       // balas enemigas
     this.drops = [];
+    this.corpses = [];        // los que acaban de morir, cayendo
     this.floats = [];         // textos que suben y se desvanecen
 
     this.power = { double: 0, mega: 0, shield: 0, turbo: 0 };
@@ -109,10 +111,21 @@ export default {
     this.bossPending = null;
     this.bossT = 0;
     this.flash = 0;
+    // Camara lenta: segundos que quedan de tiempo ralentizado. Solo la usa la
+    // muerte de un jefe, y por eso se siente como un final y no como un tic.
+    this.slow = 0;
+    this.destroyed = false;
   },
 
   // ---------- Bucle ----------
   update(dt, ctx) {
+    // Camara lenta tras matar a un jefe: el golpe se ve entero. Baja el tiempo
+    // a un tercio y vuelve sola.
+    const dtReal = dt;
+    if (this.slow > 0) {
+      this.slow -= dt;
+      dt *= 0.34;
+    }
     this.t += dt;
     if (this.shake > 0) this.shake -= dt;
     if (this.tutorial > 0) this.tutorial -= dt;
@@ -126,7 +139,9 @@ export default {
 
     // Eligiendo recompensa: el juego se queda quieto detras. Sin cuenta atras a
     // proposito, que pueda leer las tres cartas con calma.
-    if (this.picker) { this._updatePicker(dt); return; }
+    // La pantalla de recompensa va a tiempo REAL: se abre justo al morir el
+    // jefe, o sea en plena camara lenta, y las cartas entrarian arrastrandose.
+    if (this.picker) { this._updatePicker(dtReal); return; }
 
     this._updateRoma(dt);
     this._updatePowers(dt);
@@ -135,6 +150,9 @@ export default {
     this._updateBullets(dt);
     this._updateEBullets(dt, ctx);
     this._updateDrops(dt);
+    for (let i = this.corpses.length - 1; i >= 0; i--) {
+      if (!updateCorpse(this.corpses[i], dt)) this.corpses.splice(i, 1);
+    }
     this._updateFloats(dt);
 
     if (this.comboT > 0) {
@@ -509,6 +527,13 @@ export default {
       }
       e.x = clamp(e.x, 14, VW - 14);
 
+      // La velocidad lateral REAL del frame, ya con el kamikaze y el clamp
+      // aplicados: calcularla dentro de _move se perdia el desvio del kamikaze,
+      // y justo los que embisten son los que mas se tienen que ver ladear.
+      // Media movil porque el valor crudo salta y el ladeo temblaria.
+      const vxr = dt > 0 ? (e.x - e._x0) / dt : 0;
+      e.vx = (e.vx || 0) * 0.8 + vxr * 0.2;
+
       // Disparo, con su aviso previo (el original lo llamaba telegraph).
       if (e.def.shoots && !e.invisible) {
         e.shootT -= dt;
@@ -551,6 +576,10 @@ export default {
 
   _move(e, dt, mult) {
     const m = e.def.move;
+    // De donde venia, para saber a que velocidad se desplaza de lado. La
+    // animacion lo usa para ladearlo hacia donde va, y sale bien para CUALQUIER
+    // movimiento (incluido el kamikaze y el del TRACKER) sin conocer los casos.
+    const x0 = e.x;
     e.y += e.speed * mult * dt;
     if (m === 'zigzag') {
       e.x = e.baseX + Math.sin(e.t * 2.2) * 42;
@@ -562,6 +591,7 @@ export default {
       e.x += Math.sign(this.roma.x - e.x) * 22 * dt;
       e.baseX = e.x - Math.sin(e.t * 1.5) * 60;
     }
+    e._x0 = x0;              // lo consume el bucle, tras el kamikaze y el clamp
   },
 
   _enemyShoot(e) {
@@ -828,6 +858,9 @@ export default {
     if (e.dead) return;
     e.dead = true;
     this.enemies.splice(idx, 1);
+    // Deja un cuerpo que sale despedido y se aplasta: desaparecer de golpe no
+    // se siente como matar algo. Dura medio segundo (el doble en un jefe).
+    if (e.spawnT <= 0) this.corpses.push(mkCorpse(e, this.rnd));
 
     if (scored) {
       const mult = comboMult(this.combo);
@@ -841,7 +874,25 @@ export default {
       colors: e.boss ? ['#ffe14d', '#ff5c9d', '#ffffff'] : ['#ff8ad4', '#ffffff'],
     });
     if (e.boss) {
-      cam.shake(7, 0.6); SFX.explode();
+      cam.shake(9, 0.8); SFX.explode();
+      // La muerte de un jefe no es un burst y ya: el tiempo se frena, la
+      // pantalla destella y la explosion llega en tres oleadas. Es el momento
+      // que ella va a recordar de cada pelea, asi que se le da su medio segundo.
+      this.slow = 0.5;
+      this.flash = 0.4;
+      for (const [espera, n, vel, col] of [
+        [120, 22, 190, ['#ffffff', '#ffe14d']],
+        [260, 26, 130, ['#ff5c9d', '#ffe14d']],
+        [430, 18, 90,  ['#ff3ec9', '#ffffff']],
+      ]) {
+        setTimeout(() => {
+          if (this.destroyed) return;
+          burst(e.x, e.y, n, {
+            rnd: this.rnd, speed: vel, life: 0.7, size: 2, grav: 40, colors: col,
+          });
+          cam.shake(4, 0.3);
+        }, espera);
+      }
       // Se acabo la pelea: vuelve el tema de las olas. Si el EGO dejo un clon
       // vivo la pelea sigue, asi que solo se cambia cuando no queda ningun jefe.
       if (!this.enemies.some(o => o.boss && !o.dead)) {
@@ -1092,6 +1143,7 @@ export default {
   draw(g) {
     this._drawBg(g);
     this._drawDrops(g);
+    this._drawCorpses(g);        // los muertos, por debajo de los vivos
     this._drawEnemies(g);
     this._drawBullets(g);
     this._drawAim(g);
@@ -1151,6 +1203,20 @@ export default {
     g.fillRect(0, LINE_Y, VW, VH - LINE_Y);
   },
 
+  _drawCorpses(g) {
+    for (const c of this.corpses) {
+      const p = posarCorpse(c);
+      const w = c.r * 2.4;
+      g.save();
+      g.globalAlpha = p.alpha;
+      g.translate(c.x, c.y);
+      g.rotate(p.rot);
+      g.scale(p.sx, p.sy);
+      g.drawImage(A.sprite(c.sprite), -w / 2, -w / 2, w, w);
+      g.restore();
+    }
+  },
+
   _drawEnemies(g) {
     for (const e of this.enemies) {
       const s = A.sprite(e.id);
@@ -1159,19 +1225,44 @@ export default {
       if (e.spawnT > 0) k = 0.35 + (1 - e.spawnT / 0.35) * 0.65;
       const w = e.r * 2.4 * k, h = w;
 
+      // Como toca dibujarla AHORA: respira, se ladea hacia donde va, se estira
+      // al embestir y se aplasta al recibir. Todo son transformaciones sobre la
+      // misma lamina horneada; ver surv-anim.js.
+      const po = pose(e);
+
       g.save();
+      g.translate(e.x, e.y);
+      if (po.rot) g.rotate(po.rot);
+      g.scale(po.sx, po.sy);
+
       if (e.invisible) g.globalAlpha = 0.16;          // la MENTIRA, casi borrada
       if (e.hit > 0) {
         // Destello blanco al recibir un golpe.
-        g.globalAlpha *= 1;
-        g.drawImage(s, e.x - w / 2, e.y - h / 2, w, h);
+        g.drawImage(s, -w / 2, -h / 2, w, h);
         g.globalCompositeOperation = 'lighter';
         g.globalAlpha = 0.75;
-        g.drawImage(s, e.x - w / 2, e.y - h / 2, w, h);
+        g.drawImage(s, -w / 2, -h / 2, w, h);
       } else {
-        g.drawImage(s, e.x - w / 2, e.y - h / 2, w, h);
+        g.drawImage(s, -w / 2, -h / 2, w, h);
       }
       g.restore();
+
+      // Los jefes AVISAN antes de soltar su habilidad: un anillo que se cierra
+      // a su alrededor mientras se hinchan. Sin esto un jefe es una bolsa de
+      // vida que dispara cuando quiere; con esto se puede aprender a leer.
+      if (e.boss) {
+        const c = carga(e);
+        if (c > 0) {
+          g.save();
+          g.globalAlpha = 0.25 + c * 0.5;
+          g.strokeStyle = e.phase2 ? '#ff4d4d' : '#ffe14d';
+          g.lineWidth = 1 + c * 2;
+          g.beginPath();
+          g.arc(e.x, e.y, e.r + 16 - c * 12, 0, 7);
+          g.stroke();
+          g.restore();
+        }
+      }
 
       // El escudo del MURO, dibujado aparte del cuerpo: se va apagando segun
       // recibe golpes, y asi se entiende sin leer nada que se puede romper.
@@ -1523,10 +1614,14 @@ export default {
   },
 
   destroy() {
+    // Las oleadas de la explosion del jefe van por setTimeout: si se sale del
+    // juego en ese medio segundo, no deben dibujar sobre otra escena.
+    this.destroyed = true;
     this.enemies.length = 0;
     this.bullets.length = 0;
     this.ebullets.length = 0;
     this.drops.length = 0;
+    this.corpses.length = 0;
     this.floats.length = 0;
   },
 };
