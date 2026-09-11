@@ -60,8 +60,8 @@ export const SKILLS = {
   perforante: {
     id: 'perforante', ready: true, name: 'PERFORANTE', rarity: 'comun', max: 3,
     desc: n => n >= 3
-      ? ['LA BALA NO SE', 'DETIENE NUNCA']
-      : ['LA BALA ATRAVIESA', 'A ' + n + ' ENEMIGO' + (n > 1 ? 'S' : '')],
+      ? ['UNA BALA BARRE', 'LA FILA ENTERA']
+      : ['CADA BALA MATA', 'A ' + (n + 1) + ' EN FILA'],
     // Cuantos enemigos mas puede atravesar una bala antes de apagarse.
     pierce: n => (n >= 3 ? 99 : n),
   },
@@ -69,8 +69,8 @@ export const SKILLS = {
   iman: {
     id: 'iman', ready: true, name: 'IMAN', rarity: 'comun', max: 3,
     desc: n => n >= 3
-      ? ['LOS PODERES VUELAN', 'DESDE TODA LA ARENA']
-      : ['LOS PODERES VUELAN', 'HACIA TI'],
+      ? ['NUNCA PIERDES', 'UN PODER']
+      : ['ATRAPAS ' + ['LA MITAD', 'CASI TODOS'][n - 1], 'DE LOS PODERES'],
     // Radio en px dentro del cual un poder caido se va hacia Roma.
     //
     // Medido en la app: la distancia horizontal entre Roma y un poder que cae
@@ -83,29 +83,28 @@ export const SKILLS = {
 
   mecha: {
     id: 'mecha', ready: true, name: 'MECHA CORTA', rarity: 'comun', max: 3,
-    desc: n => ['LA BOMBA RECARGA', 'EN ' + [21, 17, 13][n - 1] + ' SEGUNDOS'],
+    desc: n => ['MAS BOMBAS: UNA', 'CADA ' + [21, 17, 13][n - 1] + ' SEGUNDOS'],
     cooldown: n => [21, 17, 13][n - 1],
   },
 
   // ----- RARAS -----
   piel: {
     id: 'piel', ready: true, name: 'SEGUNDA PIEL', rarity: 'rara', max: 3,
-    desc: n => n >= 3
-      ? ['ESCUDO CADA OLA', 'AGUANTA DOS GOLPES']
-      : n === 2
-        ? ['ESCUDO AL EMPEZAR', 'Y A MITAD DE OLA']
-        : ['EMPIEZAS CADA OLA', 'CON ESCUDO'],
+    desc: n => ['AGUANTAS ' + [1, 2, 4][n - 1] + ' GOLPE' + (n > 1 ? 'S' : ''), 'GRATIS POR OLA'],
     charges: n => (n >= 2 ? 2 : 1),      // escudos por ola
     hits: n => (n >= 3 ? 2 : 1),         // golpes que aguanta cada uno
   },
 
-  memoria: {
-    id: 'memoria', ready: true, name: 'MEMORIA', rarity: 'rara', max: 3,
+  // MEMORIA (proteger el combo de los golpes) se quito: el combo SOLO
+  // multiplica puntos (ver comboMult en surv-defs.js), asi que protegerlo no
+  // cambiaba nada de como se juega. En su sitio va REFLEJO, que si se nota.
+  reflejo: {
+    id: 'reflejo', ready: true, name: 'REFLEJO', rarity: 'rara', max: 3,
     desc: n => n >= 3
-      ? ['EL COMBO YA NO', 'BAJA NUNCA']
-      : ['UN GOLPE SOLO QUITA', (n === 1 ? 'LA MITAD' : 'UN TERCIO') + ' DEL COMBO'],
-    // Que fraccion del combo SOBREVIVE a un golpe.
-    keep: n => [0.5, 0.67, 1][n - 1],
+      ? ['DISPARAS 3 VECES', 'MAS RAPIDO']
+      : ['DISPARAS ' + ['UN TERCIO', 'EL DOBLE'][n - 1], n === 1 ? 'MAS RAPIDO' : 'DE RAPIDO'],
+    // Multiplica la cadencia. El disparo base tarda 0.25 s entre balas.
+    rate: n => [1.33, 2, 3][n - 1],
   },
 
   linea: {
@@ -114,8 +113,8 @@ export const SKILLS = {
     // cruzar, el juego lo mata siempre. Lo que da de verdad es que ese cruce
     // bloqueado ademas PUNTUA, que si es distinto.
     desc: n => n >= 3
-      ? ['AGUANTA 3 CRUCES', 'Y ENCIMA PUNTUAN']
-      : ['LA LINEA AGUANTA', n + ' CRUCE' + (n > 1 ? 'S' : '') + ' POR OLA'],
+      ? ['3 SE TE PUEDEN', 'COLAR Y ENCIMA PAGAN']
+      : ['SE TE PUEDEN COLAR', n + ' SIN PERDER VIDA'],
     // El N3 sube a tres cruces ademas de puntuar: medido, con dos se quedaba
     // igual que el N2 y el tope de la habilidad no se notaba al subirlo.
     blocks: n => [1, 2, 3][n - 1],
@@ -125,18 +124,23 @@ export const SKILLS = {
   // ----- EPICAS -----
   ardiente: {
     id: 'ardiente', ready: true, name: 'COMBO ARDIENTE', rarity: 'epica', max: 2,
+    // Pedia combo 20 y 10, y era casi inalcanzable: el combo caduca a los 3 s
+    // sin matar, y una ola entera trae 7 enemigos en la ola 5 y 13 en la 30.
+    // Llegar a 20 exigia encadenar casi DOS olas sin una sola pausa. Medido y
+    // bajado a 5 y 3, que es un par de enemigos seguidos: ahora se enciende de
+    // verdad y se siente como una racha, que es lo que queria ser.
     desc: n => n >= 2
-      ? ['COMBO 10: BALAS', 'MEGA Y DOBLES']
-      : ['COMBO 20: TUS BALAS', 'SON MEGA SOLAS'],
-    at: n => (n >= 2 ? 10 : 20),
+      ? ['3 SEGUIDAS: BALAS', 'TRIPLES Y DOBLES']
+      : ['5 SEGUIDAS: TUS', 'BALAS TRIPLICAN'],
+    at: n => (n >= 2 ? 3 : 5),
     dbl: n => n >= 2,
   },
 
   rebote: {
     id: 'rebote', ready: true, name: 'REBOTE', rarity: 'epica', max: 2,
     desc: n => n >= 2
-      ? ['REBOTAN 2 VECES', 'Y PEGAN MAS FUERTE']
-      : ['LAS BALAS REBOTAN', 'EN EL TECHO'],
+      ? ['REBOTES QUE PEGAN', 'EL DOBLE DE FUERTE']
+      : ['TUS BALAS VUELVEN', 'Y PILLAN POR DETRAS'],
     bounces: n => n,
     stronger: n => n >= 2,
   },
@@ -144,7 +148,7 @@ export const SKILLS = {
   // ----- LEGENDARIA -----
   otra: {
     id: 'otra', ready: true, name: 'OTRA OPORTUNIDAD', rarity: 'legendaria', max: 1,
-    desc: () => ['AL CAER REVIVES', 'UNA VEZ POR PARTIDA'],
+    desc: () => ['LA PRIMERA MUERTE', 'NO CUENTA'],
     // No aparece en las dos primeras elecciones: de salir pronto, se llevaria
     // por delante toda la tension de las primeras olas.
     minPick: 3,

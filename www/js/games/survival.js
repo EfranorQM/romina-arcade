@@ -154,6 +154,10 @@ export default {
     // Disparo. El SILENCIO duplica el tiempo entre tiros si estas en su aura.
     if (this.firing) {
       let cd = this.power.turbo > 0 ? RULES.turboCooldown : RULES.shotCooldown;
+      // REFLEJO: dispara mas seguido. Se aplica tambien sobre el TURBO, que ya
+      // es rapido de por si: las dos cosas juntas son una build valida.
+      const rf = this._lvl('reflejo');
+      if (rf) cd /= SKILLS.reflejo.rate(rf);
       if (this.silenced) cd *= 2;
       if (this.t - r.lastShot >= cd) {
         r.lastShot = this.t;
@@ -162,12 +166,17 @@ export default {
     }
   },
 
+  // COMBO ARDIENTE: si la racha actual ya enciende las balas. Lo consultan el
+  // disparo Y el dibujo, asi que vive en un solo sitio.
+  _ardiendo() {
+    const ar = this._lvl('ardiente');
+    return ar > 0 && this.combo >= SKILLS.ardiente.at(ar);
+  },
+
   _fire() {
     const r = this.roma;
-    // COMBO ARDIENTE: con el combo alto las balas son MEGA por si solas, sin
-    // haber recogido el poder. El N2 ademas las dobla.
     const ar = this._lvl('ardiente');
-    const ardiendo = ar > 0 && this.combo >= SKILLS.ardiente.at(ar);
+    const ardiendo = this._ardiendo();
     const mega = this.power.mega > 0 || ardiendo;
     const doble = this.power.double > 0 || (ardiendo && SKILLS.ardiente.dbl(ar));
     const dmg = mega ? 3 : 1;
@@ -224,9 +233,7 @@ export default {
     this.lives--;
     r.inv = RULES.invulnerable;
     r.hurt = 0.5;
-    // MEMORIA: el golpe ya no borra el combo entero, solo se lleva un trozo.
-    const mem = this._lvl('memoria');
-    this.combo = mem ? Math.floor(this.combo * SKILLS.memoria.keep(mem)) : 0;
+    this.combo = 0;
     this.shake = 0.4;
     cam.shake(5, 0.35);
     vibrate(60);
@@ -763,8 +770,17 @@ export default {
   _damage(e, idx, dmg) {
     e.hp -= dmg;
     e.hit = 0.12;
+    // COMBO ARDIENTE: avisar en el fotograma EXACTO en que se encienden las
+    // balas. Sin este aviso la habilidad se activaba en silencio y no habia
+    // forma de saber que estaba funcionando.
+    const ardiaAntes = this._ardiendo();
     this.combo++;
     this.comboT = 3;
+    if (!ardiaAntes && this._ardiendo()) {
+      this._float('EN LLAMAS', this.roma.x, ROMA_Y - 38, '#ffe14d');
+      SFX.powerup();
+      cam.shake(3, 0.2);
+    }
     burst(e.x, e.y, 4, {
       rnd: this.rnd, speed: 60, life: 0.25, size: 2,
       colors: ['#ffffff', '#ff8ad4'],
@@ -1232,7 +1248,10 @@ export default {
     if (r.inv > 0 && Math.sin(this.t * 30) < 0) return;
 
     let mode = 'normal';
-    if (this.power.mega > 0) mode = 'mega';
+    // `ardiendo` cuenta igual que el poder MEGA: si las balas estan potenciadas
+    // hay que VERLO. Antes solo se miraba power.mega y COMBO ARDIENTE no
+    // encendia nada: las balas triplicaban y en pantalla no cambiaba nada.
+    if (this.power.mega > 0 || this._ardiendo()) mode = 'mega';
     else if (this.power.turbo > 0) mode = 'turbo';
     else if (this.power.shield > 0) mode = 'shield';
     else if (this.power.double > 0) mode = 'double';

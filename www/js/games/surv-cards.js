@@ -8,11 +8,15 @@
 // unico que las distingue de un vistazo, asi que se dibuja con cuidado.
 
 import { text, textCenter, measure } from '../font.js';
+import { icon } from './surv-icons.js';
 
 // La carta y su sitio. Tres caben en 600 px de ancho con aire de sobra.
-export const CARD_W = 150, CARD_H = 150;
+// La carta crecio de 150 a 188 de alto al meterle el icono: cinta 22 + icono 48
+// + nombre (hasta dos lineas) + nivel + descripcion + pastillas suman 187, y el
+// lienzo da 196 desde y=66. Justo, pero entra.
+export const CARD_W = 150, CARD_H = 188;
 const GAP = 24;
-export const CARD_Y = 84;
+export const CARD_Y = 66;
 
 // Donde cae la carta i (0,1,2) ya colocada.
 export function cardX(i, vw) {
@@ -157,9 +161,29 @@ function drawCard(g, card, x, y, t, anim, sel) {
   g.fillRect(1, 16, CARD_W - 2, 1);
   textCenter(g, rar.name, CARD_W / 2, 5, '#ffffff', 1);
 
+  // ---------- El icono, en su propio marco ----------
+  // Un recuadro hundido con el dibujo dentro: separa el arte del texto y le da
+  // a la carta el aire de cromo que no tenia cuando era solo letras.
+  const IW = 48, IX = CARD_W / 2 - IW / 2, IY = 22;
+  g.fillStyle = 'rgba(0,0,0,0.42)';
+  g.fillRect(IX, IY, IW, IW);
+  // Fondo del hueco: un degradado del color de la rareza, muy apagado, para
+  // que el icono no flote sobre negro plano.
+  const ig = g.createLinearGradient(IX, IY, IX, IY + IW);
+  ig.addColorStop(0, rgba(rar.color, 0.22));
+  ig.addColorStop(1, rgba(rar.color, 0.04));
+  g.fillStyle = ig;
+  g.fillRect(IX, IY, IW, IW);
+  g.strokeStyle = rgba(rar.color, 0.55);
+  g.lineWidth = 1;
+  g.strokeRect(IX + 0.5, IY + 0.5, IW - 1, IW - 1);
+
+  const ic = icon(s.id, rar.color, 3);
+  if (ic) g.drawImage(ic, IX, IY, IW, IW);
+
   // Nombre, siempre a escala 2: partido en dos lineas si no cabe de una.
   const nl = nameLines(s.name, CARD_W - 14);
-  let y2 = 28;
+  let y2 = IY + IW + 6;
   for (const line of nl) {
     textCenter(g, line, CARD_W / 2, y2, '#ffffff', 2);
     y2 += 18;
@@ -197,13 +221,13 @@ function drawCard(g, card, x, y, t, anim, sel) {
     for (let i = 0; i < n; i++) {
       const on = i < card.level;
       g.fillStyle = on ? rar.color : 'rgba(255,255,255,0.13)';
-      g.fillRect(px, CARD_H - 18, pw, 4);
+      g.fillRect(px, CARD_H - 14, pw, 4);
       px += pw + gap;
     }
   } else {
     // Las de un solo nivel (la LEGENDARIA) no tienen pastillas que enseñar: en
     // su hueco va lo que de verdad las define, que no se pueden mejorar mas.
-    textCenter(g, 'UNICA', CARD_W / 2, CARD_H - 22, rgba(rar.color, 0.75), 1);
+    textCenter(g, 'UNICA', CARD_W / 2, CARD_H - 18, rgba(rar.color, 0.75), 1);
   }
   g.restore();
 }
@@ -218,8 +242,8 @@ export function drawPicker(g, st, vw, vh, t) {
 
   const head = Math.min(1, st.anim * 2);
   g.globalAlpha = head;
-  textCenter(g, st.title, vw / 2, 30, '#ffe14d', 1);
-  textCenter(g, 'ELIGE TU RECOMPENSA', vw / 2, 48, '#ff3ec9', 2);
+  textCenter(g, st.title, vw / 2, 12, '#ffe14d', 1);
+  textCenter(g, 'ELIGE TU RECOMPENSA', vw / 2, 28, '#ff3ec9', 2);
   g.globalAlpha = 1;
 
   for (let i = 0; i < st.cards.length; i++) {
