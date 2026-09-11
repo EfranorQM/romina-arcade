@@ -173,10 +173,18 @@ function seqTick() {
 
 export function playMusic(song) {
   if (!ac) return;
+  // Pedir la cancion que YA suena no la reinicia. SURVIVAL cambia de tema al
+  // entrar y al morir cada jefe; sin esta guarda, cualquier llamada de mas
+  // cortaria el compas por la mitad y se oiria el salto.
+  if (seq && seq.song === song) return;
   stopMusic();
   seq = { song, step:0, stepDur: 60 / song.bpm / 4, next: ac.currentTime + 0.08 };
   seqTick();
 }
+
+// Que cancion suena ahora mismo, o null. La usa SURVIVAL para volver al tema de
+// las olas solo si de verdad estaba en el del jefe.
+export function currentSong() { return seq ? seq.song : null; }
 
 export function stopMusic() {
   if (seqTimer) { clearTimeout(seqTimer); seqTimer = 0; }
@@ -207,6 +215,26 @@ export const SONGS = {
     // tri/pulse/noise, asi que un 'saw' aqui sonaria como cuadrada sin avisar.
     { wave:'tri',   pattern:'E.E.E.E.E.E.E.E.C.C.C.C.G.G.G.G.', vol:0.16 },
     { wave:'pulse', duty:0.25, pattern:'e.g.b.g.e.g.b.g.c.e.g.e.g.b.d.b.', vol:0.07 },
+    { wave:'noise', pattern:'H.hHH.hHH.hHH.hH', vol:0.06 },
+  ]},
+
+  // SURVIVAL: un juego de AGUANTAR, no de correr. La de las olas va en La menor
+  // a tempo medio: tiene que sostener veinte minutos de partida sin cansar, asi
+  // que el bajo pisa en redondas (no en corcheas como FURIA) y la percusion
+  // deja huecos. El arpegio baja al final del compas, que es lo que le da el
+  // aire de "esto viene hacia ti" en vez de marcha triunfal.
+  survival: { bpm: 132, tracks: [
+    { wave:'tri',   pattern:'A...A...F...F...C...C...G...G...', vol:0.16 },
+    { wave:'pulse', duty:0.25, pattern:'a.c.e.c.a.c.e.c.f.a.c.a.e.g.b.g.', vol:0.065 },
+    { wave:'noise', pattern:'H...h...H...h...', vol:0.05 },
+  ]},
+  // SURVIVAL, pelea de jefe. Misma tonalidad que las olas (La menor) para que
+  // el cambio no suene a otro juego, pero 30 bpm mas rapida, el bajo en
+  // corcheas y la percusion densa. El arpegio sube en vez de bajar: aqui la que
+  // aprieta es ella.
+  survivalBoss: { bpm: 162, tracks: [
+    { wave:'tri',   pattern:'A.A.A.A.F.F.F.F.G.G.G.G.E.E.E.E.', vol:0.17 },
+    { wave:'pulse', duty:0.125, pattern:'a.e.a.c.e.a.c.e.f.c.f.a.c.e.g.b.', vol:0.075 },
     { wave:'noise', pattern:'H.hHH.hHH.hHH.hH', vol:0.06 },
   ]},
 };

@@ -13,7 +13,7 @@
 
 import { Pool, clamp, cam, makeRng } from '../core.js';
 import { text, textCenter, measure } from '../font.js';
-import { SFX, sfx } from '../audio.js';
+import { SFX, sfx, playMusic, stopMusic, SONGS } from '../audio.js';
 import { burst, particles } from '../gfx.js';
 import { vibrate } from '../input.js';
 import * as A from './surv-art.js';
@@ -195,6 +195,8 @@ export default {
     this.overT = 0;
     this.msg = GAMEOVER_MSGS[(this.rnd() * GAMEOVER_MSGS.length) | 0];
     cam.shake(8, 0.6);
+    // La musica calla para que el jingle de derrota se oiga limpio.
+    stopMusic();
     SFX.gameover();
   },
 
@@ -348,6 +350,8 @@ export default {
         def.score = Math.floor(def.score * (1 + Math.max(0, this.wave - 5) * 0.04));
         this._spawn(id, def, VW / 2, -30);
         cam.shake(6, 0.5);
+        // La musica sube de revoluciones en cuanto el jefe pisa la arena.
+        playMusic(SONGS.survivalBoss);
       }
     }
 
@@ -680,7 +684,12 @@ export default {
       rnd: this.rnd, speed: e.boss ? 150 : 90, life: 0.55, size: 2, grav: 60,
       colors: e.boss ? ['#ffe14d', '#ff5c9d', '#ffffff'] : ['#ff8ad4', '#ffffff'],
     });
-    if (e.boss) { cam.shake(7, 0.6); SFX.explode(); }
+    if (e.boss) {
+      cam.shake(7, 0.6); SFX.explode();
+      // Se acabo la pelea: vuelve el tema de las olas. Si el EGO dejo un clon
+      // vivo la pelea sigue, asi que solo se cambia cuando no queda ningun jefe.
+      if (!this.enemies.some(o => o.boss && !o.dead)) playMusic(SONGS.survival);
+    }
     else SFX.brick();
 
     // El DIVISOR se parte en dos al morir.

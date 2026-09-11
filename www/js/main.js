@@ -1,7 +1,7 @@
 // ROMINA'S ARCADE — arranque, bucle de tiempo fijo, gestor de escenas y menu.
 import { VW, VH, BASE_VW, BASE_VH, MENU_VW, MENU_VH, setVirtual, setSmooth, requestOrientation, isLandscape, initCanvas, view, makeRng, Save, cam } from './core.js';
 import { initInput } from './input.js';
-import { initAudio, unlockAudio, SFX, toggleMute, suspendAudio, resumeAudio, playMusic, stopMusic, SONGS } from './audio.js';
+import { initAudio, unlockAudio, SFX, toggleMute, suspendAudio, resumeAudio, playMusic, stopMusic, SONGS, currentSong } from './audio.js';
 import { text, textCenter, measure } from './font.js';
 import { particles, updateParticles, drawParticles } from './gfx.js';
 import { GAMES } from './games.js';
@@ -255,7 +255,15 @@ function boot() {
 
 // Gancho para las herramientas de tools/: permite llevar la app a una escena
 // concreta sin jugar hasta ella. No lo usa nada del juego.
-window.__arcade = { sm, ctx, Menu, GameOver, GAMES, view };
+// `cancion` devuelve el NOMBRE del tema que suena: es la unica forma de
+// comprobar desde fuera que SURVIVAL cambia de musica al entrar el jefe.
+window.__arcade = {
+  sm, ctx, Menu, GameOver, GAMES, view,
+  get cancion() {
+    const s = currentSong();
+    return s ? (Object.keys(SONGS).find(k => SONGS[k] === s) || '?') : null;
+  },
+};
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();
