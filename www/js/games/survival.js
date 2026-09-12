@@ -25,6 +25,7 @@ import { SKILLS, offerCards } from './surv-skills.js';
 import { biomaFor, bossFor, entraBioma, drawBioma } from './surv-biomas.js';
 import { pose, carga, mkCorpse, updateCorpse, posarCorpse } from './surv-anim.js';
 import { drawPicker, cardAt } from './surv-cards.js';
+import { poseRoma, brilloRoma, alphaRoma, mkEstadoRoma, updateRoma } from './surv-roma.js';
 import { bloom, bloomLibre } from '../bloom.js';
 
 // Cuanta luz suma la pasada de neon. Medido comparando capturas de la MISMA
@@ -79,6 +80,10 @@ export default {
     // la interpolacion. Nace ya puesta, o el primer frame la dibujaria
     // viniendo de la coordenada 0 (el borde izquierdo).
     this.roma = { x: VW / 2, px: VW / 2, inv: 0, lastShot: 0, hurt: 0 };
+    // La vida de Roma: fase del latido y ladeo suavizado. Vive aqui y se mueve
+    // en update(), nunca en draw(): lo que se actualiza al dibujar corre al
+    // ritmo de la PANTALLA, y en un telefono de 120 Hz iria al doble.
+    this.rst = mkEstadoRoma();
     this.lives = RULES.lives;
     this.score = 0;
     this.wave = 0;
@@ -237,20 +242,32 @@ export default {
     r.x = clamp(r.x + this.padDX * RULES.romaSpeed * dt, 16, VW - 16);
     if (r.inv > 0) r.inv -= dt;
     if (r.hurt > 0) r.hurt -= dt;
+    // El latido, el ladeo y la cadencia. Con el dt del JUEGO, asi que la camara
+    // lenta al matar un jefe tambien le frena el corazon, que es lo que toca.
+    updateRoma(this, this.rst, dt);
 
     // Disparo. El SILENCIO duplica el tiempo entre tiros si estas en su aura.
     if (this.firing) {
-      let cd = this.power.turbo > 0 ? RULES.turboCooldown : RULES.shotCooldown;
-      // REFLEJO: dispara mas seguido. Se aplica tambien sobre el TURBO, que ya
-      // es rapido de por si: las dos cosas juntas son una build valida.
-      const rf = this._lvl('reflejo');
-      if (rf) cd /= SKILLS.reflejo.rate(rf);
-      if (this.silenced) cd *= 2;
+      const cd = this._cadencia();
       if (this.t - r.lastShot >= cd) {
         r.lastShot = this.t;
         this._fire();
       }
     }
+  },
+
+  // Cada cuanto puede disparar Roma ahora mismo, en segundos. Vive en un solo
+  // sitio porque lo consultan el disparo Y la animacion: el retroceso del
+  // corazon tiene que durar menos que el intervalo entre tiros, o con TURBO y
+  // REFLEJO 3 (30 tiros por segundo) se solaparia y ella se quedaria encogida.
+  _cadencia() {
+    let cd = this.power.turbo > 0 ? RULES.turboCooldown : RULES.shotCooldown;
+    // REFLEJO: dispara mas seguido. Se aplica tambien sobre el TURBO, que ya
+    // es rapido de por si: las dos cosas juntas son una build valida.
+    const rf = this._lvl('reflejo');
+    if (rf) cd /= SKILLS.reflejo.rate(rf);
+    if (this.silenced) cd *= 2;
+    return cd;
   },
 
   // COMBO ARDIENTE: si la racha actual ya enciende las balas. Lo consultan el
@@ -1543,9 +1560,12 @@ export default {
 
   _drawRoma(g) {
     const r = this.roma;
-    // Parpadea mientras es invulnerable.
-    if (r.inv > 0 && Math.sin(this.t * 30) < 0) return;
     const rx = this._romaX();
+    // Ya NO se salta el dibujado cuando es invulnerable. Antes hacia
+    // `if (r.inv > 0 && Math.sin(this.t*30) < 0) return;`, o sea que la borraba
+    // 7 veces en el segundo y medio de gracia: 0.75 s sin su personaje en
+    // pantalla justo despues de que la golpearan, que es cuando mas falta le
+    // hace verse. Ahora se vuelve translucida (ver alphaRoma) y no desaparece.
 
     let mode = 'normal';
     // `ardiendo` cuenta igual que el poder MEGA: si las balas estan potenciadas
@@ -1557,9 +1577,33 @@ export default {
     else if (this.power.double > 0) mode = 'double';
 
     const s = A.roma(mode);
-    const k = r.hurt > 0 ? 1.15 : 1;
-    const w = 30 * A.factor(s) * k;
-    g.drawImage(s, rx - w / 2, ROMA_Y - w / 2, w, w);
+    const w = 30 * A.factor(s);
+    const po = poseRoma(this, this.rst);
+
+    // EL RESPLANDOR, debajo del cuerpo. No lleva shadowBlur ni un gradiente por
+    // frame: es la propia lamina de Roma, agrandada y sumada con 'lighter'. El
+    // bloom que ya pasa el motor (bloom.js) la convierte en neon gratis.
+    //
+    // Es lo que la marca como la protagonista: hasta ahora era el unico objeto
+    // del juego que no emitia nada, un corazon parado mientras 28 criaturas
+    // respiraban a su alrededor.
+    const br = brilloRoma(this, this.rst);
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    g.globalAlpha = br * 0.30;
+    const gw = w * (1.35 + br * 0.30);
+    g.drawImage(s, rx - gw / 2, ROMA_Y - gw / 2, gw, gw);
+    g.restore();
+
+    // El cuerpo, con su pose. Igual que las criaturas: save/translate/rotate/
+    // scale, pero con el corazon centrado en su sitio.
+    g.save();
+    g.globalAlpha = alphaRoma(this);
+    g.translate(rx, ROMA_Y);
+    if (po.rot) g.rotate(po.rot);
+    g.scale(po.sx, po.sy);
+    g.drawImage(s, -w / 2, -w / 2, w, w);
+    g.restore();
 
     // La burbuja del escudo y el nombre van pegados al cuerpo: misma rx, o se
     // arrastrarian detras de ella al correr, igual que los adornos de los
