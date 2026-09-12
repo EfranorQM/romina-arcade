@@ -149,9 +149,19 @@ const ctx = {
   get VH() { return VH; },
   rnd,
   gameOver(score) {
-    const id = sm.cur.meta.id;
-    const isRecord = Save.submit(id, Math.floor(score));
-    sm.go(GameOver, { id, score: Math.floor(score), isRecord, title: sm.cur.meta.title });
+    const m = sm.cur.meta;
+    const isRecord = Save.submit(m.id, Math.floor(score));
+    // La pantalla de fin de partida SE QUEDA EN LA ORIENTACION DEL JUEGO. Antes
+    // era siempre apaisada, y al morir en uno de los cinco juegos verticales el
+    // telefono giraba solo para ensenar el puntaje y volvia a girar al empezar
+    // otra partida: dos rotaciones, con sus dos animaciones, entre una partida y
+    // la siguiente. Ahora hereda el formato del juego del que viene y no gira
+    // nadie. Se copia tambien la resolucion para que el lienzo no cambie de
+    // forma al morir.
+    GameOver.meta.wide = !!m.wide;
+    GameOver.meta.vw = m.vw || (m.wide ? MENU_VW : BASE_VW);
+    GameOver.meta.vh = m.vh || (m.wide ? MENU_VH : BASE_VH);
+    sm.go(GameOver, { id: m.id, score: Math.floor(score), isRecord, title: m.title });
   },
   toMenu() { sm.go(Menu, {}); },
   // La pausa se comparte con los juegos: la pieza del boton de pausa la
@@ -165,9 +175,19 @@ const ctx = {
 Menu.onLaunch = G => sm.go(G, { seed: (Math.random() * 0xffffffff) >>> 0 });
 
 // ---------- Escena: GAME OVER ----------
+// HEREDA LA ORIENTACION DEL JUEGO DEL QUE VIENE, y ese es el detalle que la
+// hace no molestar. Antes era siempre apaisada, asi que al morir en cualquiera
+// de los cinco juegos verticales el telefono GIRABA solo para ensenar el
+// puntaje, y volvia a girar al entrar de nuevo a jugar: dos rotaciones entre
+// una partida y la siguiente, cada una con su animacion del sistema.
+//
+// Ahora se queda como estaba el juego. La unica que sigue siendo apaisada de
+// verdad es la que viene de SURVIVAL o del menu, que ya lo eran.
+//
+// El dibujado no puede llevar coordenadas fijas, entonces: las mismas lineas
+// tienen que caber en 600x270 y en 270x600. Se colocan como fracciones de VH y
+// la escala del puntaje se elige segun el ancho que haya.
 const GameOver = {
-  // Apaisada como el menu: el puntaje es lo unico que importa aqui y en
-  // horizontal cabe mucho mas grande.
   meta: { id: '_over', title: 'FIN', wide: true, vw: 600, vh: 270 },
   init(c, a) {
     this.score = a.score; this.isRecord = a.isRecord; this.gameId = a.id; this.title = a.title;
@@ -179,20 +199,27 @@ const GameOver = {
   draw(g) {
     g.fillStyle = '#0d0620'; g.fillRect(0, 0, VW, VH);
     const cx = VW / 2;
-    textCenter(g, this.title, cx, 26, '#5a4a88', 2);
+    // Todo se coloca en fracciones de la altura, no en pixeles fijos: esta
+    // pantalla sale tanto apaisada (600x270) como de pie (270x600).
+    const y = f => Math.round(VH * f);
+    // El puntaje es lo que ella mira, asi que se lleva todo el tamano que quepa.
+    // A 7 ocupa 7*6-1 = 41 px por cifra: en un lienzo de 270 de ancho, cinco
+    // cifras se saldrian. Se elige la escala mas grande que entre.
+    const cifras = String(this.score).length;
+    const esc = Math.max(3, Math.min(7, Math.floor((VW - 24) / (cifras * 6))));
+    textCenter(g, this.title, cx, y(0.10), '#5a4a88', 2);
     if (this.isRecord) {
       const f = Math.sin(this.t * 8) > 0 ? '#ffe14d' : '#ff5c9d';
-      textCenter(g, 'RECORD NUEVO!', cx, 50, f, 3);
+      textCenter(g, 'RECORD NUEVO!', cx, y(0.19), f, VW < 400 ? 2 : 3);
     } else {
-      textCenter(g, 'FIN DEL JUEGO', cx, 50, '#ff5c9d', 3);
+      textCenter(g, 'FIN DEL JUEGO', cx, y(0.19), '#ff5c9d', VW < 400 ? 2 : 3);
     }
-    // El puntaje, enorme: es lo que ella mira.
-    textCenter(g, String(this.score), cx, 84, '#ffffff', 7);
-    textCenter(g, 'MEJOR ' + Save.best(this.gameId), cx, 150, '#8a7ab8', 2);
+    textCenter(g, String(this.score), cx, y(0.31), '#ffffff', esc);
+    textCenter(g, 'MEJOR ' + Save.best(this.gameId), cx, y(0.56), '#8a7ab8', 2);
     if (this.msg) {
       // Mensaje carinoso, solo al romper record.
-      textCenter(g, this.msg[0], cx, 178, '#5cffd8', 2);
-      if (this.msg[1]) textCenter(g, this.msg[1], cx, 196, '#5cffd8', 2);
+      textCenter(g, this.msg[0], cx, y(0.66), '#5cffd8', 2);
+      if (this.msg[1]) textCenter(g, this.msg[1], cx, y(0.73), '#5cffd8', 2);
     }
     if (this.canTap && Math.sin(this.t * 4) > -0.3) {
       textCenter(g, 'TOCA PARA JUGAR', cx, VH - 44, '#ffffff', 2);
@@ -259,7 +286,9 @@ function frame(now) {
   // se quedaria congelado para siempre: su 'toca para jugar' se activa desde
   // update(), asi que ni jugar ni volver al menu funcionarian. La app quedaria
   // muerta sin forma de salir.
-  const girando = orientationMismatch();
+  // Con el puente nativo esto es SIEMPRE false: el sistema gira solo, no hay
+  // nada que esperar ni que avisar. Ver avisoDeGiro().
+  const girando = avisoDeGiro();
   // La pausa de verdad (ella salio de la app, o toco el boton) se suma a la del
   // giro. Se comprueba DESPUES de sm.flush() mas abajo? No: aqui, porque el
   // valor tiene que ser el mismo para todo el frame, igual que `girando`.
@@ -465,8 +494,26 @@ function orientationMismatch() {
   return mmVal;
 }
 
+// ---------- Si hay que molestarla pidiendole que gire el telefono ----------
+//
+// CON PUENTE NATIVO, NUNCA. El puente llama a setRequestedOrientation() en cada
+// cambio de escena, asi que cada pantalla se pone sola en su orientacion sin
+// importar como este el telefono: el menu y SURVIVAL de lado, los otros cinco
+// juegos de pie. Pedirle que gire seria pedirle que arregle algo que el sistema
+// ya esta arreglando, y el cartel solo podia salir mientras la ventana giraba,
+// que es el peor momento para taparle la pantalla.
+//
+// SIN PUENTE (el navegador de escritorio, o un APK viejo) el aviso se queda:
+// ahi screen.orientation.lock() no manda sobre nadie y la unica forma de ver la
+// escena derecha es que la gire ella. Es la red de seguridad que documenta el
+// comentario de la pausa mas arriba: sin ella, con el lock rechazado, el fin de
+// partida se quedaria congelado y la app no tendria salida.
+function avisoDeGiro() {
+  return !giroNativo() && orientationMismatch();
+}
+
 function drawRotateHint(gg) {
-  if (!orientationMismatch()) return;
+  if (!avisoDeGiro()) return;
   const quiere = !!sm.cur.meta.wide;              // true = apaisada
   gg.save();
 
@@ -503,7 +550,7 @@ function boot() {
     // Pero el 'up' SIEMPRE pasa. Un dedo apoyado en el boton de disparo cuando
     // entra la pausa tiene que poder soltarse; si se le come el 'up', el juego
     // se queda creyendo que sigue pulsado y el boton no vuelve a responder.
-    if (ev.type !== 'up' && orientationMismatch()
+    if (ev.type !== 'up' && avisoDeGiro()
         && !(sm.cur && sm.cur.meta.wide)) return;
     // ---------- Toques con la pausa puesta ----------
     // Nada llega al juego mientras esta pausado, o acumularia pulsaciones que
