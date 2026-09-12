@@ -68,8 +68,20 @@ const espejismo = () => bake(d => {
   d.fillStyle = '#d9c2ff';
   d.beginPath(); d.ellipse(7, 2, 11, 15, 0, 0, 7); d.fill();
   d.globalAlpha = 1;
-  // La figura de delante.
-  d.fillStyle = '#e8dcff';
+  // La figura de delante. Este lila es el mismo de la DUDA, y no es casualidad:
+  // antes era #e8dcff (232,220,255), el cuerpo mas claro de las 28 criaturas, y
+  // con la pasada de neon encima se quemaba. Medido el % del cuerpo con los tres
+  // canales por encima de 250 (blanco sin color) a fuerza 0.40:
+  //
+  //   #e8dcff  22.1%   <- se queda sin ojos: el blanco de alrededor se los come
+  //   #e0d2ff  17.8%
+  //   #d9c2ff   6.5%   <- el de la DUDA, que con la misma fuerza nunca se quemo
+  //
+  // Sus ojos son los mas pequenos de la tropa (r 3.2 a escala 0.28, o sea ~1 px
+  // de pupila en pantalla), asi que es la criatura a la que menos margen le
+  // queda antes de perder la cara. Bajar la fuerza del bloom no la salvaba
+  // (22.1 -> 20.6% a 0.45): el problema era el color, no el neon.
+  d.fillStyle = '#d9c2ff';
   d.beginPath(); d.ellipse(-3, 0, 12, 16, 0, 0, 7); d.fill();
   d.fillStyle = 'rgba(120,80,180,0.28)';
   d.beginPath(); d.ellipse(1, 3, 8, 11, 0, 0, 7); d.fill();
