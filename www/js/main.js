@@ -1,5 +1,5 @@
 // ROMINA'S ARCADE — arranque, bucle de tiempo fijo, gestor de escenas y menu.
-import { VW, VH, BASE_VW, BASE_VH, MENU_VW, MENU_VH, setVirtual, setSmooth, requestOrientation, isLandscape, initCanvas, view, makeRng, Save, cam } from './core.js';
+import { VW, VH, BASE_VW, BASE_VH, MENU_VW, MENU_VH, setVirtual, setSmooth, setSupersample, baseTransform, requestOrientation, isLandscape, initCanvas, view, makeRng, Save, cam } from './core.js';
 import { initInput } from './input.js';
 import { initAudio, unlockAudio, SFX, toggleMute, suspendAudio, resumeAudio, playMusic, stopMusic, SONGS, currentSong } from './audio.js';
 import { text, textCenter, measure } from './font.js';
@@ -25,6 +25,11 @@ const sm = {
     // El filtrado se elige ANTES de setVirtual: asignar canvas.width resetea el
     // contexto, y setVirtual reaplica el modo que se haya dejado puesto aqui.
     setSmooth(!!m.smooth);
+    // Cuantas veces mas grande es el lienzo real que el virtual. Va con el
+    // filtrado, y por el mismo motivo: setVirtual reaplica lo que se deje puesto
+    // aqui. Solo lo piden los juegos de arte suave; el pixel art no lo necesita
+    // (su dibujo YA es de rejilla) y le costaria el cuadruple de relleno.
+    setSupersample(m.smooth ? (m.ss || 1) : 1);
     // meta.wide = escena apaisada (el menu y el fin de partida). Sin el, es un
     // juego y va vertical. Se le pide el giro al telefono ANTES de fijar la
     // resolucion, para que el navegador ya este girando cuando el juego mida.
@@ -156,6 +161,9 @@ function frame(now) {
   }
   if (n === MAX_STEPS && acc > STEP) acc = 0;   // corta la espiral de la muerte
 
+  // El transform base se reaplica cada frame: lleva el sobremuestreo, y la
+  // camara hace translate() ENCIMA de el. Sin esto, el temblor se acumularia.
+  baseTransform();
   g.save();
   if (cam.x || cam.y) g.translate(cam.x, cam.y);
   if (sm.cur && sm.cur.draw) sm.cur.draw(g, ctx);

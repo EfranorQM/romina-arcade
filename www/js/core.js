@@ -34,20 +34,54 @@ export function initCanvas(el) {
 // (smooth=false, el defecto); un juego que dibuja con curvas y degradados en
 // vez de sprites horneados pide smooth=true via meta.smooth, y entonces el
 // escalado y los bordes salen suaves en vez de escalonados.
+//
+// OJO: esta bandera solo manda DENTRO del lienzo. El ultimo escalado -- el que
+// estira el lienzo hasta la pantalla, y es el que multiplica por cuatro -- lo
+// hace el navegador segun el CSS, y durante mucho tiempo #c llevaba
+// 'image-rendering: pixelated' fijo para toda la app. O sea que SURVIVAL
+// suavizaba por dentro y el navegador se lo volvia a escalonar por fuera: se
+// pagaba el coste de suavizar y se veia pixelado igual. Por eso la clase CSS
+// se pone AQUI, siguiendo al modo del juego.
 let smoothMode = false;
 export function setSmooth(on) {
   smoothMode = !!on;
   if (g) g.imageSmoothingEnabled = smoothMode;
+  if (canvas) canvas.classList.toggle('pixelado', !smoothMode);
+}
+
+// ---------- Sobremuestreo ----------
+// El lienzo REAL se hace SS veces mas grande que el virtual, y todo el dibujado
+// se multiplica por SS con el transform base. Los juegos siguen escribiendo sus
+// posiciones y radios en coordenadas de VWxVH sin enterarse de nada.
+//
+// Hace falta porque las criaturas se hornean a 64px y se dibujan a ~36: con el
+// lienzo a 1x, la mitad del detalle que tienen los sprites no cabe en ningun
+// pixel. Medido en un telefono real: el lienzo de 600x270 se estira x4, asi que
+// cada pixel virtual sale como un bloque de 4x4.
+let SS = 1;
+export function supersample() { return SS; }
+export function setSupersample(n) {
+  const v = Math.max(1, n || 1);
+  if (v === SS) return;
+  SS = v;
+  if (canvas) { canvas.width = VW * SS; canvas.height = VH * SS; baseTransform(); fit(); }
+}
+
+// Reaplica el transform base. El bucle lo llama al empezar cada frame, porque
+// la camara hace translate() encima y hay que partir siempre del mismo sitio.
+export function baseTransform() {
+  if (g) { g.setTransform(SS, 0, 0, SS, 0, 0); g.imageSmoothingEnabled = smoothMode; }
 }
 
 // Cambia la resolucion virtual entre escenas. OJO: asignar canvas.width RESETEA
-// todo el estado del contexto 2D, incluido imageSmoothingEnabled; hay que
-// volver a ponerlo aqui o el juego entero se dibuja borroso sin avisar.
+// todo el estado del contexto 2D, incluido imageSmoothingEnabled y el
+// transform; hay que volver a ponerlos aqui o el juego entero se dibuja
+// borroso, o a la escala equivocada, sin avisar.
 export function setVirtual(w, h) {
-  if (w === VW && h === VH) { g.imageSmoothingEnabled = smoothMode; return; }
+  if (w === VW && h === VH && canvas.width === VW * SS) { baseTransform(); return; }
   VW = w; VH = h;
-  canvas.width = VW; canvas.height = VH;
-  g.imageSmoothingEnabled = smoothMode;
+  canvas.width = VW * SS; canvas.height = VH * SS;
+  baseTransform();
   fit();
 }
 

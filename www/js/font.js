@@ -1,3 +1,5 @@
+import { supersample } from './core.js';
+
 // Fuente bitmap 5x7 — 58 glifos. Sin archivos de fuente, todo dibujado en codigo.
 export const FONT5x7 = {
 'A':["01110","10001","10001","11111","10001","10001","10001"],
@@ -119,14 +121,25 @@ function bakeString(str, color, scale) {
 export function text(g, str, x, y, color = '#ffffff', scale = 1) {
   str = String(str);
   if (str.length === 0) return;
-  const key = scale + '' + color + '' + str;
+  const ss = supersample();
+  const key = scale + '' + ss + '' + color + '' + str;
   let cv = strCache.get(key);
   if (cv === undefined) {
     if (strCache.size >= MAX_CACHE) strCache.clear();   // purga simple: el HUD se re-hornea solo
-    cv = bakeString(str, color, scale);
+    cv = bakeString(str, color, scale, ss);
     strCache.set(key, cv);
   }
-  g.drawImage(cv, Math.round(x), Math.round(y));
+  // La lamina trae SS veces mas pixeles y se dibuja al tamano VIRTUAL, de forma
+  // que el transform base los reparte uno a uno sobre la pantalla.
+  //
+  // El filtrado se APAGA para este blit aunque el juego sea suave: la fuente es
+  // un bitmap de trazo 1px y el bilineal la unta. Es el unico sitio del motor
+  // donde el pixel manda sobre la curva, y por eso el texto se ve nitido sobre
+  // un juego que por lo demas se escala suave.
+  const sm = g.imageSmoothingEnabled;
+  if (sm) g.imageSmoothingEnabled = false;
+  g.drawImage(cv, Math.round(x), Math.round(y), cv.width / ss, cv.height / ss);
+  if (sm) g.imageSmoothingEnabled = true;
 }
 
 // Texto centrado horizontalmente respecto a cx.

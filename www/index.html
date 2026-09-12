@@ -14,9 +14,13 @@
     -webkit-tap-highlight-color:transparent;
     -webkit-touch-callout:none;
   }
+  /* El escalado final del lienzo a la pantalla. Solo los juegos de pixel art
+     lo quieren escalonado, y son ellos los que piden la clase desde setSmooth();
+     antes estaba puesto sobre #c para toda la app, y los juegos de arte suave
+     se suavizaban por dentro para acabar re-pixelados por fuera. */
+  #c.pixelado { image-rendering:pixelated; }
   #c {
     position:absolute; display:block;
-    image-rendering:pixelated; image-rendering:crisp-edges;
     touch-action:none;
   }
 </style>

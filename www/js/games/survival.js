@@ -38,7 +38,7 @@ export default {
   meta: {
     id: 'survival', title: 'SURVIVAL', tag: 'DEFIENDE LA LINEA',
     colors: ['#ff3ec9', '#6bf0ff'],
-    vw: VW, vh: VH, wide: true, smooth: true,
+    vw: VW, vh: VH, wide: true, smooth: true, ss: 2,
   },
 
   init(ctx, args) {
