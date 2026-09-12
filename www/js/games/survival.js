@@ -71,6 +71,11 @@ export default {
     id: 'survival', title: 'SURVIVAL', tag: 'DEFIENDE LA LINEA',
     colors: ['#ff3ec9', '#6bf0ff'],
     vw: VW, vh: VH, wide: true, smooth: true, ss: 2,
+    // El boton de pausa va centrado arriba (pausa.js), y ahi se apilan tres
+    // cosas de este juego: el combo (y 12..19), el nombre del jefe (y 14..21) y
+    // su barra de vida (y 25..33), todas en _drawHUD(). Se baja el boton por
+    // debajo de las tres.
+    pausaY: 34,
   },
 
   init(ctx, args) {

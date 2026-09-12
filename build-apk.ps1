@@ -114,7 +114,44 @@ if ($py) {
   Write-Host 'AVISO: sin python, no se regenera el icono (hace falta Pillow).' -ForegroundColor Yellow
 }
 
-# --- 5. Parchear el manifest: quitar INTERNET, bloquear vertical ---
+# --- 4c. Instalar el puente de orientacion ---
+# MainActivity.java lleva el puente que gira la pantalla por escena (SURVIVAL y
+# el menu apaisados, los otros cinco juegos verticales). Se copia desde
+# android-src/, que SI se versiona, porque android/ esta en .gitignore y la
+# regenera `npx cap add android`: dejar el original solo dentro de android/
+# seria perderlo en el proximo clon del proyecto.
+#
+# Va DESPUES de `cap sync` por la misma razon que el icono: si se copiara antes,
+# Capacitor podria sobrescribirlo con su MainActivity de plantilla.
+#
+# Si esto falla, se AVISA y se sigue: la app arranca igual y cae al respaldo de
+# screen.orientation.lock(). Se ve peor (vuelve el cartel de GIRA EL TELEFONO)
+# pero nadie se queda sin APK por esto.
+$puente = Join-Path $root 'android-src\MainActivity.java'
+$destino = Join-Path $root 'android\app\src\main\java\com\romina\juegos\MainActivity.java'
+if (Test-Path $puente) {
+  New-Item -ItemType Directory -Force (Split-Path $destino) | Out-Null
+  Copy-Item $puente $destino -Force
+  Write-Host 'Puente de orientacion instalado' -ForegroundColor Green
+} else {
+  Write-Host 'AVISO: falta android-src\MainActivity.java. SURVIVAL pedira el giro a mano.' -ForegroundColor Yellow
+}
+
+# --- 4d. Instalar el tema de pantalla completa ---
+# Misma historia que el puente: android/ se regenera, asi que el original vive
+# en android-src/. Aqui estan los ajustes que esconden la barra de estado y la
+# de navegacion, y que dejan la ventana meterse debajo del notch.
+$tema = Join-Path $root 'android-src\styles.xml'
+$temaDest = Join-Path $root 'android\app\src\main\res\values\styles.xml'
+if (Test-Path $tema) {
+  New-Item -ItemType Directory -Force (Split-Path $temaDest) | Out-Null
+  Copy-Item $tema $temaDest -Force
+  Write-Host 'Tema de pantalla completa instalado' -ForegroundColor Green
+} else {
+  Write-Host 'AVISO: falta android-src\styles.xml. Se veran las barras del sistema.' -ForegroundColor Yellow
+}
+
+# --- 5. Parchear el manifest: quitar INTERNET, arrancar apaisado ---
 $manifest = Join-Path $root 'android\app\src\main\AndroidManifest.xml'
 if (Test-Path $manifest) {
   $m = Get-Content $manifest -Raw
@@ -130,18 +167,25 @@ if (Test-Path $manifest) {
     `$1
 "@
   }
-  # La orientacion la elige CADA ESCENA por software (screen.orientation.lock):
-  # el menu se pone horizontal y los juegos verticales. Por eso el manifest debe
-  # dejar girar -- con una orientacion fija aqui, el lock del navegador no haria
-  # nada y la mitad de la app se veria de lado.
-  # 'fullUser' respeta ademas el bloqueo de giro del sistema si ella lo activa.
+  # La orientacion la elige CADA ESCENA, pero ya NO con screen.orientation.lock:
+  # ahora la pide el puente nativo de MainActivity (setRequestedOrientation), que
+  # manda sobre el bloqueo de giro del sistema. Ver el comentario del manifest.
+  #
+  # Lo que hay aqui es solo la orientacion de ARRANQUE, antes de que cargue el
+  # WebView, y tiene que ser apaisada porque la primera pantalla es el menu.
+  #
+  # OJO, ESTO ERA EL FALLO DE VERDAD: esta linea reescribia el manifest en CADA
+  # compilacion, asi que poner la orientacion buena a mano en el manifest no
+  # servia de nada -- el script la devolvia a 'fullUser' sin decir nada. Y
+  # 'fullUser', con el giro bloqueado en ajustes (como lo tiene el Note 10), se
+  # comporta como 'user': no gira. De ahi venia el cartel de GIRA EL TELEFONO.
   if ($m -match 'screenOrientation="[a-zA-Z]+"') {
-    $m = $m -replace 'screenOrientation="[a-zA-Z]+"', 'screenOrientation="fullUser"'
+    $m = $m -replace 'screenOrientation="[a-zA-Z]+"', 'screenOrientation="sensorLandscape"'
   } else {
-    $m = $m -replace '(<activity\s)', '$1android:screenOrientation="fullUser" android:resizeableActivity="false" '
+    $m = $m -replace '(<activity\s)', '$1android:screenOrientation="sensorLandscape" android:resizeableActivity="false" '
   }
   Set-Content $manifest $m -Encoding utf8
-  Write-Host 'Manifest parcheado: sin INTERNET, giro por software' -ForegroundColor Green
+  Write-Host 'Manifest parcheado: sin INTERNET, arranque apaisado (el giro lo pide el puente)' -ForegroundColor Green
 }
 
 # --- 6. Compilar ---

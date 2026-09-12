@@ -29,12 +29,38 @@ jobs:
           if [ ! -d android ]; then npx cap add android; fi
           npx cap sync android
 
-      - name: Quitar permiso de INTERNET y fijar vertical
+      # El puente de orientacion. android/ esta en .gitignore y se acaba de
+      # regenerar, asi que MainActivity.java hay que reponerlo desde
+      # android-src/, que si se versiona. Sin esto el APK de CI saldria sin
+      # puente y SURVIVAL volveria a pedir el giro a mano.
+      - name: Instalar el puente de orientacion
+        run: |
+          mkdir -p android/app/src/main/java/com/romina/juegos
+          cp android-src/MainActivity.java android/app/src/main/java/com/romina/juegos/MainActivity.java
+
+      # El tema de pantalla completa, por el mismo motivo que el puente: vive en
+      # android-src/ porque android/ se acaba de regenerar. Sin esto el APK de
+      # CI saldria con la barra de estado y la de navegacion encima del juego.
+      - name: Instalar el tema de pantalla completa
+        run: |
+          mkdir -p android/app/src/main/res/values
+          cp android-src/styles.xml android/app/src/main/res/values/styles.xml
+
+      - name: Quitar permiso de INTERNET y arrancar apaisado
         run: |
           M=android/app/src/main/AndroidManifest.xml
           grep -q 'xmlns:tools' $M || sed -i 's|<manifest \(xmlns:android="[^"]*"\)|<manifest \1 xmlns:tools="http://schemas.android.com/tools"|' $M
           grep -q 'INTERNET" tools:node="remove"' $M || sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET" tools:node="remove" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />\n\n    <application|' $M
-          grep -q 'screenOrientation' $M || sed -i 's|<activity |<activity android:screenOrientation="portrait" android:resizeableActivity="false" |' $M
+          # La orientacion de ARRANQUE es apaisada porque la primera pantalla es
+          # el menu (600x270). A partir de ahi manda el puente, escena a escena.
+          # Ojo: aqui decia "portrait", que ademas de estar mal para el menu solo
+          # se aplicaba si NO habia ya un screenOrientation; ahora se fuerza
+          # siempre, igual que hace build-apk.ps1.
+          if grep -q 'screenOrientation="' $M; then
+            sed -i 's|screenOrientation="[a-zA-Z]*"|screenOrientation="sensorLandscape"|' $M
+          else
+            sed -i 's|<activity |<activity android:screenOrientation="sensorLandscape" android:resizeableActivity="false" |' $M
+          fi
           cat $M
 
       - name: Dar permiso de ejecucion a gradlew

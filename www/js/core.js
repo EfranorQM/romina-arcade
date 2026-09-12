@@ -3,9 +3,12 @@
 // LA APP TIENE DOS ORIENTACIONES, y cada escena declara la suya con meta.wide:
 //
 //   El MENU es apaisado (600x270). Es la cara de la app: la estanteria de
-//   caratulas necesita ancho para que la fila se lea.
+//   caratulas necesita ancho para que la fila se lea. SURVIVAL tambien lo es,
+//   por la misma razon que el original del que viene: se agarra con las dos
+//   manos y los dos pulgares caen en las esquinas de abajo.
 //
-//   Los JUEGOS son verticales (270x600, o 540x1200 los que piden detalle).
+//   Los OTROS CINCO JUEGOS son verticales (270x600, o 540x1200 los que piden
+//   detalle).
 //   Estan medidos asi -- sus saltos, sus oleadas, su terreno -- y ademas un
 //   lienzo de pie dentro de una pantalla acostada solo podria ocupar una franja
 //   de 122px de ancho: la mitad del espacio para el que fueron dibujados.
@@ -86,11 +89,42 @@ export function setVirtual(w, h) {
 }
 
 // ---------- Orientacion ----------
-// Se le PIDE al telefono que gire: horizontal para el menu, vertical para los
-// juegos. lock() solo funciona en pantalla completa y en algunos navegadores
-// rechaza siempre; cuando falla, la app se sigue viendo bien (fit() la centra
-// con barras), solo que el usuario tiene que girar el telefono el mismo.
+// Se le PIDE al telefono que gire: horizontal para el menu y SURVIVAL, vertical
+// para los otros cinco juegos. Hay DOS vias, y se intentan en este orden.
+//
+// VIA 1, la buena: el puente nativo (AndroidGiro, en MainActivity.java).
+// Llama a setRequestedOrientation(), que es la actividad diciendo en que
+// orientacion quiere dibujarse. Manda sobre el ajuste de giro del usuario: el
+// telefono se pone de lado solo para SURVIVAL aunque ella tenga la rotacion
+// bloqueada, que es lo que hace cualquier juego apaisado de la tienda.
+//
+// VIA 2, la de siempre: screen.orientation.lock(). Se queda como respaldo para
+// el navegador de escritorio y para un APK viejo sin el puente. Falla mucho:
+// exige pantalla completa en varios motores y, sobre todo, queda POR DEBAJO de
+// la preferencia del sistema -- con el giro bloqueado en ajustes, que es como
+// esta el Note 10 de Romina, la promesa se rechaza y el juego se queda de pie.
+// Ese fallo es justo el que dejaba el cartel de "GIRA EL TELEFONO" encima.
+//
+// Si las dos fallan la app se sigue viendo bien (fit() la centra con barras);
+// solo que el usuario tiene que girar el telefono el mismo, y para eso sigue
+// estando el aviso de main.js.
+
+// True si el puente nativo esta presente. Se consulta en cada llamada y no una
+// sola vez al cargar: el interfaz lo inyecta MainActivity.onCreate(), y aunque
+// en la practica ya esta puesto antes de que corra este modulo, comprobarlo
+// aqui cuesta nada y no depende del orden de arranque.
+export function giroNativo() {
+  return typeof AndroidGiro !== 'undefined' && !!AndroidGiro
+      && typeof AndroidGiro.pedir === 'function';
+}
+
 export function requestOrientation(wide) {
+  // El puente primero. Si contesta, no se toca screen.orientation: llamar a
+  // lock() ADEMAS no aporta nada y en Android encima puede devolver un rechazo
+  // ruidoso en la consola por una orientacion que ya esta concedida.
+  try {
+    if (giroNativo()) { AndroidGiro.pedir(!!wide); return; }
+  } catch (e) { /* el puente fallo: se cae al respaldo de abajo */ }
   try {
     const so = screen.orientation;
     if (so && so.lock) {

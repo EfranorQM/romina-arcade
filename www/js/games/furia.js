@@ -33,6 +33,11 @@ export default {
     // Resolucion alta + filtrado suave: es lo que separa a este juego del
     // resto. A 270x600 con nearest-neighbour las curvas se ven escalonadas.
     vw: 540, vh: 1200, smooth: true,
+    // El boton de pausa va centrado arriba (pausa.js), y ahi esta la barra de
+    // progreso de la pista, que cruza el lienzo entero entre y=11 e y=27
+    // contando la marca de meta (drawHud, mas abajo). Se baja el boton justo
+    // por debajo.
+    pausaY: 28,
   },
 
   init(ctx, args) {

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ESTE ARCHIVO ES EL ORIGINAL. El que compila es su copia en
+  android/app/src/main/res/values/styles.xml, y la pone ahi build-apk.ps1 en
+  cada compilacion, por el mismo motivo que MainActivity.java: la carpeta
+  android/ esta en .gitignore y la regenera `npx cap add android`, asi que todo
+  lo que se escriba dentro se pierde en silencio al clonar el proyecto.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+    </style>
+
+    <!-- ESTE es el tema que acaba puesto mientras se juega, aunque el manifest
+         diga otra cosa: BridgeActivity.onCreate lo impone a mano con
+         setTheme(R.style.AppTheme_NoActionBar), pisando el del manifest. Por
+         eso los ajustes de pantalla completa van AQUI y no en el tema de
+         arranque, donde Capacitor los quitaria al cargar el WebView.
+
+         El nombre tiene que ser exactamente este: Capacitor resuelve
+         R.style.AppTheme_NoActionBar y el recurso del proyecto tapa al de la
+         libreria por llamarse igual. -->
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:background">@null</item>
+
+        <!-- Fondo NEGRO detras de todo. El lienzo apaisado mide 600x270, que es
+             20:9 clavado, la misma relacion que el Note 10 (1080x2400): ahi
+             fit() deja ox=0 y oy=0 y no asoma nada. Pero en un telefono de otra
+             relacion si asoma, y tiene que ser negro para que no salga una
+             franja clara pegada al arte. -->
+        <item name="android:windowBackground">@android:color/black</item>
+
+        <!-- Barras TRANSPARENTES, no ocultas: esconderlas es cosa del
+             WindowInsetsController de MainActivity, que es lo unico que puede
+             volver a esconderlas cuando ella desliza desde el borde. Esto solo
+             evita que, en el momento en que reaparecen, pinten una banda opaca
+             encima del juego. -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+
+        <!-- El recorte de la camara. shortEdges deja que la ventana se meta
+             DEBAJO del notch en las dos orientaciones; sin esto, en apaisado
+             Android reserva la franja del notch y la pantalla se encoge por ese
+             lado, que es justo lo que hay que evitar. Es de API 27+; en las
+             anteriores se ignora, y esos telefonos no tienen notch. -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+
+        <!-- Android 15 (API 35) fuerza el edge-to-edge a las apps con
+             targetSdk 35, y este proyecto apunta a 35 (variables.gradle). Se
+             declara que NO se quiere ese comportamiento por defecto, porque la
+             app ya se dibuja de borde a borde y gestiona sus propias barras. -->
+        <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:targetApi="35">true</item>
+    </style>
+
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="android:background">@drawable/splash</item>
+        <!-- El arranque tambien a pantalla completa: sin esto se ve un parpadeo
+             con la barra de estado puesta entre el splash y el juego. -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

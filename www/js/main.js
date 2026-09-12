@@ -1,14 +1,109 @@
 // ROMINA'S ARCADE — arranque, bucle de tiempo fijo, gestor de escenas y menu.
-import { VW, VH, BASE_VW, BASE_VH, MENU_VW, MENU_VH, setVirtual, setSmooth, setSupersample, baseTransform, requestOrientation, isLandscape, initCanvas, view, makeRng, Save, cam } from './core.js';
-import { initInput } from './input.js';
+import { VW, VH, BASE_VW, BASE_VH, MENU_VW, MENU_VH, setVirtual, setSmooth, setSupersample, baseTransform, requestOrientation, giroNativo, isLandscape, initCanvas, view, makeRng, Save, cam } from './core.js';
+import { initInput, pointers } from './input.js';
 import { initAudio, unlockAudio, SFX, toggleMute, suspendAudio, resumeAudio, playMusic, stopMusic, SONGS, currentSong } from './audio.js';
 import { text, textCenter, measure } from './font.js';
 import { particles, updateParticles, drawParticles } from './gfx.js';
 import { GAMES } from './games.js';
 import { Menu } from './menu.js';
+import { drawBoton, tocaBoton, drawPantalla, onInputPantalla, olvidaToques } from './pausa.js';
 
 let g = null;
 const rnd = makeRng(0x1234abcd);
+
+// ---------- PAUSA ----------
+// Un solo interruptor para toda la app. Lo enciende el sistema (ella salio de
+// la app) y lo apaga ella al tocar para seguir; la pieza del boton de pausa
+// usa este mismo interruptor, para que no haya dos pausas distintas que puedan
+// contradecirse.
+//
+// `motivo` dice quien pauso: 'sistema' (se fue de la app) o 'usuario' (toco el
+// boton). Importa para la musica: al volver de fuera el AudioContext esta
+// suspendido y NO se reanuda hasta que ella decida seguir, o la cancion
+// arrancaria sola encima de una pantalla quieta.
+export const Pausa = {
+  activa: false,
+  motivo: null,
+  entrar(motivo) {
+    if (this.activa) return;
+    this.activa = true; this.motivo = motivo || 'usuario';
+    suspendAudio();
+  },
+  salir() {
+    if (!this.activa) return;
+    this.activa = false; this.motivo = null;
+    // El acumulador se limpia AQUI tambien, no solo al volver a ser visible: si
+    // ella dejo la pausa puesta un rato mirando la pantalla, el bucle siguio
+    // dibujando y acc pudo quedar con un resto. Sin esto, el primer frame de
+    // vuelta simularia ese resto de golpe.
+    prev = performance.now(); acc = 0;
+    resumeAudio();
+  },
+};
+
+// ---------- La pantalla de pausa y su boton (pausa.js) ----------
+// Se enchufan en los dos huecos que Pausa deja: con esto puestos, el cartel
+// generico de mas abajo no se usa nunca, y el interruptor sigue siendo UNO.
+//
+// Se registran aqui, junto al interruptor, y no dentro de pausa.js: asi
+// pausa.js no importa nada de main.js y no hay un ciclo entre los dos modulos.
+// ---------- Soltarle al juego los dedos que tenia apoyados ----------
+// EL FALLO QUE ESTO EVITA, que es el mismo que main.js ya documenta para el
+// aviso de girar. Mientras hay pausa el juego no recibe NADA, ni siquiera los
+// 'up'. Asi que un dedo que estaba apretando el disparo cuando entra la pausa
+// nunca recibe su 'up': SURVIVAL guarda this.fireId y this.firing = true
+// (survival.js:1180) y solo los limpia con el 'up' de ESE id, que ya no va a
+// llegar. Al seguir, Roma dispara sola para siempre y el boton no responde.
+// Lo mismo con la cruceta (padId), con el acelerador de FURIA (rightId,
+// furia.js:377) y con el stick de LAST WAVE y NEON FIST.
+//
+// La cura es avisar de la soltada ANTES de cerrar la puerta: a cada dedo que
+// input.js tenga vivo (input.js:5) se le manda un 'up' en su ultima posicion
+// conocida, que es exactamente lo que el juego habria recibido si ella hubiera
+// levantado la mano. Se manda antes de poner Pausa.activa, para que el evento
+// llegue por la via normal.
+function soltarDedos() {
+  if (!sm.cur || !sm.cur.onInput) return;
+  for (const [id, p] of pointers) {
+    sm.cur.onInput({ type: 'up', x: p.x, y: p.y, id }, ctx);
+  }
+}
+
+// ---------- La pantalla de pausa y su boton (pausa.js) ----------
+// Se enchufan en los dos huecos que Pausa deja: con esto puestos, el cartel
+// generico de mas abajo no se usa nunca, y el interruptor sigue siendo UNO.
+//
+// Se registran aqui, junto al interruptor, y no dentro de pausa.js: asi
+// pausa.js no importa nada de main.js y no hay un ciclo entre los dos modulos.
+//
+// `antes` se encadena en vez de sustituirse: Pausa.entrar es de la pieza de la
+// pausa automatica y hace su trabajo (suspender el audio); esto solo le suma
+// soltar los dedos, y solo cuando lo que se pausa es un juego.
+const _entrar = Pausa.entrar;
+Pausa.entrar = function (motivo) {
+  if (this.activa) return;
+  if (esJuego(sm.cur)) soltarDedos();
+  olvidaToques();
+  _entrar.call(this, motivo);
+};
+
+Pausa.dibujar = gg => drawPantalla(gg, VW, VH, Pausa.motivo);
+Pausa.onInput = (ev, c) => {
+  // El motivo viaja hasta pausa.js porque cambia LA COLOCACION de las opciones:
+  // con el subtitulo de 'sistema' puesto, SEGUIR y AL MENU bajan para no
+  // montarse con el. El dibujo y el acierto del toque tienen que ver la misma
+  // posicion, asi que los dos reciben el mismo motivo.
+  const accion = onInputPantalla(ev, VW, VH, Pausa.motivo);
+  if (accion === 'seguir') {
+    // Primero salir y luego el sonido: salir() reanuda el AudioContext, y un
+    // blip disparado con el contexto todavia suspendido se programa para un
+    // instante ya pasado y no se oye.
+    Pausa.salir(); olvidaToques(); SFX.blip();
+  } else if (accion === 'menu') {
+    Pausa.salir(); olvidaToques(); SFX.select();
+    c.toMenu();
+  }
+};
 
 // ---------- Gestor de escenas con cambio diferido ----------
 const sm = {
@@ -59,6 +154,9 @@ const ctx = {
     sm.go(GameOver, { id, score: Math.floor(score), isRecord, title: sm.cur.meta.title });
   },
   toMenu() { sm.go(Menu, {}); },
+  // La pausa se comparte con los juegos: la pieza del boton de pausa la
+  // enciende desde aqui, para que no haya dos pausas distintas.
+  pausa: Pausa,
 };
 
 // ---------- Escena: MENU ----------
@@ -127,6 +225,19 @@ const RECORD_MSGS = [
 const _goUpdate = GameOver.update;
 GameOver.update = function (dt) { _goUpdate.call(this, dt); if (this.holding) this.holdT = (this.holdT || 0) + dt; };
 
+
+// Una escena es un JUEGO si esta en el registro de juegos. NO sirve meta.wide:
+// SURVIVAL es apaisado y es un juego (survival.js:73), asi que ese flag habla
+// de la FORMA del lienzo, no de si hay una partida en marcha.
+//
+// Solo los juegos se pausan. El menu y el fin de partida no: ahi no hay nada
+// que perder, y encontrarse una pausa encima de una pantalla que ya estaba
+// quieta seria solo un toque de mas. Ademas el fin de partida activa su 'toca
+// para jugar' desde update(): pausado, se quedaria muerto sin salida.
+function esJuego(scene) {
+  return !!scene && GAMES.indexOf(scene) !== -1;
+}
+
 // ---------- Bucle de tiempo fijo ----------
 const STEP = 1000 / 60, MAX_STEPS = 5, MAX_FRAME = 250;
 let acc = 0, prev = 0, raf = 0, frameNo = 0;
@@ -149,7 +260,10 @@ function frame(now) {
   // update(), asi que ni jugar ni volver al menu funcionarian. La app quedaria
   // muerta sin forma de salir.
   const girando = orientationMismatch();
-  const pausa = girando && !(sm.cur && sm.cur.meta.wide);
+  // La pausa de verdad (ella salio de la app, o toco el boton) se suma a la del
+  // giro. Se comprueba DESPUES de sm.flush() mas abajo? No: aqui, porque el
+  // valor tiene que ser el mismo para todo el frame, igual que `girando`.
+  const pausa = (girando && !(sm.cur && sm.cur.meta.wide)) || Pausa.activa;
   while (acc >= STEP && n < MAX_STEPS) {
     sm.flush();
     if (!pausa) {
@@ -222,25 +336,111 @@ function frame(now) {
   drawParticles(g);
   g.restore();
 
+  // El boton de pausa, encima de la escena y de sus particulas -- y por tanto
+  // tambien encima del bloom de SURVIVAL, que se aplica dentro de su draw
+  // (survival.js:1274) -- pero DEBAJO del cartel de pausa y del aviso de girar.
+  //
+  // Se dibuja fuera del save/restore de la camara a proposito: con el temblor
+  // de pantalla puesto, un boton fijo que de pronto se sacude parece un fallo.
+  // El HUD de los juegos si tiembla, porque lo pintan ellos dentro de su draw;
+  // este no, y es lo que se quiere.
+  if (esJuego(sm.cur) && !Pausa.activa && !girando) drawBoton(g, VW, VH, sm.cur.meta);
+
+  drawPausa(g);
   drawRotateHint(g);
 }
 
+// ---------- Pantalla de pausa ----------
+// Se dibuja ENCIMA de la escena, sin borrarla: ella ve el juego quieto detras y
+// entiende que sigue ahi, esperandola.
+//
+// Va DEBAJO del aviso de girar en el orden de dibujo: si las dos cosas pasan a
+// la vez (vuelve a la app con el telefono mal puesto), lo primero que tiene que
+// hacer es girar, no tocar.
+//
+// Si la pieza del boton de pausa trae su propia pantalla, la pone en
+// Pausa.dibujar y esta no se usa. Asi no hay dos carteles distintos.
+function drawPausa(gg) {
+  if (!Pausa.activa) return;
+  if (Pausa.dibujar) { Pausa.dibujar(gg); return; }
+  gg.save();
+  // Velo oscuro pero no opaco: la partida detras se sigue viendo, y asi ella
+  // entiende que sigue ahi esperandola. Medido sobre SURVIVAL, el brillo medio
+  // del lienzo baja de 26.6 a 13.2: a la mitad, que es bastante para que se lea
+  // el cartel y poco para que el juego desaparezca.
+  gg.fillStyle = 'rgba(6,3,16,0.72)';
+  gg.fillRect(0, 0, VW, VH);
+  const cx = VW / 2, cy = VH / 2;
+
+  // Panel opaco detras del texto. NO es adorno: los juegos escriben en mitad de
+  // la pantalla (SURVIVAL pone ahi el rotulo de la ola) y sin el, las dos
+  // lineas se montan una encima de otra y no se lee ninguna. El panel tapa esa
+  // franja entera.
+  //
+  // Las medidas salen de measure(), no a ojo: el lienzo del menu tiene 600 de
+  // ancho y el de un juego vertical 270, y un ancho fijo que quepa en uno se
+  // sale del otro.
+  // La caja se calcula desde las medidas REALES de la fuente, no a ojo: el
+  // lienzo del menu tiene 600 de ancho y el de un juego vertical solo 270, y un
+  // tamano fijo que quepa en uno se sale del otro. La fuente es de 7 px de alto
+  // por escala (font.js:65), asi que las dos lineas ocupan 21 y 14.
+  const H1 = 7 * 3, H2 = 7 * 2, HUECO = 8;
+  const w1 = measure('PAUSA', 3), w2 = measure('TOCA PARA SEGUIR', 2);
+  const pw = Math.min(VW - 12, Math.max(w1, w2) + 28);
+  const ph = H1 + HUECO + H2 + 28;
+  const px = Math.round(cx - pw / 2), py = Math.round(cy - ph / 2);
+  gg.fillStyle = 'rgba(13,6,32,0.95)';
+  gg.fillRect(px, py, pw, ph);
+  gg.strokeStyle = '#5a4a88'; gg.lineWidth = 1;
+  gg.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
+
+  // Las dos lineas se apilan desde arriba del panel: textCenter recibe el BORDE
+  // SUPERIOR del texto (font.js:121), no su centro.
+  const y1 = py + 14;
+  textCenter(gg, 'PAUSA', cx, y1, '#ffffff', 3);
+  // Parpadeo con el reloj REAL, no con un contador: aqui no hay update() que
+  // avance, justamente porque esto es la pausa.
+  if (Math.sin(performance.now() / 1000 * 3) > -0.3) {
+    textCenter(gg, 'TOCA PARA SEGUIR', cx, y1 + H1 + HUECO, '#5cffd8', 2);
+  }
+  gg.restore();
+}
+
 // ---------- Aviso de girar el telefono ----------
-// La app pide el giro por software, pero screen.orientation.lock() puede
-// rechazarse (MIUI fuera de pantalla completa, o el giro bloqueado en ajustes).
-// Cuando eso pasa, la escena se ve de lado y sin este aviso no hay ninguna
-// pista de que hacer. Aparece solo si la orientacion real no coincide con la
-// que la escena necesita, y tras medio segundo: un giro real tarda un momento
-// y sin la espera parpadearia en cada cambio de escena.
+// La app pide el giro por software y desde el APK lo consigue SIEMPRE: el
+// puente nativo llama a setRequestedOrientation(), que manda sobre el ajuste de
+// giro del usuario. Con el puente puesto este aviso no deberia verse nunca.
+//
+// PERO SE QUEDA, y no por si acaso: es la red de seguridad que main.js ya
+// documentaba. Sin puente -- el navegador de escritorio, o un APK antiguo --
+// screen.orientation.lock() se rechaza y la escena se ve de lado; sin este
+// aviso no hay ninguna pista de que hacer. Borrarlo seria cambiar un fallo
+// visible y con instrucciones por uno mudo.
+//
+// LO QUE SI CAMBIA es cuanto se espera antes de ensenarlo. Con el puente, el
+// giro no lo hace ella: lo hace el sistema, y tarda. Entre que la escena pide
+// apaisado y que el WebView se ha redimensionado hay una animacion de rotacion
+// de la ventana, y durante ese rato la orientacion real NO coincide con la que
+// la escena quiere -- que es exactamente la condicion que dispara el aviso.
+// Con el medio segundo de siempre, el cartel "GIRA EL TELEFONO" parpadearia en
+// cada entrada y salida de SURVIVAL justo mientras el telefono esta girando
+// solo, que es el peor momento posible para pedirle a ella que lo gire.
+//
+// Asi que con puente la espera sube a 1.6 s, holgado por encima de lo que tarda
+// una rotacion de ventana en un Note 10 (la animacion del sistema ronda los
+// 300-500 ms, y el WebView redimensiona detras). Si a los 1.6 s sigue sin
+// cuadrar es que el giro de verdad no ocurrio, y entonces el aviso hace falta.
+const ESPERA_AVISO_WEB = 0.5;      // sin puente: lo tiene que girar ella, no hay nada que esperar
+const ESPERA_AVISO_NATIVO = 1.6;   // con puente: se le da tiempo al sistema a girar solo
 let mismatchT = 0;
 
 // True cuando la orientacion real no es la que la escena necesita, y ya lleva
-// asi el medio segundo de gracia. La cuenta se lleva aqui, no en el dibujo,
-// para que la pausa y el aviso entren y salgan exactamente a la vez.
+// asi el tiempo de gracia. La cuenta se lleva aqui, no en el dibujo, para que
+// la pausa y el aviso entren y salgan exactamente a la vez.
 //
 // Se evalua UNA vez por frame y se cachea: la llaman el bucle (para pausar) y
-// el dibujo (para el aviso), y si cada llamada sumara al contador, el medio
-// segundo se cumpliria al doble de velocidad.
+// el dibujo (para el aviso), y si cada llamada sumara al contador, la espera se
+// cumpliria al doble de velocidad.
 let mmFrame = -1, mmVal = false, mmPrev = 0;
 
 function orientationMismatch() {
@@ -252,13 +452,16 @@ function orientationMismatch() {
     mismatchT = 0; mmPrev = 0; mmVal = false; return false;
   }
   // Se cuenta en segundos REALES, no en pasos de 1/60: el Note 10 puede ir a
-  // 90 Hz, y sumando un sesentavo por frame el medio segundo de gracia se
-  // cumpliria en un tercio de segundo, que es justo el parpadeo que la espera
-  // existe para evitar.
+  // 90 Hz, y sumando un sesentavo por frame el tiempo de gracia se cumpliria en
+  // un tercio del tiempo, que es justo el parpadeo que la espera existe para
+  // evitar.
   const ahora = performance.now();
   mismatchT += Math.min(0.25, (ahora - (mmPrev || ahora)) / 1000);
   mmPrev = ahora;
-  mmVal = mismatchT >= 0.5;
+  // Con el puente nativo el giro lo hace el SISTEMA y tarda: hay que dejarle
+  // terminar su animacion de rotacion antes de decidir que no ocurrio. Ver la
+  // nota de arriba sobre las dos esperas.
+  mmVal = mismatchT >= (giroNativo() ? ESPERA_AVISO_NATIVO : ESPERA_AVISO_WEB);
   return mmVal;
 }
 
@@ -302,12 +505,130 @@ function boot() {
     // se queda creyendo que sigue pulsado y el boton no vuelve a responder.
     if (ev.type !== 'up' && orientationMismatch()
         && !(sm.cur && sm.cur.meta.wide)) return;
+    // ---------- Toques con la pausa puesta ----------
+    // Nada llega al juego mientras esta pausado, o acumularia pulsaciones que
+    // update() no consume y se aplicarian todas de golpe al seguir.
+    //
+    // Se reanuda con el 'up', no con el 'down'. Por que: ella vuelve a la app y
+    // apoya el dedo; si el 'down' reanudara, ese mismo dedo se quedaria puesto
+    // encima del boton de disparo o de la cruceta, y el juego arrancaria con un
+    // control apretado que ella no pidio. Soltando, el 'up' que reanuda no lo
+    // ve nadie y la partida empieza con las manos quietas.
+    //
+    // Si la pieza del boton de pausa pone su propio Pausa.onInput (para su menu
+    // de SEGUIR / SALIR), manda ese y esto no corre.
+    if (Pausa.activa) {
+      if (Pausa.onInput) Pausa.onInput(ev, ctx);
+      // Primero salir y luego el sonido: salir() reanuda el AudioContext, y un
+      // blip disparado con el contexto todavia suspendido se programa para un
+      // instante ya pasado y no se oye.
+      else if (ev.type === 'up') { Pausa.salir(); SFX.blip(); }
+      return;
+    }
+    // ---------- El boton de pausa se queda el toque ----------
+    // Va ANTES que el juego y se lo come entero: en cinco de los seis juegos
+    // cualquier punto de la pantalla es un control (SKYLINE salta con un toque
+    // en cualquier sitio, skyline.js:387; el stick de LAST WAVE nace donde
+    // caiga el dedo, lastwave.js:957; SYMBIOTE arrastra desde donde sea,
+    // symbiote.js:294), asi que no hay forma de poner un boton que no le robe
+    // sitio a alguien. Lo que si se puede es que robe POCO y en el sitio menos
+    // usado: 30 px virtuales arriba del todo y centrados, lejos de donde caen
+    // los pulgares.
+    //
+    // Se pausa en el 'down' y no en el 'up' porque el 'up' de ese mismo dedo ya
+    // no llega al juego (la pausa esta puesta y esta rama devuelve antes), asi
+    // que no queda ningun control creyendose apretado. Es el caso contrario al
+    // de SALIR de la pausa, que si necesita el 'up' (ver pausa.js).
+    if (ev.type === 'down' && esJuego(sm.cur) && tocaBoton(ev, VW, VH, sm.cur.meta)) {
+      olvidaToques();
+      Pausa.entrar('usuario');
+      return;
+    }
     if (sm.cur && sm.cur.onInput) sm.cur.onInput(ev, ctx);
   });
+  // ---------- Salir de la app y volver ----------
+  //
+  // QUE PASABA ANTES. El manejador viejo paraba el bucle al ocultarse y lo
+  // volvia a arrancar al volver, de golpe. Medido con tools/ver-app.js sobre
+  // SURVIVAL: al volver el juego habia avanzado 0.5 s antes de que ella pudiera
+  // mirar la pantalla. Vuelve a la app y ya la estan disparando.
+  //
+  // QUE HACE AHORA. Al ocultarse para el bucle y pausa el juego; al volver,
+  // arranca el bucle otra vez -- hace falta, o no se dibujaria la pantalla de
+  // pausa -- pero deja la pausa PUESTA. Ella decide cuando seguir.
+  //
+  // El menu y el fin de partida no se pausan (ver esJuego): ahi no hay partida
+  // que proteger.
+  //
+  // POR QUE DOS EVENTOS Y NO UNO.
+  //   'visibilitychange' cubre bloquear la pantalla, una llamada, cambiar de
+  //   app y apagar/encender: en todos ellos Android lleva la Activity hasta
+  //   onStop, y el WebView marca el documento como oculto.
+  //   NO cubre bajar la barra de notificaciones ni un dialogo encima: ahi la
+  //   Activity solo llega a onPause, sigue VISIBLE detras, y el documento nunca
+  //   se marca oculto. Ese caso se ve con 'blur', que si llega al perder el
+  //   foco de ventana.
+  // Capacitor no ayuda: su Bridge (Bridge.java:1348-1370) solo avisa a los
+  // PLUGINS en onPause/onResume, y el plugin @capacitor/app no esta instalado
+  // (node_modules/@capacitor solo tiene android, cli y core). No se suma: seria
+  // una dependencia nueva para algo que los eventos del DOM ya dan.
+  //
+  // 'pagehide' no se usa: en un WebView solo llega al descargar la pagina, o
+  // sea al cerrar la app de verdad, y entonces ya no hay nada que pausar.
+  //
+  // LO IMPORTANTE: el bucle se para y se arranca desde UN solo sitio.
+  // Si cada manejador pidiera su rAF, dos eventos seguidos dejarian DOS bucles
+  // vivos. No es teorico: medido con dos 'visibilitychange' seguidos sobre el
+  // codigo viejo, los frames por segundo se multiplicaron por 3.17 -- tres
+  // bucles pintando lo mismo, gastando bateria para siempre. Y ahora que hay
+  // dos fuentes de eventos (visibilitychange y blur) pasaria de verdad: al
+  // bloquear la pantalla llegan LOS DOS.
+  let corriendo = true;
+  function pararBucle() {
+    if (!corriendo) return;
+    corriendo = false;
+    cancelAnimationFrame(raf);
+  }
+  function arrancarBucle() {
+    if (corriendo) return;
+    corriendo = true;
+    // El reloj se resincroniza SIEMPRE aqui. Sin esto el primer rAF de vuelta
+    // trae el hueco entero: medido, 2015 ms tras dos segundos parado. Aunque
+    // MAX_FRAME lo recorte a 250, eso son 5 pasos de simulacion (el tope) en un
+    // solo frame, y los enemigos darian un salto de 83 ms de golpe.
+    prev = performance.now(); acc = 0;
+    raf = requestAnimationFrame(frame);
+  }
+
+  function seFue() {
+    pararBucle();
+    // suspendAudio() para tambien el temporizador del secuenciador (audio.js:39):
+    // sin eso el reloj de la musica sigue corriendo minimizado y al volver
+    // suelta de golpe todas las notas que se acumularon.
+    suspendAudio();
+    if (esJuego(sm.cur)) Pausa.entrar('sistema');
+  }
+
+  function volvio() {
+    // El bucle vuelve SIEMPRE, este pausado o no: la pantalla de pausa hay que
+    // dibujarla, y el menu tiene que seguir moviendose.
+    arrancarBucle();
+    // El audio solo se reanuda si NO quedamos en pausa. Si quedamos, lo
+    // reanudara Pausa.salir() cuando ella toque: asi la cancion no arranca sola
+    // encima de una pantalla quieta.
+    if (!Pausa.activa) resumeAudio();
+  }
+
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { cancelAnimationFrame(raf); suspendAudio(); }
-    else { prev = performance.now(); acc = 0; resumeAudio(); raf = requestAnimationFrame(frame); }
+    if (document.hidden) seFue(); else volvio();
   });
+  // La barra de notificaciones y los dialogos: la Activity se pausa pero el
+  // documento sigue visible, asi que 'visibilitychange' no llega y este si.
+  window.addEventListener('blur', seFue);
+  // Al volver el foco NO se llama a volvio() si el documento sigue oculto: en
+  // Android el foco puede volver un instante antes que la visibilidad, y
+  // arrancar el bucle ahi lo dejaria corriendo contra una pantalla apagada.
+  window.addEventListener('focus', () => { if (!document.hidden) volvio(); });
   sm.go(Menu, {});
   prev = performance.now();
   raf = requestAnimationFrame(frame);
@@ -318,10 +639,31 @@ function boot() {
 // `cancion` devuelve el NOMBRE del tema que suena: es la unica forma de
 // comprobar desde fuera que SURVIVAL cambia de musica al entrar el jefe.
 window.__arcade = {
-  sm, ctx, Menu, GameOver, GAMES, view,
+  sm, ctx, Menu, GameOver, GAMES, view, Pausa,
   get cancion() {
     const s = currentSong();
     return s ? (Object.keys(SONGS).find(k => SONGS[k] === s) || '?') : null;
+  },
+
+  // ---------- El boton ATRAS de Android ----------
+  // Lo llama MainActivity.java desde su OnBackPressedCallback. Devuelve que ha
+  // hecho, y 'cerrar' significa "yo no lo he usado, cierra la app".
+  //
+  // El orden es el de un boton de VOLVER, un paso atras cada vez:
+  //     jugando        -> pausa          (no se pierde la partida)
+  //     en pausa       -> al menu
+  //     en el menu     -> cerrar la app
+  //     fin de partida -> al menu        (en vez de cerrar sin querer)
+  //
+  // Vive en __arcade y no en un evento del DOM porque el nativo tiene que
+  // ESPERAR la respuesta para decidir si cierra, y un evento no devuelve nada.
+  atras() {
+    if (Pausa.activa) { Pausa.salir(); olvidaToques(); SFX.select(); ctx.toMenu(); return 'menu'; }
+    if (esJuego(sm.cur)) { Pausa.entrar('usuario'); SFX.blip(); return 'pausa'; }
+    // El fin de partida tambien retrocede al menu: es una pantalla intermedia,
+    // y cerrar la app desde ahi seria una sorpresa desagradable.
+    if (sm.cur && sm.cur.meta && sm.cur.meta.id === '_over') { SFX.blip(); ctx.toMenu(); return 'menu'; }
+    return 'cerrar';
   },
 };
 
