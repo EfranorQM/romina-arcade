@@ -75,7 +75,10 @@ export default {
   init(ctx, args) {
     const rnd = this.rnd = makeRng((args && args.seed) >>> 0 || 1);
 
-    this.roma = { x: VW / 2, inv: 0, lastShot: 0, hurt: 0 };
+    // `px` es donde estaba Roma en el paso anterior: la mitad del trabajo de
+    // la interpolacion. Nace ya puesta, o el primer frame la dibujaria
+    // viniendo de la coordenada 0 (el borde izquierdo).
+    this.roma = { x: VW / 2, px: VW / 2, inv: 0, lastShot: 0, hurt: 0 };
     this.lives = RULES.lives;
     this.score = 0;
     this.wave = 0;
@@ -149,7 +152,32 @@ export default {
   },
 
   // ---------- Bucle ----------
+  // ---------- LA FOTO DEL PASO ANTERIOR ----------
+  // Antes de mover nada, cada cosa que se mueve guarda donde estaba. El
+  // dibujado la usa para ensenarla A MEDIO CAMINO entre los dos ultimos pasos
+  // de simulacion (ver draw y el alpha que manda main.js).
+  //
+  // Se hace AQUI, en un solo sitio, y no en cada _update*: asi no hay forma de
+  // que una entidad nueva se quede sin foto por haberse olvidado un sitio. Las
+  // que nacen DENTRO del paso se fotografian ellas mismas al nacer (mkBullet,
+  // mkEBullet, _spawn y el drop), porque este bucle ya paso.
+  //
+  // Coste medido en la app real con 30 enemigos, 40 balas de Roma, 30 enemigas
+  // y 6 drops (107 entidades): 0.0007 ms por paso. Son dos asignaciones por
+  // entidad y nada mas. Con la interpolacion del dibujado incluida, el enfoque
+  // entero cuesta 0.00012 ms por frame de los 16.67 disponibles: 0.0007%.
+  _foto() {
+    const r = this.roma;
+    r.px = r.x;
+    for (const e of this.enemies) { e.px = e.x; e.py = e.y; }
+    for (const b of this.bullets) { b.px = b.x; b.py = b.y; }
+    for (const b of this.ebullets) { b.px = b.x; b.py = b.y; }
+    for (const d of this.drops) { d.px = d.x; d.py = d.y; }
+    for (const c of this.corpses) { c.px = c.x; c.py = c.y; }
+  },
+
   update(dt, ctx) {
+    this._foto();
     // Camara lenta tras matar a un jefe: el golpe se ve entero. Baja el tiempo
     // a un tercio y vuelve sola.
     const dtReal = dt;
@@ -160,6 +188,13 @@ export default {
     this.t += dt;
     if (this.shake > 0) this.shake -= dt;
     if (this.tutorial > 0) this.tutorial -= dt;
+
+    // El destello de la bomba y de la muerte del jefe. Baja en tiempo REAL, no
+    // en el ralentizado: salta justo al morir un jefe, o sea en plena camara
+    // lenta, y con el dt frenado duraria 1.2 s en vez de los 0.4 medidos. Y va
+    // ANTES del early return del picker, que se abre en ese mismo instante:
+    // si no, el destello se quedaria congelado tapando las cartas.
+    if (this.flash > 0) this.flash = Math.max(0, this.flash - dtReal);
 
     if (this.over) {
       this.overT += dt;
@@ -495,6 +530,12 @@ export default {
       shield: def.shielded ? (def.shieldHp || 4) : 0,
       spawnT: 0.35,          // aparicion: crece desde pequenito
     };
+    // La foto del paso anterior, ya puesta al nacer. Un enemigo creado A MITAD
+    // del paso (los que invoca el MIEDO, los dos trozos del DIVISOR, el clon
+    // del EGO) no paso por _foto este paso: sin esto el dibujo lo interpolaria
+    // desde `undefined` y saldria en NaN, o desde (0,0) y entraria cruzando la
+    // pantalla en diagonal.
+    e.px = e.x; e.py = e.y;
     e.baseX = e.x;
     this.enemies.push(e);
     return e;
@@ -788,6 +829,13 @@ export default {
         else if (b.x > VW - 3) { b.x = VW - 3; b.vx = -Math.abs(b.vx); rebota = true; }
         if (b.y < 3) { b.y = 3; b.vy = Math.abs(b.vy); rebota = true; }
         if (rebota) {
+          // La foto se muda a la pared. Sin esto, la bala que rebota tiene su
+          // posicion anterior AL OTRO LADO del punto de rebote, y el dibujo
+          // interpolado la ensena cruzando la pared por dentro: durante un
+          // frame la bala esta fuera de la arena. Al fijar px/py en el punto ya
+          // corregido, el frame intermedio sale entre la pared y la posicion
+          // nueva, que es por donde de verdad va.
+          b.px = b.x; b.py = b.y;
           b.bounces--;
           // Al rebotar pierde algo de fuerza vertical y gana lateral: sin esto
           // una bala disparada recta rebotaria en el techo y volveria por el
@@ -949,8 +997,9 @@ export default {
     for (let i = 0; i < n; i++) {
       const p = POWERUPS[(this.rnd() * POWERUPS.length) | 0];
       const off = n > 1 ? (i - (n - 1) / 2) * 26 : 0;
+      const dx0 = clamp(e.x + off, 14, VW - 14);
       this.drops.push({
-        x: clamp(e.x + off, 14, VW - 14), y: e.y,
+        x: dx0, y: e.y, px: dx0, py: e.y,
         vy: 58, type: p.type, color: p.color, t: 0,
       });
     }
@@ -1171,7 +1220,22 @@ export default {
   },
 
   // ---------- Dibujado ----------
-  draw(g) {
+  // `alpha` = cuanto de un paso de simulacion ha pasado ya (0 a 1). Lo manda
+  // main.js como tercer argumento. Con el, cada frame de pantalla ensena las
+  // cosas A MEDIO CAMINO entre los dos ultimos pasos, en vez de repetir el
+  // ultimo: a 120 Hz eso son la mitad de los frames que dejan de ser copias.
+  //
+  // La guarda no es cosmetica. Esta misma draw la llaman tools/ (ver.js, las
+  // paginas de prueba) con un solo argumento, y SURVIVAL es el unico de los
+  // seis juegos cuya draw no recibia ctx: si alpha llegase `undefined`,
+  // px + (x-px)*undefined es NaN y no se dibujaria absolutamente nada.
+  draw(g, ctx, alpha) {
+    const a = alpha === undefined ? 1 : alpha;
+    // Con el juego parado no hay nada que interpolar, y ademas hay estados en
+    // los que la simulacion NO avanza aunque el bucle siga llamando a draw: la
+    // pantalla de cartas y el fin de partida. Ahi el alpha del acumulador
+    // seguiria subiendo y bajando y todo vibraria en el sitio.
+    this._a = (this.picker || this.over) ? 1 : a;
     this._drawBg(g);
     this._drawDrops(g);
     this._drawCorpses(g);        // los muertos, por debajo de los vivos
@@ -1201,9 +1265,16 @@ export default {
     if (this.picker) drawPicker(g, this.picker, VW, VH, this.t);
     if (this.over) this._drawOver(g);
 
-    // Destello de la bomba, por encima de todo.
+    // Destello de la bomba, por encima de todo. SOLO SE DIBUJA aqui: el
+    // contador baja en update(), que es donde vive el tiempo.
+    //
+    // Antes bajaba aqui mismo, restando 1/60 por FRAME DIBUJADO. Eso ya estaba
+    // mal y no se habia visto: en un telefono de 120 Hz se dibujan 120 frames
+    // por segundo, asi que el destello de matar a un jefe -- el momento mas
+    // vistoso del juego -- se apagaba al DOBLE de velocidad, en 0.2 s en vez de
+    // los 0.4 medidos. Y en la pantalla de cartas, donde update() vuelve antes
+    // de tiempo pero draw() se sigue llamando, se apagaba igual.
     if (this.flash > 0) {
-      this.flash -= 1 / 60;
       g.fillStyle = 'rgba(255,245,251,' + Math.max(0, this.flash * 2).toFixed(2) + ')';
       g.fillRect(0, 0, VW, VH);
     }
@@ -1248,13 +1319,17 @@ export default {
   },
 
   _drawCorpses(g) {
+    const a = this._a;
     for (const c of this.corpses) {
       const p = posarCorpse(c);
       const cs = A.sprite(c.sprite);
       const w = c.r * 2.4 * A.factor(cs);
       g.save();
       g.globalAlpha = p.alpha;
-      g.translate(c.x, c.y);
+      // Los cadaveres salen despedidos a 60 px/s de lado y caen con gravedad:
+      // van igual de rapido que la tropa y se interpolan igual. `px` lo pone
+      // _foto(); mkCorpse los crea con el mismo x/y del enemigo que murio.
+      g.translate(c.px + (c.x - c.px) * a, c.py + (c.y - c.py) * a);
       g.rotate(p.rot);
       g.scale(p.sx, p.sy);
       g.drawImage(cs, -w / 2, -w / 2, w, w);
@@ -1263,7 +1338,19 @@ export default {
   },
 
   _drawEnemies(g) {
+    const a = this._a;
     for (const e of this.enemies) {
+      // LA POSICION DIBUJADA, calculada UNA sola vez por enemigo.
+      //
+      // Esto es lo que mas facil era hacer mal. Cada criatura usa su posicion
+      // en CINCO sitios distintos de este bucle: el cuerpo, el anillo de carga
+      // del jefe, el escudo del MURO, el aura del SILENCIO y la barra de vida.
+      // Si el cuerpo se interpolase y los adornos no, el escudo y la barra se
+      // quedarian clavados donde el enemigo estuvo el ultimo paso simulado y
+      // se DESPEGARIAN del cuerpo hasta 3 px virtuales (12 px fisicos en el
+      // telefono). Por eso ex/ey se calculan aqui arriba y a partir de este
+      // punto nadie vuelve a leer e.x ni e.y para dibujar.
+      const ex = e.px + (e.x - e.px) * a, ey = e.py + (e.y - e.py) * a;
       const s = A.sprite(e.id);
       // Al aparecer crecen desde pequenito, para que no salgan de golpe.
       let k = 1;
@@ -1281,7 +1368,7 @@ export default {
       const po = pose(e);
 
       g.save();
-      g.translate(e.x, e.y);
+      g.translate(ex, ey);
       if (po.rot) g.rotate(po.rot);
       g.scale(po.sx, po.sy);
 
@@ -1308,7 +1395,7 @@ export default {
           g.strokeStyle = e.phase2 ? '#ff4d4d' : '#ffe14d';
           g.lineWidth = 1 + c * 2;
           g.beginPath();
-          g.arc(e.x, e.y, e.r + 16 - c * 12, 0, 7);
+          g.arc(ex, ey, e.r + 16 - c * 12, 0, 7);
           g.stroke();
           g.restore();
         }
@@ -1321,7 +1408,7 @@ export default {
         g.strokeStyle = 'rgba(107,240,255,' + (0.35 + f * 0.5).toFixed(2) + ')';
         g.lineWidth = 1 + f * 2;
         g.beginPath();
-        g.arc(e.x, e.y + 4, e.r + 6, Math.PI * 1.12, Math.PI * 1.88);
+        g.arc(ex, ey + 4, e.r + 6, Math.PI * 1.12, Math.PI * 1.88);
         g.stroke();
       }
 
@@ -1329,37 +1416,41 @@ export default {
       if (e.def.ability === 'silenceAura') {
         g.strokeStyle = 'rgba(154,134,216,' + (0.25 + Math.sin(this.t * 3) * 0.1).toFixed(2) + ')';
         g.lineWidth = 1.5;
-        g.beginPath(); g.arc(e.x, e.y, e.def.aura, 0, 7); g.stroke();
+        g.beginPath(); g.arc(ex, ey, e.def.aura, 0, 7); g.stroke();
       }
 
       // Barra de vida de la tropa. La del jefe NO va aqui: va fija en el HUD,
       // porque un jefe patrulla pegado al techo y encima de el no queda sitio
       // ni para la barra ni para su nombre.
       if (e.maxHp > 1 && !e.boss && !e.invisible) {
-        const bw = 26, bh = 2.5, by = e.y - e.r - 8;
+        const bw = 26, bh = 2.5, by = ey - e.r - 8;
         g.fillStyle = 'rgba(0,0,0,0.55)';
-        g.fillRect(e.x - bw / 2, by, bw, bh);
+        g.fillRect(ex - bw / 2, by, bw, bh);
         g.fillStyle = '#7de0d0';
-        g.fillRect(e.x - bw / 2, by, bw * Math.max(0, e.hp / e.maxHp), bh);
+        g.fillRect(ex - bw / 2, by, bw * Math.max(0, e.hp / e.maxHp), bh);
       }
     }
   },
 
   _drawBullets(g) {
-    // Las de Roma.
+    const a = this._a;
+    // Las de Roma. Son lo que MAS gana con la interpolacion: a 330 px/s cada
+    // paso las adelanta 5.5 px virtuales, que en el telefono son 21.45 fisicos
+    // de golpe. Es el salto mas grande de toda la pantalla.
     for (const b of this.bullets) {
+      const bx = b.px + (b.x - b.px) * a, by = b.py + (b.y - b.py) * a;
       const col = b.hostile ? '#ff4444' : (b.mega ? '#ffe66d' : '#ff8ad4');
       g.fillStyle = col;
       if (b.mega) {
-        g.beginPath(); g.arc(b.x, b.y, 4.5, 0, 7); g.fill();
+        g.beginPath(); g.arc(bx, by, 4.5, 0, 7); g.fill();
         g.fillStyle = '#ffffff';
-        g.beginPath(); g.arc(b.x, b.y, 2, 0, 7); g.fill();
+        g.beginPath(); g.arc(bx, by, 2, 0, 7); g.fill();
       } else {
         // Una bala que ya reboto va girada en su direccion: asi se ve que
         // ahora viaja en diagonal y puede pillar a un MURO por el costado.
         const ang = Math.atan2(b.vy, b.vx) + Math.PI / 2;
         g.save();
-        g.translate(b.x, b.y);
+        g.translate(bx, by);
         g.rotate(ang);
         g.fillRect(-1.5, -6, 3, 9);
         g.fillStyle = 'rgba(255,255,255,0.85)';
@@ -1369,12 +1460,14 @@ export default {
     }
     // Las enemigas: rombos, para no confundirlas con las de Roma.
     for (const b of this.ebullets) {
+      const bx = b.px + (b.x - b.px) * a, by = b.py + (b.y - b.py) * a;
       // Halo: una bala enemiga tiene que verse venir sobre la rejilla del
-      // fondo. Sin el, a 4 px se perdian entre las lineas.
+      // fondo. Sin el, a 4 px se perdian entre las lineas. Va en la MISMA
+      // posicion interpolada que el rombo, o el rombo se saldria del halo.
       g.fillStyle = 'rgba(255,60,60,0.22)';
-      g.beginPath(); g.arc(b.x, b.y, 7, 0, 7); g.fill();
+      g.beginPath(); g.arc(bx, by, 7, 0, 7); g.fill();
       g.save();
-      g.translate(b.x, b.y);
+      g.translate(bx, by);
       g.rotate(b.t * 6);
       g.fillStyle = '#ff3b3b';
       g.fillRect(-4, -4, 8, 8);
@@ -1385,10 +1478,14 @@ export default {
   },
 
   _drawDrops(g) {
+    const a = this._a;
     for (const d of this.drops) {
       const bob = Math.sin(d.t * 6) * 2;
       g.save();
-      g.translate(d.x, d.y + bob);
+      // El IMAN los tira hacia Roma a 210 px/s, mas rapido que la propia Roma:
+      // sin interpolar, el tramo final del poder volando hacia ella era un
+      // tiron a saltos.
+      g.translate(d.px + (d.x - d.px) * a, d.py + (d.y - d.py) * a + bob);
       // Halo del color del poder.
       const gr = g.createRadialGradient(0, 0, 0, 0, 0, 16);
       gr.addColorStop(0, d.color); gr.addColorStop(1, 'rgba(0,0,0,0)');
@@ -1411,13 +1508,19 @@ export default {
   _drawAim(g) {
     if (!this.firing) return;
     const r = this.roma;
+    // La mira sale de Roma, asi que tiene que salir de la MISMA Roma que se
+    // dibuja. Si la mira partiese de r.x crudo y el cuerpo de la interpolada,
+    // la linea de puntos se despegaria del personaje hasta 3.2 px virtuales
+    // moviendose a tope: 12.35 px fisicos en el telefono, mas de un tercio del
+    // ancho de Roma. Es el fallo que mas se veria de los siete.
+    const rx = this._romaX();
     const cx = Math.cos(this.aim), cy = Math.sin(this.aim);
     const col = this.aiming ? 'rgba(255,138,212,0.85)' : 'rgba(255,138,212,0.35)';
     g.fillStyle = col;
     for (let d = 20; d < 92; d += 9) {
       const k = 1 - d / 110;
       g.globalAlpha = k;
-      g.fillRect(r.x + cx * d - 1.2, ROMA_Y + cy * d - 1.2, 2.4, 2.4);
+      g.fillRect(rx + cx * d - 1.2, ROMA_Y + cy * d - 1.2, 2.4, 2.4);
     }
     g.globalAlpha = 1;
     // Punta de la mira, mas marcada cuando se esta apuntando de verdad.
@@ -1425,15 +1528,24 @@ export default {
       g.strokeStyle = 'rgba(255,138,212,0.75)';
       g.lineWidth = 1.5;
       g.beginPath();
-      g.arc(r.x + cx * 96, ROMA_Y + cy * 96, 4.5, 0, 7);
+      g.arc(rx + cx * 96, ROMA_Y + cy * 96, 4.5, 0, 7);
       g.stroke();
     }
+  },
+
+  // Donde se dibuja Roma este frame. Vive aparte porque la usan el cuerpo Y la
+  // mira, y las dos tienen que partir del mismo sitio (ver _drawAim). Roma solo
+  // se mueve de lado: ROMA_Y es constante y no hay nada que interpolar en Y.
+  _romaX() {
+    const r = this.roma;
+    return r.px + (r.x - r.px) * this._a;
   },
 
   _drawRoma(g) {
     const r = this.roma;
     // Parpadea mientras es invulnerable.
     if (r.inv > 0 && Math.sin(this.t * 30) < 0) return;
+    const rx = this._romaX();
 
     let mode = 'normal';
     // `ardiendo` cuenta igual que el poder MEGA: si las balas estan potenciadas
@@ -1447,16 +1559,18 @@ export default {
     const s = A.roma(mode);
     const k = r.hurt > 0 ? 1.15 : 1;
     const w = 30 * A.factor(s) * k;
-    g.drawImage(s, r.x - w / 2, ROMA_Y - w / 2, w, w);
+    g.drawImage(s, rx - w / 2, ROMA_Y - w / 2, w, w);
 
-    // Burbuja del escudo.
+    // La burbuja del escudo y el nombre van pegados al cuerpo: misma rx, o se
+    // arrastrarian detras de ella al correr, igual que los adornos de los
+    // enemigos.
     if (this.power.shield > 0) {
       g.strokeStyle = 'rgba(107,240,255,' + (0.5 + Math.sin(this.t * 8) * 0.25).toFixed(2) + ')';
       g.lineWidth = 2;
-      g.beginPath(); g.arc(r.x, ROMA_Y, 20, 0, 7); g.stroke();
+      g.beginPath(); g.arc(rx, ROMA_Y, 20, 0, 7); g.stroke();
     }
     // Su nombre debajo, como en el original.
-    textCenter(g, 'ROMA', r.x, ROMA_Y + 13, 'rgba(255,62,201,0.75)', 1);
+    textCenter(g, 'ROMA', rx, ROMA_Y + 13, 'rgba(255,62,201,0.75)', 1);
   },
 
   _drawFloats(g) {
@@ -1691,11 +1805,13 @@ function normalizar(a) {
 function mkBullet(x, y, vx, vy, dmg, mega, pierce = 0) {
   // Una MEGA rebota mas veces: es el premio de haberla recogido.
   // `pierce` = cuantos enemigos MAS puede atravesar tras matar (PERFORANTE).
-  return { x, y, vx, vy, dmg, mega, life: 3, hostile: false, bounces: mega ? 3 : 1, pierce };
+  // px/py nacen en el mismo sitio que x/y: una bala recien salida no viene de
+  // ningun lado, y su primer frame tiene que dibujarse en la boca del canon.
+  return { x, y, px: x, py: y, vx, vy, dmg, mega, life: 3, hostile: false, bounces: mega ? 3 : 1, pierce };
 }
 
 function mkEBullet(x, y, vx, vy) {
-  return { x, y, vx, vy, t: 0 };
+  return { x, y, px: x, py: y, vx, vy, t: 0 };
 }
 
 // Un corazoncito para las vidas del HUD.

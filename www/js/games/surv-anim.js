@@ -116,6 +116,11 @@ export function mkCorpse(e, rnd) {
   return {
     sprite: e.id,
     x: e.x, y: e.y,
+    // Donde estaba el paso anterior, que para un recien muerto es donde esta:
+    // nace a mitad del paso (cuando la bala acierta), asi que no pasa por la
+    // foto que el juego saca al principio de update(). Sin esto, el primer
+    // frame lo interpolaria desde `undefined` y no se dibujaria.
+    px: e.x, py: e.y,
     r: e.r,
     boss: e.boss,
     // Sale despedida en la direccion en que iba, con algo de azar.
