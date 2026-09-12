@@ -10,31 +10,95 @@
 // Todo se dibuja dentro de una caja de SZ x SZ centrada en (SZ/2, SZ/2), asi
 // el motor puede colocarlos por su centro sin saber nada de cada dibujo.
 
-import { BUILDERS2 } from './surv-art2.js';
+import { builders2 } from './surv-art2.js';
 
 const SZ = 64;                     // lado de la lamina de cada criatura
 
 // Cada sprite se hornea a su propio canvas. `f` recibe el contexto ya centrado.
+//
+// La lamina es MAS GRANDE que la figura (MARGEN por cada lado) porque el glow
+// se hornea aqui dentro y necesita sitio: en la lamina justa de 64 solo
+// quedaban 6-9 px libres alrededor del cuerpo, y a la escala a la que se dibuja
+// (0.56) eso son menos de 4 px en pantalla. Medido con tools/_a/medir.html.
+//
+// La figura se sigue dibujando en coordenadas de SZ centradas en el origen: el
+// margen lo absorbe el translate, asi que ningun dibujo de criatura cambia.
 function bake(f, size = SZ) {
+  const N = size + MARGEN * 2;
   const cv = document.createElement('canvas');
-  cv.width = size; cv.height = size;
+  cv.width = N; cv.height = N;
   const d = cv.getContext('2d');
   d.imageSmoothingEnabled = false;
-  d.translate(size / 2, size / 2);
+  d.translate(N / 2, N / 2);
+  glowCol = null;                  // lo rellena halo() si la figura pide neon
   f(d, size);
-  return cv;
+  return glowCol ? conGlow(cv, glowCol, glowA) : cv;
 }
 
-// Resplandor detras de una figura: un disco que se desvanece. Es lo que da el
-// aire de neon sin tener que usar sombras (shadowBlur cuesta carisimo por
-// frame; horneado aqui se paga una sola vez).
-function halo(d, r, col, a = 0.5) {
-  const g = d.createRadialGradient(0, 0, 0, 0, 0, r);
-  g.addColorStop(0, rgba(col, a));
-  g.addColorStop(0.55, rgba(col, a * 0.35));
-  g.addColorStop(1, rgba(col, 0));
-  d.fillStyle = g;
-  d.beginPath(); d.arc(0, 0, r, 0, 7); d.fill();
+// Cuanto crece la lamina por cada lado. Con 16 el halo que rodea a la figura
+// pasa de 121 a 213 pixeles de PANTALLA encendidos sobre el cielo del bioma
+// (medido en tools/_a/wcag2.html, los 80 pares criatura-bioma).
+//
+// Probado tambien a 4, 10 y 12: el coste por frame sale el MISMO dentro del
+// ruido de la medida (+-0.5 ms), porque lo que se paga no es el area de la
+// lamina sino mezclar un sprite que ahora lleva mucho pixel semitransparente.
+// Como el margen sale gratis, se coge el que deja sitio al desenfoque largo.
+const MARGEN = 16;
+
+// `halo()` ya NO dibuja nada: solo APUNTA de que color quiere brillar la
+// figura. El disco que dibujaba antes quedaba DENTRO del cuerpo opaco (medido:
+// sobresalia -1.3 a -3.2 px en las siete criaturas) y lo tapaba el propio
+// dibujo que venia despues, asi que se pagaba un gradiente radial por criatura
+// para no ver ni un pixel de neon. El radio que recibia se ignora a proposito:
+// el glow de verdad sale de la SILUETA, no de un circulo.
+let glowCol = null, glowA = 0.5;
+function halo(d, r, col, a = 0.5) { glowCol = col; glowA = a; }
+
+// El glow: se lee la silueta del sprite ya horneado, se tine del color y se
+// desenfoca reduciendola y volviendola a ampliar. El navegador hace ese
+// desenfoque bilineal en la GPU y aqui se paga UNA vez por criatura (medido:
+// 0.59 ms cada una, 16.5 ms las 28 juntas), no por frame como shadowBlur.
+//
+// Son tres pasadas de radio creciente sumadas con 'lighter': la corta pega el
+// neon al borde de la figura y la larga lo derrama. Con una sola pasada o se
+// ve un contorno duro o se ve una nube sin borde.
+const PASADAS = [[3, 0.50], [6, 0.55], [12, 0.60]];
+
+function conGlow(src, col, a) {
+  const N = src.width;
+  // Silueta tenida: el sprite como mascara y el color encima.
+  const m = document.createElement('canvas');
+  m.width = N; m.height = N;
+  const md = m.getContext('2d');
+  md.drawImage(src, 0, 0);
+  md.globalCompositeOperation = 'source-in';
+  md.fillStyle = col; md.fillRect(0, 0, N, N);
+
+  const o = document.createElement('canvas');
+  o.width = N; o.height = N;
+  const d = o.getContext('2d');
+  d.globalCompositeOperation = 'lighter';
+  for (const [q, pa] of PASADAS) {
+    const lw = Math.max(2, Math.round(N / q));
+    const lo = document.createElement('canvas');
+    lo.width = lw; lo.height = lw;
+    const ld = lo.getContext('2d');
+    ld.imageSmoothingEnabled = true;
+    ld.drawImage(m, 0, 0, lw, lw);
+    d.imageSmoothingEnabled = true;
+    // El alpha que pedia cada halo() se respeta, pero COMPRIMIDO. Los valores
+    // viejos (0.22 a 0.50) estaban medidos para un disco DEBAJO del cuerpo, que
+    // es otra cosa: usados tal cual, el PESO (0.22) se quedaba en 0.0 px de
+    // glow visible y no se notaba nada. Mapeados a 0.75-1.10 todos brillan y se
+    // conserva quien queria brillar mas que quien menos.
+    d.globalAlpha = pa * (0.75 + (a - 0.22) * (0.35 / 0.28));
+    d.drawImage(lo, 0, 0, N, N);
+  }
+  d.globalAlpha = 1;
+  d.globalCompositeOperation = 'source-over';
+  // La figura, entera y opaca, encima de su propio resplandor.
+  d.drawImage(src, 0, 0);
+  return o;
 }
 
 function rgba(hex, a) {
@@ -589,7 +653,7 @@ function romaHeart(col, glow) {
 const BUILDERS = {
   duda, olvido, tristeza, dasher, tracker, muro, divisor,
   celos, rutina, inseguridad, miedo, mentira, silencio, vicio, tiempo, abandono, ego,
-  ...BUILDERS2,
+  ...builders2(bake, halo),        // la tropa de los biomas, con el mismo horno
 };
 
 const cache = new Map();
@@ -624,4 +688,16 @@ export function roma(mode) {
   return s;
 }
 
-export { SZ, BZ };
+// Cuanto hay que multiplicar el tamano de dibujado para que el CUERPO siga
+// midiendo lo mismo en pantalla ahora que la lamina lleva margen.
+//
+// NO es una constante: hay tres tamanos de figura (64 las criaturas, 84 los
+// jefes, 56 Roma) y el margen es el mismo para las tres, asi que el factor sale
+// distinto en cada una (1.500, 1.381, 1.571). Con una sola constante los jefes
+// saldrian un 9% mas grandes de lo que miden hoy. Por eso se pregunta por el
+// sprite ya horneado, que es quien sabe su lamina.
+export function factor(s) {
+  return s.width / (s.width - MARGEN * 2);
+}
+
+export { SZ, BZ, MARGEN };

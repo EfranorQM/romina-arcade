@@ -8,33 +8,20 @@
 // Cada bioma tiene su paleta y sus criaturas la respetan: al cambiar de tramo
 // se nota que la tropa tambien cambio, no solo el fondo.
 
-// Estos tres ayudantes son los mismos de surv-art.js. Se repiten aqui en vez de
-// exportarlos alli para que este archivo se pueda leer solo, que es como se
-// dibuja: mirando una criatura entera de una vez.
+// `bake` y `halo` los PONE surv-art.js y se reciben aqui por parametro (ver el
+// final del archivo). Antes estaban copiados, y al cambiar como se hornea el
+// glow habrian quedado dos versiones distintas del mismo horno: las criaturas
+// de los biomas brillando de una manera y las comunes de otra.
+//
+// `eyes` si se queda copiado: es dibujo, no horno, y tenerlo aqui deja leer una
+// criatura entera sin saltar de archivo.
 const SZ = 64;
+let bake, halo;
 
-function bake(f, size = SZ) {
-  const cv = document.createElement('canvas');
-  cv.width = size; cv.height = size;
-  const d = cv.getContext('2d');
-  d.imageSmoothingEnabled = false;
-  d.translate(size / 2, size / 2);
-  f(d, size);
-  return cv;
-}
-
+// Color con alpha calculado: esto SI se queda aqui, es dibujo y no horno.
 function rgba(hex, a) {
   const n = parseInt(hex.slice(1), 16);
   return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')';
-}
-
-function halo(d, r, col, a = 0.5) {
-  const g = d.createRadialGradient(0, 0, 0, 0, 0, r);
-  g.addColorStop(0, rgba(col, a));
-  g.addColorStop(0.55, rgba(col, a * 0.35));
-  g.addColorStop(1, rgba(col, 0));
-  d.fillStyle = g;
-  d.beginPath(); d.arc(0, 0, r, 0, 7); d.fill();
 }
 
 function eyes(d, y, w, r, col = '#ffffff', pupil = '#12061c') {
@@ -316,7 +303,15 @@ const grieta = () => bake(d => {
   d.beginPath(); d.arc(10, -2, 2.6, 0, 7); d.fill();
 });
 
-export const BUILDERS2 = {
+// Los constructores son flechas que llaman a `bake` cuando se las invoca, no
+// al cargar el modulo: por eso basta con dejar puesto el horno antes de pedir
+// la primera criatura.
+const TROPA = {
   susurro, espejismo, hueco, peso, reflejo, mascara,
   ahogo, eco, eco2, olvidado, grieta,
 };
+
+export function builders2(horno, resplandor) {
+  bake = horno; halo = resplandor;
+  return TROPA;
+}

@@ -25,6 +25,37 @@ import { SKILLS, offerCards } from './surv-skills.js';
 import { biomaFor, bossFor, entraBioma, drawBioma } from './surv-biomas.js';
 import { pose, carga, mkCorpse, updateCorpse, posarCorpse } from './surv-anim.js';
 import { drawPicker, cardAt } from './surv-cards.js';
+import { bloom, bloomLibre } from '../bloom.js';
+
+// Cuanta luz suma la pasada de neon. Medido comparando capturas de la MISMA
+// escena a la resolucion del telefono (2400x1080), con el glow que sobresale
+// del cuerpo y el contraste WCAG contra el fondo:
+//
+//   fuerza   glow fuera del cuerpo   HUECO     GRIETA    fondo vacio
+//    0.45          +13 px          1.99->2.20  ->2.57      +1.09
+//    0.70          +25 px          1.99->2.30  ->2.78      +1.16
+//    1.00          +32 px          1.99->2.44  ->3.04      +1.49
+//
+// El fondo apenas se entera en ninguno de los tres (+1.1 niveles de luz sobre
+// 255): el umbral hace su trabajo y el violeta oscuro no pasa.
+//
+// PERO la tabla de arriba solo mira el contraste CONTRA EL FONDO, y por eso se
+// quedaba corta: lo que rompe el efecto es lo que le pasa al CUERPO. Medido en
+// el centro de la DUDA y en sus ojos, capturando la misma escena con el mismo
+// seed y variando solo la fuerza:
+//
+//   fuerza   centro del cuerpo    ojo           que se ve
+//    0      (203,181,237)      (217,194,255)   sin neon
+//    0.25   (227,200,255)      (242,219,255)   lila, con neon
+//    0.40   (238,211,255)      (251,228,255)   lila, con neon   <- el limite
+//    0.55   (247,223,255)      (255,237,255)   el ojo se satura
+//    0.70   (255,233,255)      (255,243,255)   cuerpo y ojos BLANCOS
+//
+// A 0.70 la DUDA deja de ser lila y se queda sin cara: los ojos, que son lo que
+// hace que se lea como criatura y no como mancha, se funden con la frente. Se
+// gana neon y se pierde el personaje, que es justo lo contrario de lo que se
+// buscaba. A 0.40 el resplandor se ve igual de bien y la cara sigue ahi.
+const BRILLO = 0.4;
 
 // ---------- Los controles tactiles ----------
 // En apaisado los pulgares caen en las esquinas de abajo, asi que ahi van los
@@ -1148,6 +1179,19 @@ export default {
     this._drawBullets(g);
     this._drawAim(g);
     this._drawRoma(g);
+
+    // EL NEON. Aqui, y no antes ni despues, por dos motivos medidos:
+    //
+    //  - Va DESPUES del mundo (fondo, criaturas, balas, Roma) para que todo lo
+    //    que brilla ya este dibujado: el resplandor se saca del frame entero de
+    //    una sola pasada, no criatura a criatura.
+    //  - Va ANTES del HUD, los controles, los carteles y el picker de cartas.
+    //    Esos son interfaz y tienen que leerse nitidos; un texto que florece se
+    //    vuelve ilegible, y la barra de vida del jefe dejaria de medirse bien.
+    //
+    // Los numeritos flotantes (_drawFloats) tambien se quedan fuera: son texto.
+    bloom(g, BRILLO);
+
     this._drawFloats(g);
     this._drawHUD(g);
     this._drawControls(g);
@@ -1206,13 +1250,14 @@ export default {
   _drawCorpses(g) {
     for (const c of this.corpses) {
       const p = posarCorpse(c);
-      const w = c.r * 2.4;
+      const cs = A.sprite(c.sprite);
+      const w = c.r * 2.4 * A.factor(cs);
       g.save();
       g.globalAlpha = p.alpha;
       g.translate(c.x, c.y);
       g.rotate(p.rot);
       g.scale(p.sx, p.sy);
-      g.drawImage(A.sprite(c.sprite), -w / 2, -w / 2, w, w);
+      g.drawImage(cs, -w / 2, -w / 2, w, w);
       g.restore();
     }
   },
@@ -1223,7 +1268,12 @@ export default {
       // Al aparecer crecen desde pequenito, para que no salgan de golpe.
       let k = 1;
       if (e.spawnT > 0) k = 0.35 + (1 - e.spawnT / 0.35) * 0.65;
-      const w = e.r * 2.4 * k, h = w;
+      // LAMINA corrige que la lamina horneada ahora sea mas grande que la
+      // figura: sin ese factor el CUERPO encogeria, porque `w` mide la lamina
+      // entera y no la criatura. Con el, el cuerpo mide exactamente lo mismo
+      // que antes (medido: 10.7 px de radio en la DUDA, igual que con la
+      // lamina de 64) y lo que crece es solo el sitio del glow.
+      const w = e.r * 2.4 * A.factor(s) * k, h = w;
 
       // Como toca dibujarla AHORA: respira, se ladea hacia donde va, se estira
       // al embestir y se aplasta al recibir. Todo son transformaciones sobre la
@@ -1396,7 +1446,7 @@ export default {
 
     const s = A.roma(mode);
     const k = r.hurt > 0 ? 1.15 : 1;
-    const w = 30 * k;
+    const w = 30 * A.factor(s) * k;
     g.drawImage(s, r.x - w / 2, ROMA_Y - w / 2, w, w);
 
     // Burbuja del escudo.
@@ -1623,6 +1673,9 @@ export default {
     this.drops.length = 0;
     this.corpses.length = 0;
     this.floats.length = 0;
+    // Los buffers del neon son de modulo, compartidos: se sueltan al salir para
+    // no dejar 300x135 de pixeles ocupados mientras ella navega el menu.
+    bloomLibre();
   },
 };
 
