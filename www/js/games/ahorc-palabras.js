@@ -12,16 +12,26 @@
 // repetidas) y hace jugar a dos bots por escalon de dificultad.
 
 // ---------- NOSOTROS: las de ustedes dos ----------
-// Anderson: aqui van las palabras que solo Romina y tu entienden -- el lugar de
-// la primera cita, el apodo, la comida que siempre piden, la cancion. Con
-// acentos si quieres (se quitan al cargar), mayusculas o minusculas, y frases
-// de dos palabras. La categoria entra en la rotacion desde la segunda palabra
-// de cada partida con un 25% de probabilidad, con la pista NOSOTROS, siempre
-// que tenga al menos cinco.
-// Maximo 14 caracteres contando espacios, que es lo que cabe en las casillas.
+// Anderson: estas son las palabras del modo privado (el corazon de abajo en la
+// pantalla de modos, manteniendolo apretado). NO salen en SOLA ni en A DOS.
+// Cada linea es [palabra, pista]: la pista se ensena entera en el cielo, en
+// vez de la categoria. Con acentos si quieres (se quitan al cargar), mayusculas
+// o minusculas, y frases de dos palabras. Maximo 14 caracteres por palabra
+// contando espacios (lo que cabe en las casillas) y unos 100 por pista (tres
+// lineas). Para agregar una, se copia una linea.
 const NOSOTROS = [
-  'PRIMERA CITA', 'TE AMO', 'ABRAZO FUERTE', 'CAFE JUNTOS', 'PARA SIEMPRE',
-  'MI AMOR', 'CINE Y PIZZA', 'NUESTRA CASA',
+  ['lechita', 'lo que quieres que te de en la boca'],
+  ['pija', 'te encantaria chupar sin parar'],
+  ['Roma', 'tu primer apodo'],
+  ['roblox', 'primer juego que disfrutamos juntos'],
+  ['videollamadas', 'nos encanta hacerlo ya sea para jugar o cochinadas'],
+  ['tiktok', 'estas viciada y no entiendo tu humor'],
+  ['free', 'viciada pero te divierte'],
+  ['minecraft', 'falta terminar la casa'],
+  ['cochinadas', 'nos encanta hacer cada que podamos'],
+  ['popo', 'el primer halago que te dije, tus ojos son color...'],
+  ['temu', 'ya has hecho varias compras'],
+  ['spotify', 'se cobra solo y es barato'],
 ];
 
 const CATEGORIAS = {
@@ -72,7 +82,20 @@ for (const cat in CATEGORIAS) for (const w of CATEGORIAS[cat]) {
   const n = normalizar(w);
   if (n) LISTA.push({ w: n, cat, d: dificultad(n) });
 }
-export const NUESTRAS = NOSOTROS.map(normalizar).filter(w => w && w.length <= 14);
+// Una pista es texto libre: mayusculas y sin acentos (la fuente 5x7 no los
+// tiene), pero se le deja la puntuacion.
+export function limpiar(s) {
+  return String(s).normalize('NFC').toUpperCase().replace(/Ñ/g, '\u0001').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\u0001/g, 'Ñ').replace(/\s+/g, ' ').trim();
+}
+export const NUESTRAS = NOSOTROS.map(([w, p]) => ({ w: normalizar(w), pista: limpiar(p || '') })).filter(x => x.w && x.w.length <= 14);
+
+// Una de las nuestras que no haya salido en esta partida, o null si ya
+// salieron todas. Sin escalones: son pocas y todas valen lo mismo.
+export function elegirNuestra(rnd, usadas) {
+  const pool = NUESTRAS.filter(x => !usadas.has(x.w));
+  if (!pool.length) return null;
+  return pool[Math.floor(rnd() * pool.length)];
+}
 
 // Tercios por dificultad: FACIL, MEDIO, DIFICIL.
 const ordenada = LISTA.slice().sort((a, b) => a.d - b.d);
@@ -93,10 +116,6 @@ function marcar(w) { recientes.push(w); if (recientes.length > 40) recientes.shi
 //   6-9: medio o dificil, con prioridad a las duras.   10+: cualquiera.
 // Nunca repite la categoria de la anterior, ni una palabra de las recientes.
 export function elegir(rnd, n, catAnterior) {
-  if (n >= 2 && NUESTRAS.length >= 5 && catAnterior !== 'NOSOTROS' && rnd() < 0.25) {
-    const libres = NUESTRAS.filter(w => !recientes.includes(w));
-    if (libres.length) { const w = libres[Math.floor(rnd() * libres.length)]; marcar(w); return { w, cat: 'NOSOTROS' }; }
-  }
   let filtro;
   if (n <= 2) filtro = x => tercio(x) === 0 && SUAVES.includes(x.cat);
   else if (n <= 5) filtro = x => tercio(x) <= 1;

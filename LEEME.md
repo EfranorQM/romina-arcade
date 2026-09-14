@@ -88,7 +88,7 @@ www/                  el juego (esto es todo lo que corre)
       ahorc-cara.js   AHORCADO: las expresiones
       ahorc-arte.js   AHORCADO: cielo, estanque, rana, globos y cuerpo
       ahorc-teclado.js AHORCADO: el teclado en pantalla
-      ahorc-palabras.js AHORCADO: las palabras (NOSOTROS va al principio)
+      ahorc-palabras.js AHORCADO: las palabras (las privadas van al principio)
 docs/                 investigación técnica y diseños
 tools/                utilidades de desarrollo (no entran en el APK)
   icono.py            dibuja el ícono del APK en las cinco densidades
@@ -217,9 +217,13 @@ cara. El diseño completo, con cada número, está en `docs/design-ahorcado.md`.
 - **A DOS** no toca el récord: uno escribe (el muñeco se tapa los ojos), elige
   la pista entre seis tejuelas, aparece PASALE EL TELEFONO, y el otro adivina
   con seis globos. Marcador J1-J2 y OTRA (CAMBIAN).
-- **NOSOTROS**: al principio de `www/js/games/ahorc-palabras.js` hay un array
-  para las palabras que solo ustedes dos entienden. Con cinco o más, entra en
-  la rotación con su propia pista.
+- **NOSOTROS**, el modo privado: se entra **manteniendo apretado 0,8 s el
+  corazón** que hay debajo de los dos botones (un toque suelto no lo abre).
+  Las palabras y sus pistas están al principio de
+  `www/js/games/ahorc-palabras.js`, una línea por palabra: `['palabra',
+  'pista']`. La pista se escribe entera en el cielo. Juega como SOLA, con su
+  propio récord, y se acaba con fiesta cuando las adivina todas. No salen ni
+  en SOLA ni en A DOS.
 - La **Ñ** se añadió a la fuente 5x7 (`font.js`): era la única letra del
   español que faltaba.
 

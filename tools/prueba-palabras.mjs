@@ -45,7 +45,12 @@ console.log('== 1) LA LISTA ==');
   ok(Object.values(porCat).every(n => n >= 12), 'cada categoria con al menos 12');
   const conEnye = P.LISTA.filter(x => x.w.includes('Ñ')).length;
   ok(conEnye >= 10, 'al menos 10 con Ñ (hay ' + conEnye + ')');
-  ok(P.NUESTRAS.every(w => w.length <= 14), 'NOSOTROS cabe en las casillas');
+  ok(P.NUESTRAS.length >= 1 && P.NUESTRAS.every(x => x.w.length <= 14 && x.pista.length > 0 && x.pista.length <= 108), 'NOSOTROS: ' + P.NUESTRAS.length + ' palabras, cada una con pista de hasta tres lineas');
+  // Las nuestras NO salen en SOLA: 2000 elecciones sin una sola.
+  { let seed3 = 5; const r3 = () => { seed3 ^= seed3 << 13; seed3 >>>= 0; seed3 ^= seed3 >>> 17; seed3 ^= seed3 << 5; seed3 >>>= 0; return seed3 / 4294967296; };
+    let coladas = 0; const nuestras = new Set(P.NUESTRAS.map(x => x.w));
+    for (let n = 1; n <= 2000; n++) { const e = P.elegir(r3, (n % 12) + 1, null); if (nuestras.has(e.w) || e.cat === 'NOSOTROS') coladas++; }
+    ok(coladas === 0, 'ninguna de NOSOTROS se cuela en SOLA'); }
   let seed = 99; const rnd = () => { seed ^= seed << 13; seed >>>= 0; seed ^= seed >>> 17; seed ^= seed << 5; seed >>>= 0; return seed / 4294967296; };
   let seguidas = 0, repetidas = 0;
   for (let p = 0; p < 200; p++) {

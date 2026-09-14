@@ -10,10 +10,14 @@
 // curiosidad: entre letra y letra el muneco es un juguete -- se lo columpia,
 // se lo empuja, se le hacen cosquillas -- y nada de eso cuenta.
 //
-// Dos modos. SOLA: palabras de la lista con la categoria como pista, puntaje
+// Tres modos. SOLA: palabras de la lista con la categoria como pista, puntaje
 // por racha y record. A DOS: una persona escribe la palabra secreta, le pasa el
 // telefono a la otra, y esa adivina; marcador J1-J2 y sin record, porque quien
-// escribe puede poner lo que quiera.
+// escribe puede poner lo que quiera. Y NOSOTROS, el privado: se entra
+// manteniendo apretado el corazon de la pantalla de modos, y las palabras son
+// las de ellos dos (ahorc-palabras.js), cada una con su propia pista escrita en
+// el cielo. Juega como SOLA pero con su propio record, y se acaba cuando las
+// adivina todas.
 //
 // Reparto del lienzo (540x1200, de arriba abajo):
 //     0..74     boton de pausa del motor (centro) y HUD en las esquinas
@@ -35,7 +39,7 @@ import * as F from './ahorc-fisica.js';
 import * as A from './ahorc-arte.js';
 import { mkCara, updateCara, reaccion, cortarReaccion } from './ahorc-cara.js';
 import { Teclado, Botones, posTecla, ZONA_TECLADO_Y, PANEL_Y, ACERTADA, FALLADA, KW, KH, rrect } from './ahorc-teclado.js';
-import { elegir, normalizar } from './ahorc-palabras.js';
+import { elegir, elegirNuestra } from './ahorc-palabras.js';
 
 const PISTA_Y = 722, MSG_Y = 808;
 const RANA_X = 110, RANA_Y = 646;
@@ -45,6 +49,18 @@ const PISTAS_DUO = ['ANIMAL', 'COMIDA', 'LUGAR', 'COSA', 'NOSOTROS', 'SIN PISTA'
 // Lo que dice la pantalla de fin: carinoso si hay record, ligero si no.
 const MSGS_RECORD = ['ERES INCREIBLE ROMINA', 'NADIE COMO TU', 'TE AMO CAMPEONA', 'ESA ES MI CHICA', 'BRUTAL ROMINA'];
 const MSGS_FIN = ['LA PROXIMA ES TUYA', 'CASI CASI', 'LA RANA DICE GRACIAS', 'A SECARSE Y VOLVER', 'NI EL AGUA TE PARA'];
+
+// Parte una frase en lineas de como mucho `max` caracteres, por palabras.
+function partir(s, max) {
+  const out = []; let linea = '';
+  for (const w of String(s).split(' ')) {
+    if (!linea) linea = w;
+    else if (linea.length + 1 + w.length <= max) linea += ' ' + w;
+    else { out.push(linea); linea = w; }
+  }
+  if (linea) out.push(linea);
+  return out;
+}
 
 export default {
   meta: {
@@ -102,12 +118,27 @@ export default {
     this.estado = 'modo'; this.estT = 0;
     this.tec.ocultar();
     this.bot.poner([
-      { id: 'sola', x: 50, y: 880, w: 440, h: 100, txt: 'SOLA', esc: 5, col: '#5cffd8', sub: 'PALABRAS DE LA LISTA' },
-      { id: 'duo', x: 50, y: 1010, w: 440, h: 100, txt: 'A DOS', esc: 5, col: '#ff5c9d', sub: 'UNO ESCRIBE, OTRO ADIVINA' },
+      { id: 'sola', x: 50, y: 860, w: 440, h: 100, txt: 'SOLA', esc: 5, col: '#5cffd8', sub: 'PALABRAS DE LA LISTA' },
+      { id: 'duo', x: 50, y: 990, w: 440, h: 100, txt: 'A DOS', esc: 5, col: '#ff5c9d', sub: 'UNO ESCRIBE, OTRO ADIVINA' },
     ]);
+    // El corazon del modo privado: sin rotulo, y hay que MANTENERLO apretado
+    // 0.8 s. Un toque suelto no lo abre, asi que nadie entra por casualidad.
+    this.corazon = { id: -1, t: 0 };
     this.saluda = 1.2;
     this.palabra = ''; this.cat = null;
   },
+
+  empezarNosotros() {
+    this.modo = 'nos';
+    this.puntaje = 0; this.n = 0; this.racha = 0; this.cat = null;
+    this.nuestrasUsadas = new Set(); this.todas = false;
+    if (this.S.falling) this.nuevoMono(150);
+    this.bot.vaciar();
+    this.tec.reset(); this.tec.mostrar('adivinar');
+    this.nuevaPalabra();
+  },
+
+  saveId() { return this.modo === 'nos' ? 'ahorcado-nos' : 'ahorcado'; },
 
   empezarSola() {
     this.modo = 'sola';
@@ -120,6 +151,16 @@ export default {
 
   nuevaPalabra() {
     this.n++;
+    if (this.modo === 'nos') {
+      const e = elegirNuestra(this.rnd, this.nuestrasUsadas);
+      // Se las sabe todas: se termina con fiesta, no con chapuzon.
+      if (!e) { this.n--; this.todas = true; this.irFin(); return; }
+      this.nuestrasUsadas.add(e.w);
+      this.pista = e.pista;
+      this.ponerPalabra(e.w, 'NOSOTROS');
+      return;
+    }
+    this.pista = null;
     const e = elegir(this.rnd, this.n, this.cat);
     this.ponerPalabra(e.w, e.cat);
   },
@@ -165,7 +206,7 @@ export default {
         this.voltea[i] = 0.2;
         // Los puntos por casilla solo existen en SOLA; en A DOS no hay puntaje
         // que los reciba y un '+5' flotando no iria a ninguna parte.
-        if (this.modo === 'sola') { this.flotante('+5', geo.xs[i] + geo.w / 2, 740, 0.5, 2, '#5cffd8', 30); this.puntaje += 5; }
+        if (this.modo !== 'duo') { this.flotante('+5', geo.xs[i] + geo.w / 2, 740, 0.5, 2, '#5cffd8', 30); this.puntaje += 5; }
         k++;
       }
       SFX.acierto(Math.min(12, this.reveladas.size));
@@ -215,8 +256,8 @@ export default {
     const perfecta = this.fallos === 0;
     if (perfecta) pts += 100;
     this.ptsPalabra = pts;
-    if (this.modo === 'sola') { this.puntaje += pts; this.racha++; }
-    const msgs = this.modo === 'sola' ? MSGS_SOLA : MSGS_DUO;
+    if (this.modo !== 'duo') { this.puntaje += pts; this.racha++; }
+    const msgs = this.modo !== 'duo' ? MSGS_SOLA : MSGS_DUO;
     this.mensaje(perfecta ? 'PERFECTA! +100' : msgs[Math.floor(this.rnd() * msgs.length)], '#ffe14d', 1.4);
     this.flotante('+' + pts, S.x[F.CAB], S.y[F.CAB] - 50, 0.8, 3, '#ffe14d', 60);
     reaccion(this.cara, 'TRIUNFO', 1.6);
@@ -230,7 +271,7 @@ export default {
     }
     if (perfecta) SFX.record(); else SFX.powerup();
     // Tres globos nuevos suben desde detras del panel y se atan uno a uno.
-    if (this.modo === 'sola') {
+    if (this.modo !== 'duo') {
       let k = 0;
       for (let b = 0; b < 6 && k < 3; b++) if (!S.alive[b] && !this.entrando.some(e => e.b === b)) {
         this.entrando.push({ b, x: S.x[F.NUDO] + (b - 2.5) * 22, y: 740 + k * 60, t: -k * 0.15 });
@@ -369,7 +410,7 @@ export default {
     // caderas del muneco.
     const r = this.rana;
     r.boca += (clamp(1 - (F.WATER - F.lowestFoot(S)) / 80, 0, 1) - r.boca) * Math.min(1, dt * 6);
-    if ((this.estado === 'caida' && this.flotando) || this.estado === 'fin') r.boca += (0 - r.boca) * 0.2;
+    if ((this.estado === 'caida' && this.flotando) || (this.estado === 'fin' && S.falling)) r.boca += (0 - r.boca) * 0.2;
     r.mira = { x: (S.x[F.CR] + S.x[F.CL]) / 2, y: (S.y[F.CR] + S.y[F.CL]) / 2 };
     if (r.salto > 0) r.salto = Math.max(0, r.salto - 80 * dt);
     r.croaT -= dt;
@@ -422,6 +463,12 @@ export default {
       this.frotaEv = false;
     }
 
+    // El corazon del modo privado: 0.8 s apretado y entra.
+    if (this.corazon.id >= 0 && this.estado === 'modo') {
+      this.corazon.t += dt;
+      if (this.corazon.t >= 0.8) { this.corazon.id = -1; this.corazon.t = 0; SFX.select(); this.empezarNosotros(); }
+    }
+
     // Gags de aburrido que piden sonido o pies.
     if (this.cara.gagNuevo === 'bostezo') SFX.bostezo();
     if (this.cara.gagNuevo === 'tararea') { SFX.tarareo(); this.patadas = 6; this.patadaT = 0; this.patadaF = 120; }
@@ -438,7 +485,7 @@ export default {
       rana: { x: r.x, y: r.y },
       globoAlto: globoAlto || { x: S.x[F.NUDO], y: S.y[F.NUDO] - 80 },
       palabra: { x: 270, y: 770 },
-      estado: (this.estado === 'caida' && this.flotando) || this.estado === 'fin' ? 'flotando' : this.estado,
+      estado: (this.estado === 'caida' && this.flotando) || (this.estado === 'fin' && S.falling) ? 'flotando' : this.estado,
       tocada: this.tocada,
       eh: this.eh,
     }, dt);
@@ -466,7 +513,7 @@ export default {
 
   siguiente() {
     this.atarPendientes();
-    if (this.modo === 'sola') this.nuevaPalabra();
+    if (this.modo !== 'duo') this.nuevaPalabra();
     else this.irResultado(true);
   },
 
@@ -520,7 +567,7 @@ export default {
   terminar(ctx) {
     if (this.terminado) return;
     this.terminado = true;
-    if (this.modo === 'sola') this.irFin();
+    if (this.modo !== 'duo') this.irFin();
     else { this.terminado = false; this.irResultado(false); }
   },
 
@@ -533,9 +580,10 @@ export default {
   irFin() {
     this.estado = 'fin'; this.estT = 0;
     const pts = Math.floor(this.puntaje);
-    this.esRecord = Save.submit('ahorcado', pts);
+    this.esRecord = Save.submit(this.saveId(), pts);
     this.tec.ocultar();
-    if (this.esRecord) { SFX.record(); this.msgFin = MSGS_RECORD[Math.floor(this.rnd() * MSGS_RECORD.length)]; this.confetiT = 1.2; }
+    if (this.todas) { SFX.record(); this.msgFin = 'TE LAS SABES TODAS'; this.confetiT = 1.6; reaccion(this.cara, 'TRIUNFO', 3); }
+    else if (this.esRecord) { SFX.record(); this.msgFin = MSGS_RECORD[Math.floor(this.rnd() * MSGS_RECORD.length)]; this.confetiT = 1.2; }
     else { SFX.gameover(); this.msgFin = MSGS_FIN[Math.floor(this.rnd() * MSGS_FIN.length)]; this.confetiT = 0; }
     this.bot.poner([
       { id: 'otravez', x: 50, y: 954, w: 440, h: 90, txt: 'OTRA VEZ', esc: 4, col: '#5cffd8' },
@@ -552,7 +600,7 @@ export default {
       const f = Math.sin(this.t * 8) > 0 ? '#ffe14d' : '#ff5c9d';
       textCenter(g, 'RECORD NUEVO!', 270, 874, f, 3);
     } else {
-      textCenter(g, 'MEJOR ' + Save.best('ahorcado'), 270, 878, '#8a7ab8', 2);
+      textCenter(g, 'MEJOR ' + Save.best(this.saveId()), 270, 878, '#8a7ab8', 2);
     }
     const n = this.racha;
     textCenter(g, n === 1 ? '1 PALABRA ADIVINADA' : n + ' PALABRAS ADIVINADAS', 270, 904, '#ffffff', 2);
@@ -572,7 +620,7 @@ export default {
     } else if (rn.enBarriga) {
       rn.x = (S.x[F.CR] + S.x[F.CL]) / 2; rn.y = (S.y[F.CR] + S.y[F.CL]) / 2 - 14; rn.mira = { x: 270, y: -400 };
     }
-    if (this.rnd() < 0.02) A.particula(A.BURBUJA, S.x[F.CAB] + (this.rnd() - 0.5) * 40, F.WATER + 20 + this.rnd() * 20, 0, -60, 0.8, '#fff', 2 + this.rnd() * 3, 0, this.rnd() * 6);
+    if (S.falling && this.rnd() < 0.02) A.particula(A.BURBUJA, S.x[F.CAB] + (this.rnd() - 0.5) * 40, F.WATER + 20 + this.rnd() * 20, 0, -60, 0.8, '#fff', 2 + this.rnd() * 3, 0, this.rnd() * 6);
     if (this.confetiT > 0) {
       this.confetiT -= dt;
       for (let k = 0; k < 2; k++) A.particula(A.CONFETI, 40 + this.rnd() * 460, -10, (this.rnd() - 0.5) * 60, 80 + this.rnd() * 120, 3.5, A.COLORES[Math.floor(this.rnd() * 6)], 5, 140, this.rnd() * 6);
@@ -591,6 +639,11 @@ export default {
       if (st === 'pasar') { if (this.estT >= 0.6) { SFX.select(); this.empezarRondaDuo(); } return; }
       // Botones grandes (SOLA / A DOS, tejuelas, ESPACIO / LISTO, resultado).
       if (this.bot.down(ev)) { SFX.tecla(); return; }
+      // El corazon del modo privado: se queda el dedo y cuenta el tiempo.
+      if (st === 'modo' && this.corazon.id < 0 && Math.hypot(ev.x - 270, ev.y - 1128) <= 34) {
+        this.corazon.id = ev.id; this.corazon.t = 0; SFX.tecla();
+        return;
+      }
       if (ev.y >= ZONA_TECLADO_Y) {
         // Mientras el teclado entra deslizandose, y en el primer tercio de
         // segundo de cada palabra, no hay teclas: el segundo toque de un doble
@@ -648,6 +701,7 @@ export default {
       // salir de la app: el dedo sigue vivo en input.js. Ese no compromete
       // nada -- ni la letra que tenia apoyada ni el boton -- solo suelta.
       const sintetico = pointers.has(ev.id);
+      if (ev.id === this.corazon.id) { this.corazon.id = -1; this.corazon.t = 0; }
       const b = this.bot.up(ev);
       if (b && !sintetico) { this.boton(b); }
       const r = this.tec.up(ev);
@@ -691,7 +745,7 @@ export default {
     else if (b.id.startsWith('pista:')) { this.duo.pista = b.id.slice(6); this.irPasar(); }
     else if (b.id === 'otra') { this.duo.escribe = this.duo.escribe === 1 ? 2 : 1; this.irEscribir(); }
     else if (b.id === 'menu') { this.ctx.toMenu(); }
-    else if (b.id === 'otravez') { this.empezarSola(); }
+    else if (b.id === 'otravez') { if (this.modo === 'nos') this.empezarNosotros(); else this.empezarSola(); }
   },
 
   // ---------- Dibujo ----------
@@ -737,14 +791,16 @@ export default {
     if (st === 'fin') this.drawFin(g);
     this.tec.draw(g);
     this.bot.draw(g);
+    if (st === 'modo') this.drawCorazon(g);
+    if (this.modo === 'nos' && this.pista && (st === 'ronda' || st === 'ganada')) this.drawPistaCielo(g);
     if (st === 'pasar') this.drawPasar(g, a);
     this.drawHud(g);
   },
 
   drawPalabra(g) {
     const perdida = (this.estado === 'caida' && this.flotando) || this.estado === 'fin';
-    if (perdida) textCenter(g, 'SE MOJO... ERA:', 270, PISTA_Y, '#ff9b4d', 2);
-    else if (this.cat) textCenter(g, this.cat, 270, PISTA_Y, '#5cffd8', 2);
+    if (perdida) textCenter(g, this.todas ? 'TE LAS SABES TODAS!' : 'SE MOJO... ERA:', 270, PISTA_Y, this.todas ? '#ff5c9d' : '#ff9b4d', 2);
+    else if (this.cat) textCenter(g, this.cat, 270, PISTA_Y, this.modo === 'nos' ? '#ff5c9d' : '#5cffd8', 2);
     const letras = [], cols = [];
     for (let i = 0; i < this.palabra.length; i++) {
       const c = this.palabra[i];
@@ -762,6 +818,44 @@ export default {
       A.drawCasillas(g, this.palabra, letras, cols, this.voltea);
       g.restore();
     } else A.drawCasillas(g, this.palabra, letras, cols, this.voltea);
+  },
+
+  // La pista del modo privado, en el cielo: es una frase entera, no una
+  // categoria, y en la linea del panel no cabe. Hasta tres lineas de 36
+  // caracteres (432 px a escala 2) sobre un velo suave.
+  drawPistaCielo(g) {
+    const lineas = partir(this.pista, 36).slice(0, 3);
+    const h = 16 + lineas.length * 22;
+    g.fillStyle = 'rgba(13,6,32,0.30)'; g.fillRect(40, 486, 460, h);
+    for (let i = 0; i < lineas.length; i++) textCenter(g, lineas[i], 270, 496 + i * 22, '#ffffff', 2);
+  },
+
+  // El corazon del modo privado, abajo de los dos botones. Late despacio, y
+  // mientras se lo mantiene apretado se enciende y un anillo se va cerrando:
+  // asi se ve que mantener hace algo, sin escribirlo.
+  drawCorazon(g) {
+    const c = this.corazon, hold = c.id >= 0 ? Math.min(1, c.t / 0.8) : 0;
+    const s = 1 + Math.sin(this.t * 3) * 0.05 + hold * 0.25;
+    g.save();
+    g.translate(270, 1128);
+    if (hold > 0) {
+      g.strokeStyle = '#ff5c9d'; g.lineWidth = 3;
+      g.beginPath(); g.arc(0, 0, 30, -Math.PI / 2, -Math.PI / 2 + hold * Math.PI * 2); g.stroke();
+    }
+    g.scale(s, s);
+    g.fillStyle = 'rgba(255,92,157,' + (0.10 + hold * 0.3).toFixed(2) + ')';
+    g.beginPath(); g.arc(0, 0, 26, 0, 7); g.fill();
+    g.fillStyle = hold > 0 ? '#ff5c9d' : '#b0457f';
+    g.beginPath();
+    g.moveTo(0, 14);
+    g.bezierCurveTo(-18, 2, -13, -13, -5, -13);
+    g.bezierCurveTo(-2, -13, 0, -10, 0, -8);
+    g.bezierCurveTo(0, -10, 2, -13, 5, -13);
+    g.bezierCurveTo(13, -13, 18, 2, 0, 14);
+    g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.45)';
+    g.beginPath(); g.ellipse(-5, -6, 3, 2, -0.5, 0, 7); g.fill();
+    g.restore();
   },
 
   drawEscribir(g) {
@@ -812,7 +906,7 @@ export default {
     if (this.estado === 'pasar') return;
     // En A DOS quien adivina puede ser Anderson: el rotulo es neutro.
     text(g, this.modo === 'duo' ? 'A DOS' : 'ROMINA', 16, 12, '#ffffff', 2);
-    if (this.modo === 'sola' && this.estado !== 'fin') {
+    if ((this.modo === 'sola' || this.modo === 'nos') && this.estado !== 'fin') {
       text(g, String(this.puntaje), 16, 34, '#ffffff', 2);
       if (this.racha > 0) {
         const mult = this.n <= 2 ? 1 : this.n <= 5 ? 2 : 3;
@@ -821,7 +915,7 @@ export default {
     } else if (this.modo === 'duo') {
       text(g, 'J1 ' + this.duo.j1 + ' - ' + this.duo.j2 + ' J2', 16, 34, '#ffe14d', 2);
     }
-    const m = 'MEJOR ' + Save.best('ahorcado');
+    const m = 'MEJOR ' + Save.best(this.saveId());
     text(g, m, 540 - 16 - measure(m, 2), 12, '#8a7ab8', 2);
   },
 };
