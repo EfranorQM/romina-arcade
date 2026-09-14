@@ -366,7 +366,63 @@ const survival = () => make(d => {
   frame(d, '#ff3ec9');
 });
 
-const BUILDERS = { skyline, neonfist, lastwave, symbiote, furia, survival };
+// ---------- AHORCADO: el tipito colgado de sus globos sobre el agua ----------
+// Lo que hay que leer es el RAMO grande arriba, el muneco chiquito colgando
+// con cara de 'ay', y el agua con la rana debajo. Sin horca: es el chiste.
+const ahorcado = () => make(d => {
+  sky(d, '#120a2e', '#4a2a7a');
+  d.fillStyle = 'rgba(255,255,255,0.6)';
+  for (let i = 0; i < 12; i++) d.fillRect((i * 37 + 5) % CW, (i * 23 + 3) % 70, 1, 1);
+  // Luna.
+  d.fillStyle = 'rgba(255,242,200,0.16)'; d.beginPath(); d.arc(74, 22, 24, 0, 7); d.fill();
+  d.fillStyle = '#fff2c8'; d.beginPath(); d.arc(74, 22, 13, 0, 7); d.fill();
+  // Agua, desde y=98, con la estela de la luna.
+  const ag = d.createLinearGradient(0, 98, 0, CH);
+  ag.addColorStop(0, '#1b2c6e'); ag.addColorStop(1, '#0d1440');
+  d.fillStyle = ag; d.fillRect(0, 98, CW, CH - 98);
+  d.fillStyle = 'rgba(180,200,255,0.4)'; d.fillRect(0, 98, CW, 1);
+  d.fillStyle = 'rgba(255,255,255,0.12)';
+  for (let k = 0; k < 3; k++) { d.beginPath(); d.ellipse(74 - k * 6, 106 + k * 6, 10 - k * 2, 1.5, 0, 0, 7); d.fill(); }
+  // La rana en su nenufar, mirando arriba con la boca abierta.
+  d.fillStyle = '#2f8f5a'; d.beginPath(); d.ellipse(24, 108, 11, 3, 0, 0, 7); d.fill();
+  d.fillStyle = '#8aff6a'; d.beginPath(); d.ellipse(24, 103, 6, 4, 0, 0, 7); d.fill();
+  d.fillStyle = '#ffffff'; d.beginPath(); d.arc(21, 99, 2.2, 0, 7); d.arc(27, 99, 2.2, 0, 7); d.fill();
+  d.fillStyle = '#1a1030'; d.beginPath(); d.arc(21.5, 98.4, 1, 0, 7); d.arc(27.5, 98.4, 1, 0, 7); d.fill();
+  d.fillStyle = '#5a1030'; d.beginPath(); d.ellipse(24, 105, 2.5, 1.5, 0, 0, 7); d.fill();
+  // Los hilos, de cada globo al puño.
+  const globos = [[34, 30, '#ff5c9d'], [48, 24, '#5cffd8'], [62, 30, '#ffe14d'], [40, 42, '#b48cff'], [58, 43, '#ff9b4d'], [49, 37, '#8aff6a']];
+  d.strokeStyle = 'rgba(255,255,255,0.7)'; d.lineWidth = 1;
+  for (const [gx, gy] of globos) { d.beginPath(); d.moveTo(gx, gy + 9); d.lineTo(48, 60); d.stroke(); }
+  for (const [gx, gy, col] of globos) {
+    d.fillStyle = col; d.beginPath(); d.ellipse(gx, gy, 8.5, 10, 0, 0, 7); d.fill();
+    d.strokeStyle = '#1a1030'; d.lineWidth = 1.5; d.stroke();
+    d.fillStyle = 'rgba(255,255,255,0.55)'; d.beginPath(); d.ellipse(gx - 3, gy - 4, 2, 3, -0.4, 0, 7); d.fill();
+  }
+  // El muneco: puño arriba, cabeza a la izquierda del brazo, cuerpo colgando.
+  d.lineCap = 'round'; d.lineJoin = 'round';
+  const trazo = (pts, col, w) => {
+    d.strokeStyle = '#1a1030'; d.lineWidth = w + 2; d.beginPath(); d.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) d.lineTo(pts[i], pts[i + 1]); d.stroke();
+    d.strokeStyle = col; d.lineWidth = w; d.beginPath(); d.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) d.lineTo(pts[i], pts[i + 1]); d.stroke();
+  };
+  trazo([46, 78, 44, 88, 43, 96], '#4a3f8a', 2.5);   // pierna izq
+  trazo([52, 78, 54, 88, 55, 96], '#4a3f8a', 2.5);   // pierna der
+  trazo([50, 66, 48, 60], '#ffe6c7', 2.5);           // brazo al puño
+  d.fillStyle = '#ff8fb8'; d.strokeStyle = '#1a1030'; d.lineWidth = 1.5;
+  d.beginPath(); d.moveTo(43, 66); d.lineTo(53, 66); d.lineTo(54, 80); d.lineTo(42, 80); d.closePath(); d.fill(); d.stroke();
+  trazo([43, 68, 38, 78], '#ffe6c7', 2.5);           // brazo que cuelga
+  d.fillStyle = '#ffe6c7'; d.beginPath(); d.arc(48, 60, 2.5, 0, 7); d.fill(); d.stroke();
+  // Cabeza con cara de 'ay': ojos mirando abajo, cejas preocupadas, boca ondulada.
+  d.fillStyle = '#ffe6c7'; d.beginPath(); d.arc(41, 60, 9, 0, 7); d.fill(); d.stroke();
+  d.fillStyle = '#ffffff'; d.beginPath(); d.ellipse(38, 59, 2.2, 2.8, 0, 0, 7); d.ellipse(44, 59, 2.2, 2.8, 0, 0, 7); d.fill();
+  d.fillStyle = '#1a1030'; d.beginPath(); d.arc(38, 60.5, 1.2, 0, 7); d.arc(44, 60.5, 1.2, 0, 7); d.fill();
+  d.strokeStyle = '#1a1030'; d.lineWidth = 1.2;
+  // Cejas de preocupacion: los extremos INTERIORES arriba (al reves es enojo).
+  d.beginPath(); d.moveTo(35.5, 56.5); d.lineTo(39.5, 54.5); d.moveTo(46.5, 56.5); d.lineTo(42.5, 54.5); d.stroke();
+  d.beginPath(); d.moveTo(38, 65); d.lineTo(40, 64); d.lineTo(42, 66); d.lineTo(44, 65); d.stroke();
+  frame(d, '#ff9bc8');
+});
+
+const BUILDERS = { skyline, neonfist, lastwave, symbiote, furia, survival, ahorcado };
 
 // Portada generica: si algun dia se suma un juego y nadie le dibuja caratula,
 // sale una caja con sus colores y su inicial en vez de un hueco.

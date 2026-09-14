@@ -1,6 +1,6 @@
 # ROMINA'S ARCADE
 
-Seis juegos de acción, 100% offline, para el Redmi Note 10.
+Siete juegos, 100% offline, para el Redmi Note 10: seis de acción y uno de pensar.
 
 ---
 
@@ -59,6 +59,7 @@ La app queda con su ícono (una marquesina de arcade en neón) y ya no pide nada
 | **SYMBIOTE** | Criatura de carne que trepa un laboratorio | Arrastrar el dedo = fluir · Botón = agarrar y matar · Gira con el teléfono |
 | **FURIA** | Moto de montaña: 8 niveles con meta | Derecha = acelerar · Izquierda = saltar (tocar) y frenar (mantener) · En el aire, las dos zonas giran la moto |
 | **SURVIVAL** | Roma defiende su línea de todo lo que amenaza una relación | **Se juega de lado.** Pulgar izquierdo = mover · Pulgar derecho = disparar; **arrastrándolo se apunta** · Botón de la estrella = bomba |
+| **AHORCADO** | Adivina la palabra: un muñeco colgado de seis globos sobre un estanque, y cada fallo revienta uno | Tocar una letra (cuenta al soltar; deslizar fuera cancela) · **SOLA** = palabras de la lista con su categoría · **A DOS** = uno escribe la secreta, le pasa el teléfono al otro · Al muñeco se lo puede arrastrar, empujar y hacerle cosquillas: no cuesta nada |
 
 Sin tutoriales, sin diálogos, sin historia. Se toca y se juega.
 Los récords se guardan solos. El sonido se activa y desactiva desde el menú.
@@ -79,9 +80,15 @@ www/                  el juego (esto es todo lo que corre)
     audio.js          sonido y música, todo sintetizado
     gfx.js            sprites, partículas
     font.js           fuente pixel 5x7
-    games/            los seis juegos
+    games/            los siete juegos
       surv-defs.js    SURVIVAL: enemigos, jefes y reglas
       surv-art.js     SURVIVAL: las criaturas, dibujadas por código
+      ahorcado.js     AHORCADO: la escena y los dos modos
+      ahorc-fisica.js AHORCADO: el muñeco (Verlet), sin DOM: se mide en Node
+      ahorc-cara.js   AHORCADO: las expresiones
+      ahorc-arte.js   AHORCADO: cielo, estanque, rana, globos y cuerpo
+      ahorc-teclado.js AHORCADO: el teclado en pantalla
+      ahorc-palabras.js AHORCADO: las palabras (NOSOTROS va al principio)
 docs/                 investigación técnica y diseños
 tools/                utilidades de desarrollo (no entran en el APK)
   icono.py            dibuja el ícono del APK en las cinco densidades
@@ -106,11 +113,12 @@ parece bueno, y lo que importa es cómo se ve a 48. La verificación comprueba l
 único que puede romperlo en el teléfono — que el dibujo quepa en el círculo
 seguro de 66dp, porque cada launcher recorta con su propia máscara.
 
-**FURIA es la excepción al pixel art.** Los otros cuatro juegos hornean sprites
-y corren con el filtrado en nearest-neighbour. FURIA declara `meta.smooth` y
-corre a 540x1200 con antialiasing: el terreno es una polilínea, la moto se
-dibuja con curvas y degradados, y las ruedas giran de verdad. Por eso se ve
-suave en lugar de escalonado, sin usar ni una imagen.
+**FURIA, SURVIVAL y AHORCADO son la excepción al pixel art.** Los otros cuatro
+juegos hornean sprites y corren con el filtrado en nearest-neighbour. Estos
+tres declaran `meta.smooth` y corren con antialiasing: el terreno de FURIA es
+una polilínea, la moto se dibuja con curvas y degradados, y el muñeco del
+AHORCADO es tinta gruesa y curvas sobre puntos de física. Por eso se ven suaves
+en lugar de escalonados, sin usar ni una imagen.
 
 ---
 
@@ -173,6 +181,51 @@ Qué cambió respecto al original, y por qué:
 node tools/ver.js tools/ver-survival.html criaturas.png 1150 1500   # ver el arte
 node tools/ver-app.js x.png "...;archivo:tools/prueba-jefes.js;..."  # los 10 jefes
 node tools/ver-app.js x.png "...;archivo:tools/prueba-partida.js;..." # jugar sola
+```
+
+## AHORCADO
+
+Un muñeco colgado de seis globos sobre un estanque de noche, con una rana
+mirándolo desde su nenúfar. Cada letra fallada revienta un globo: baja 40 px, se
+bambolea y cambia de cara — de tranquilo a atento, a nervioso (sudor, se agarra
+con las dos manos) y a pánico (con un globo los pies rozan el agua y la rana se
+relame). Al sexto, chapuzón, y la rana se le sienta en la barriga. No hay
+horca: las seis oportunidades de siempre se leen en altura, en física y en
+cara. El diseño completo, con cada número, está en `docs/design-ahorcado.md`.
+
+- **El muñeco es física de verdad**: 17 puntos Verlet con restricciones
+  (`ahorc-fisica.js`), el mismo esquema que los tentáculos de SYMBIOTE. Se lo
+  puede arrastrar de un pie, columpiar, empujar de un toque, frotarle la
+  barriga (se ríe) y tocar los globos (se aplastan y suenan, nunca revientan).
+  Nada de eso cuenta como error.
+- **La cara es un actor**: nueve parámetros continuos que se acercan a su
+  objetivo, un estado base por globos vivos, y reacciones encima: espera con
+  esperanza mientras el pulgar está apoyado en una tecla, suspira al acertar,
+  se sobresalta al reventar, niega con la cabeza si la letra ya salió, y si
+  ella tarda se aburre (párpados, bostezo, ceja a cámara, tararea).
+- **La letra cuenta al SOLTAR dentro de la tecla**; deslizar fuera cancela. Es
+  un juego de pensar y un mal toque no puede costar un globo. Teclas de
+  66x70 px virtuales = 8.2x8.7 mm en el Note 10, sin huecos entre ellas.
+- **SOLA** puntúa para el récord: +5 por casilla, y por palabra
+  (100 + 15·letras + 25·globos que quedan) × racha (x1, x2 desde la tercera,
+  x3 desde la sexta); PERFECTA +100. Al ganar suben 3 globos nuevos (tope 6);
+  la partida termina en el primer chapuzón. Las palabras vienen de una lista
+  de 445 en 12 categorías, en español latino y sin acentos (CAMION), con la Ñ.
+  La dificultad es por letras, no por largo: PIÑA es más difícil que ELEFANTE.
+- **A DOS** no toca el récord: uno escribe (el muñeco se tapa los ojos), elige
+  la pista entre seis tejuelas, aparece PASALE EL TELEFONO, y el otro adivina
+  con seis globos. Marcador J1-J2 y OTRA (CAMBIAN).
+- **NOSOTROS**: al principio de `www/js/games/ahorc-palabras.js` hay un array
+  para las palabras que solo ustedes dos entienden. Con cinco o más, entra en
+  la rotación con su propia pista.
+- La **Ñ** se añadió a la fuente 5x7 (`font.js`): era la única letra del
+  español que faltaba.
+
+```
+node tools/prueba-ahorcado.mjs        # la física, diez pruebas con umbral
+node tools/prueba-palabras.mjs        # la lista, los bots y las canciones
+node tools/ver.js tools/ver-ahorcado.html caras.png 1000 1150   # las 16 expresiones a tamaño real
+VERTICAL=1 node tools/ver-app.js x.png "espera900;js:__arcade.sm.go(__arcade.GAMES[6],{seed:7});espera2500;toca261:856;espera1200;archivo:tools/prueba-ahorcado-app.js;espera300;archivo:tools/prueba-ahorcado-app.js;espera300;archivo:tools/prueba-ahorcado-app.js;espera300;archivo:tools/prueba-ahorcado-app.js"
 ```
 
 ## El menú

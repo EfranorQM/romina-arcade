@@ -1,4 +1,4 @@
-// EL BOTON DE PAUSA Y SU PANTALLA, compartidos por los SEIS juegos.
+// EL BOTON DE PAUSA Y SU PANTALLA, compartidos por los SIETE juegos.
 //
 // POR QUE VIVE AQUI Y NO EN CADA JUEGO. La alternativa era copiar boton,
 // cartel y arbitraje de toques en los seis archivos: seis sitios donde se

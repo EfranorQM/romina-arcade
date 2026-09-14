@@ -270,6 +270,27 @@ export const SONGS = {
     { wave:'noise', pattern:'H.hHH.hHH.hHH.hH', vol:0.055 },
   ]},
 
+  // ---------- AHORCADO ----------
+  // Un juego de PENSAR: la cancion mas lenta y suave del arcade. Es una NANA en
+  // 3/4, Do mayor, 108 bpm. El secuenciador toca pattern[step % largo] por
+  // pista (seqTick), asi que un patron de 48 pasos son cuatro compases de 3/4
+  // con cuatro pasos por negra, sin tocar nada del secuenciador. El bajo pisa
+  // una redonda con puntillo por compas y el arpegio va en corcheas de caja de
+  // musica; la percusion es un um-pa-pa de 24 pasos (dos compases) que se
+  // repite el doble de veces.
+  ahorcado: { bpm: 108, tracks: [
+    { wave:'tri',   pattern:'C...........A...........F...........G...........', vol:0.14 },
+    { wave:'pulse', duty:0.5, pattern:'c.e.g.e.g.e.a.c.e.c.e.c.f.a.c.a.c.a.g.b.d.b.d.b.', vol:0.055 },
+    { wave:'noise', pattern:'H...h...h...H...h...h...', vol:0.03 },
+  ]},
+  // Con UN globo: La menor en 4/4 a 132 bpm, para el contraste. Al recuperar
+  // globos vuelve la nana (playMusic es idempotente).
+  ahorcadoPanico: { bpm: 132, tracks: [
+    { wave:'tri',   pattern:'A.......F.......D.......E.......', vol:0.15 },
+    { wave:'pulse', duty:0.25, pattern:'a.c.e.c.f.a.c.a.d.f.a.f.e.g.b.g.', vol:0.065 },
+    { wave:'noise', pattern:'H.h.H.h.H.h.H.h.', vol:0.045 },
+  ]},
+
   // SURVIVAL, pelea de jefe. Misma tonalidad que las olas (La menor) para que
   // el cambio no suene a otro juego, pero 30 bpm mas rapida, el bajo en
   // corcheas y la percusion densa. El arpegio sube en vez de bajar: aqui la que
@@ -300,4 +321,21 @@ export const SFX = {
   gameover: () => { [523, 440, 349, 262].forEach((f, i) => setTimeout(() => sfx({ type: 'tri', f0: f, dur: 0.3, vol: 0.34 }), i * 170)); },
   record:   () => { [659, 784, 988, 1319, 1568].forEach((f, i) => setTimeout(() => sfx({ type: 'pulse', duty: 0.5, f0: f, dur: 0.14, vol: 0.30 }), i * 90)); },
   wave:     () => { [392, 523, 659].forEach((f, i) => setTimeout(() => sfx({ type: 'pulse', duty: 0.5, f0: f, dur: 0.13, vol: 0.28 }), i * 80)); },
+
+  // ---------- AHORCADO ----------
+  tecla:    () => sfx({ type: 'pulse', duty: 0.5, f0: 560, dur: 0.04, vol: 0.16 }),
+  cancelar: () => sfx({ type: 'noise', f0: 400, f1: 200, dur: 0.10, vol: 0.10 }),
+  // Dos notas que suben con cada letra ya revelada (k), como el combo de SKYLINE.
+  acierto:  k => { const m = Math.pow(2, Math.min(12, k || 0) / 12); sfx({ type: 'pulse', duty: 0.25, f0: 784 * m, dur: 0.07, vol: 0.24 }); setTimeout(() => sfx({ type: 'pulse', duty: 0.25, f0: 1175 * m, dur: 0.07, vol: 0.24 }), 60); },
+  globo:    () => { sfx({ type: 'noise', f0: 3000, f1: 200, dur: 0.12, vol: 0.5 }); sfx({ type: 'pulse', duty: 0.125, f0: 900, f1: 120, dur: 0.08, vol: 0.3 }); },
+  repetida: () => sfx({ type: 'pulse', duty: 0.5, f0: 300, f1: 280, dur: 0.10, vol: 0.15 }),
+  nudo:     () => sfx({ type: 'pulse', duty: 0.25, f0: 1319, dur: 0.05, vol: 0.2 }),
+  chapuzon: () => { sfx({ type: 'noise', f0: 1200, f1: 150, dur: 0.5, vol: 0.5 }); sfx({ type: 'tri', f0: 220, f1: 90, dur: 0.4, vol: 0.3 }); [900, 1100, 1300].forEach((f, i) => setTimeout(() => sfx({ type: 'pulse', duty: 0.5, f0: f, dur: 0.05, vol: 0.15 }), 500 + i * 120)); },
+  chapoteo: () => sfx({ type: 'noise', f0: 1500, f1: 400, dur: 0.08, vol: 0.18 }),
+  croac:    () => { sfx({ type: 'saw', f0: 140, f1: 110, dur: 0.12, vol: 0.2 }); setTimeout(() => sfx({ type: 'saw', f0: 140, f1: 110, dur: 0.12, vol: 0.2 }), 90); },
+  risa:     k => sfx({ type: 'pulse', duty: 0.5, f0: (k & 1) ? 880 : 660, dur: 0.05, vol: 0.18 }),
+  eh:       () => sfx({ type: 'pulse', duty: 0.25, f0: 500, f1: 700, dur: 0.08, vol: 0.2 }),
+  boing:    () => sfx({ type: 'tri', f0: 300, f1: 420, dur: 0.10, vol: 0.2 }),
+  bostezo:  () => sfx({ type: 'tri', f0: 300, f1: 200, dur: 0.6, vol: 0.15 }),
+  tarareo:  () => { [392, 440, 392].forEach((f, i) => setTimeout(() => sfx({ type: 'tri', f0: f, dur: 0.12, vol: 0.14 }), i * 140)); },
 };

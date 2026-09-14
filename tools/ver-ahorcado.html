@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<!-- Hoja de contactos de AHORCADO: las expresiones del muneco sobre su cabeza
+     real (ahorc-cara.js + ahorc-arte.js), cada una al tamano al que se ve
+     jugando (x1) y ampliada x2, que es el tamano FISICO en el Note 10. Se
+     juzga a x2: a x1 todo parece bien y los defectos (cejas de enojado, boca
+     que no se lee) aparecen al tamano real.
+     Uso: node tools/ver.js tools/ver-ahorcado.html caras.png 900 1200 -->
+<meta charset="utf-8">
+<title>ahorcado</title>
+<style>
+  body { margin:0; background:#0d0620; font:12px/1.4 monospace; color:#c8b8ff; }
+  #hoja { padding:14px; display:flex; flex-wrap:wrap; gap:10px; }
+  .col { text-align:center; }
+  .col span { display:block; margin-top:2px; color:#7a6aa8; }
+  canvas { display:block; background:#2a1660; border-radius:6px; }
+</style>
+<div id="hoja"></div>
+<script type="module">
+import { mkCara, updateCara, reaccion } from '../www/js/games/ahorc-cara.js';
+import { drawCara } from '../www/js/games/ahorc-cara.js';
+
+const hoja = document.getElementById('hoja');
+let seed = 7;
+const rnd = () => { seed ^= seed << 13; seed >>>= 0; seed ^= seed >>> 17; seed ^= seed << 5; seed >>>= 0; return seed / 4294967296; };
+
+const J = (globos, estado, extra) => Object.assign({
+  globos, cabeza: { x: 0, y: 0 }, dedo: null, tecla: null, rana: { x: -60, y: 300 }, globoAlto: { x: 20, y: -100 },
+  palabra: { x: 0, y: 400 }, estado: estado || 'ronda', tocada: false, eh: null,
+}, extra || {});
+
+// Cada expresion: como se llega a ella y cuanto se deja avanzar.
+const CASOS = [
+  { n: 'TRANQUI (6)', j: J(6), segs: 1 },
+  { n: 'ATENTO (4)', j: J(4), segs: 1 },
+  { n: 'NERVIOSO (2)', j: J(2), segs: 1.2 },
+  { n: 'PANICO (1)', j: J(1), segs: 1 },
+  { n: 'EXPECTANTE', j: J(5, 'ronda', { tecla: { x: 60, y: 500, t: 0 } }), pre: c => reaccion(c, 'EXPECTANTE', 9), segs: 0.5 },
+  { n: 'ALIVIO', j: J(5), pre: c => reaccion(c, 'ALIVIO', 9), segs: 0.4 },
+  { n: 'SUSTO', j: J(4), pre: c => reaccion(c, 'SUSTO', 9), segs: 0.3 },
+  { n: 'YA LA USASTE', j: J(5), pre: c => reaccion(c, 'YA', 9), segs: 0.4 },
+  { n: 'EH', j: J(5, 'ronda', { eh: { x: -40, y: 20 } }), pre: c => reaccion(c, 'EH', 9), segs: 0.4 },
+  { n: 'COSQUILLAS', j: J(5), pre: c => reaccion(c, 'COSQUILLAS', 9), segs: 0.5 },
+  { n: 'TRIUNFO', j: J(5), pre: c => reaccion(c, 'TRIUNFO', 9), segs: 0.5 },
+  { n: 'EMPAPADO', j: J(0, 'flotando'), pre: c => reaccion(c, 'EMPAPADO', 9), segs: 1.5 },
+  { n: 'NO MIRO', j: J(6, 'escribir'), pre: c => reaccion(c, 'NOMIRO', 9), segs: 0.5 },
+  { n: 'BOSTEZO', j: J(6), pre: c => { c.reac = 'BOSTEZO'; c.reacT = 0; c.reacDur = 9; }, segs: 0.4 },
+  { n: 'ABURRIDO 6s', j: J(6), pre: c => { c.sinToque = 7; }, segs: 0.6 },
+  { n: 'CEJA (15s)', j: J(6), pre: c => { c.reac = 'CEJA'; c.reacT = 0; c.reacDur = 9; }, segs: 0.4 },
+];
+
+for (const caso of CASOS) {
+  const cara = mkCara(rnd);
+  cara.parpT = 99;   // sin parpadeos en la hoja
+  if (caso.pre) caso.pre(cara);
+  for (let i = 0; i < caso.segs * 60; i++) updateCara(cara, caso.j, 1 / 60);
+  for (const esc of [1, 2]) {
+    const cv = document.createElement('canvas');
+    cv.width = 100 * esc; cv.height = 100 * esc;
+    const g = cv.getContext('2d');
+    g.scale(esc, esc);
+    // La cabeza como la dibuja ahorc-arte.js: piel r34 con borde de tinta 6.
+    g.fillStyle = '#ffe6c7'; g.strokeStyle = '#1a1030'; g.lineWidth = 6;
+    g.beginPath(); g.arc(50, 52, 34, 0, 7); g.fill(); g.stroke();
+    g.lineCap = 'round';
+    g.beginPath(); g.moveTo(38, 22); g.quadraticCurveTo(32, 8, 42, 6); g.stroke();
+    g.beginPath(); g.moveTo(50, 19); g.quadraticCurveTo(48, 2, 58, 4); g.stroke();
+    g.beginPath(); g.moveTo(62, 21); g.quadraticCurveTo(66, 8, 74, 12); g.stroke();
+    drawCara(g, cara, 50, 52, 0, -1, 0.3);
+    const col = document.createElement('div');
+    col.className = 'col';
+    col.appendChild(cv);
+    const s = document.createElement('span'); s.textContent = caso.n + ' x' + esc;
+    col.appendChild(s);
+    hoja.appendChild(col);
+  }
+}
+document.title = 'listo';
+</script>

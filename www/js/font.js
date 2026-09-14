@@ -1,6 +1,6 @@
 import { supersample } from './core.js';
 
-// Fuente bitmap 5x7 — 58 glifos. Sin archivos de fuente, todo dibujado en codigo.
+// Fuente bitmap 5x7 — 59 glifos. Sin archivos de fuente, todo dibujado en codigo.
 export const FONT5x7 = {
 'A':["01110","10001","10001","11111","10001","10001","10001"],
 'B':["11110","10001","10001","11110","10001","10001","11110"],
@@ -28,6 +28,10 @@ export const FONT5x7 = {
 'X':["10001","10001","01010","00100","01010","10001","10001"],
 'Y':["10001","10001","01010","00100","00100","00100","00100"],
 'Z':["11111","00001","00010","00100","01000","10000","11111"],
+// La eñe entro con AHORCADO: es la unica letra del espanol que no estaba, y un
+// juego de palabras sin ella no puede escribir NIÑO ni ARAÑA. La tilde ocupa dos
+// filas y la N se aprieta en las cinco de abajo.
+'Ñ':["01001","10110","10001","11001","10101","10011","10001"],
 '0':["01110","10001","10011","10101","11001","10001","01110"],
 '1':["00100","01100","10100","00100","00100","00100","11111"],
 '2':["01110","10001","00001","00010","00100","01000","11111"],
