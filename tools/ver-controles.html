@@ -73,7 +73,7 @@ function panel(titulo, casos, rect, escalas) {
 const base = {
   t: 3.7, padId: null, padDX: 0, firing: false, aiming: false,
   aim: -Math.PI / 2, latF: 0.06, fireKick: 0,
-  romaX: 300, rastro: { x: new Float32Array(6), i: 0 },
+  rastro: { x: new Float32Array(6), i: 0 },
   bomb: { ready: true, cd: 0 }, bombCd: 12,
 };
 const st = o => Object.assign({}, base, o);
@@ -86,7 +86,6 @@ panel('MOVERSE — reposo, empujando a cada lado', [
   { label: 'izquierda',     st: st({ padId: 1, padDX: -1 }) },
   { label: 'medio derecha', st: st({ padId: 1, padDX: 0.45 }) },
   { label: 'derecha',       st: st({ padId: 1, padDX: 1 }) },
-  { label: 'Roma encima',   st: st({ romaX: 52 }) },
 ], IZQ, [1, 4]);
 
 panel('DISPARAR — reposo, disparando, y apuntando rasante a cada lado', [

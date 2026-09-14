@@ -36,18 +36,22 @@ import { VW, VH } from './surv-defs.js';
 // defiende: dos barras horizontales pegadas, una cian y otra rosa, compitiendo
 // por el mismo sitio. Aqui el rastro queda por debajo de la linea.
 const PAD_X = 52, PAD_Y = VH - 30;
-const PISTA = 32;                   // media longitud de la pista del rastro
-// Hasta donde llega el CENTRO del cometa. No llega al final de la pista: el
-// cometa tiene 7 de radio y los bornes estan en +-PISTA, asi que a tope se los
-// tragaba enteros y la pista perdia sus dos topes justo cuando mas dicen (ver
-// el render: a dx=1 el borne desaparecia dentro del halo).
+// PISTA=36 y no mas: con el halo (9 px por lado) la pista ocupa x 7..97, o sea
+// 7 px de margen contra el borde del lienzo. A 40 tocaba el 0.
+const PISTA = 36;                   // media longitud de la pista del rastro
+// Hasta donde llega el CENTRO del cometa cuando el pulgar esta a tope. Son los
+// MISMOS 22 px que recorria el punto de la cruceta vieja, y no es casualidad:
+// se probo con 17 (para que el cometa no pisara el borne) y el se quejo de que
+// el movimiento se sentia tosco. Tenia razon: el indicador se movia un 23%
+// menos por cada px de pulgar y ademas era mas chico. Lo que el pulgar hace
+// tiene que verse ENTERO, o el control parece que no responde.
 //
-// El numero sale de medir, no a ojo: el borne encendido crece hasta r=7.2, o
-// sea que su borde interior esta en PISTA-7.2 = 24.8; el cometa mide 7 de
-// radio. Para que los CUERPOS no se toquen el centro no puede pasar de 17.8.
-// A 17 quedan 0.8 px de aire. El halo del cometa (alpha 0.10) si llega hasta
-// el borne, y eso esta bien: es luz, no cuerpo, y ata las dos piezas.
-const RECORRIDO = 17;
+// Con 22 el borde del cometa (r=8) queda en 30 y el borde interior del borne
+// encendido (r=7.2) en 36-7.2 = 28.8: se rozan 1.2 px justo a tope. Se lee
+// como que el cometa ENCAJA en el borne, no como un choque, y dice "estas al
+// maximo" con el cuerpo y no solo con la luz.
+const RECORRIDO = 22;
+const COMETA = 8;                   // radio del cometa
 
 // FIRE_Y sube a VH-52 (antes VH-44). El usuario pidio que el boton de disparar
 // no pudiese irse tan abajo, y ademas tenia poco sitio: a VH-44 el aro llegaba
@@ -134,23 +138,15 @@ function drawRastro(g, st) {
   const dx = st.padDX;
   const cx = PAD_X + dx * RECORRIDO;
 
-  // El rastro se APARTA cuando Roma se le viene encima. Ella llega hasta x=16 y
-  // se dibuja a ROMA_Y=242, o sea que en su tope izquierdo su cuerpo y la pista
-  // ocupan la misma franja: sin esto, llevarla a la esquina la metia en un
-  // charco de luz cian y se perdia de vista justo donde mas apurada esta.
-  //
-  // No se puede resolver moviendo la pista: Roma recorre el ancho entero y
-  // abajo no queda sitio (su cuerpo baja a y~257 de 270). Asi que la pista cede
-  // el paso, que ademas es lo que hace el juego con el texto del tutorial.
-  //
-  // Se desvanece por distancia, sin saltos: a 60 px no se entera, pegada a
-  // ella baja al 15%. Nunca desaparece del todo, para que el pulgar no se
-  // quede sin referencia de donde esta el control.
-  const lejos = Math.abs(st.romaX - PAD_X);
-  const cede = 0.15 + 0.85 * Math.min(1, Math.max(0, (lejos - 22) / 38));
-
+  // La pista NO se aparta cuando Roma se le acerca. Hubo una version que la
+  // desvanecia al 15% con Roma en el tercio izquierdo, por no pintarle una
+  // raya cian encima; el la probo y dijo que el movimiento "se detenia a
+  // veces". Claro: se le apagaba el control bajo el pulgar cada vez que ella
+  // iba a la izquierda, que es la mitad de la partida. Un control tiene que
+  // verse SIEMPRE igual; que Roma pase por detras de una linea de luz es un
+  // mal mucho menor, y la cruceta vieja ya lo hacia sin que nadie lo notara.
   g.save();
-  g.globalAlpha = (vivo ? 0.95 : 0.5) * cede;
+  g.globalAlpha = vivo ? 0.95 : 0.5;
 
   // La pista: cuatro capas del mismo segmento, de gruesa y tenue a fina y
   // clara. La caida va al CUADRADO (f*f) — lineal dejaba las capas casi igual
@@ -186,19 +182,19 @@ function drawRastro(g, st) {
     const i = (r.i - k + ESTELA) % ESTELA;
     const a = 1 - k / ESTELA;
     g.fillStyle = rgba('#6bf0ff', a * a * 0.30);
-    g.beginPath(); g.arc(r.x[i], PAD_Y, 7 * a, 0, 7); g.fill();
+    g.beginPath(); g.arc(r.x[i], PAD_Y, COMETA * a, 0, 7); g.fill();
   }
 
   // El cometa: halo, cuerpo y un corazon casi blanco.
   const lat = 1 + Math.sin(st.t * 5) * 0.06;
   for (let i = 3; i >= 1; i--) {
     g.fillStyle = rgba('#6bf0ff', 0.10 * (vivo ? 1.5 : 1));
-    g.beginPath(); g.arc(cx, PAD_Y, 7 * lat * (1 + i * 0.45), 0, 7); g.fill();
+    g.beginPath(); g.arc(cx, PAD_Y, COMETA * lat * (1 + i * 0.45), 0, 7); g.fill();
   }
   g.fillStyle = rgba('#6bf0ff', 0.9);
-  g.beginPath(); g.arc(cx, PAD_Y, 7 * lat, 0, 7); g.fill();
+  g.beginPath(); g.arc(cx, PAD_Y, COMETA * lat, 0, 7); g.fill();
   g.fillStyle = 'rgba(236,254,255,0.95)';
-  g.beginPath(); g.arc(cx, PAD_Y - 1, 3 * lat, 0, 7); g.fill();
+  g.beginPath(); g.arc(cx, PAD_Y - 1, 3.4 * lat, 0, 7); g.fill();
 
   g.restore();
 }

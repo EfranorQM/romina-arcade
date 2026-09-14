@@ -74,6 +74,23 @@ const BRILLO = 0.4;
 // tiene un area propia es la bomba, porque esa si es un boton concreto dentro
 // de la mitad derecha, y sus medidas las manda el modulo del dibujo para que el
 // circulo que se ve y el que responde no puedan separarse nunca.
+//
+// Hasta donde se puede inclinar el disparo, medido desde la vertical. NO es un
+// numero redondo porque es una MEDIDA: el angulo desde Roma en un borde (topa
+// en x=16) hasta un enemigo en el borde contrario justo sobre la linea:
+//
+//     atan2(584 - 16, ROMA_Y - LINE_Y) = atan2(568, 16) = 88.4 grados
+//
+// Es el tiro mas tumbado que sirve para algo, y por eso es el tope: cualquier
+// arrastre plano o hacia abajo se recorta a este angulo, y la bala llega a la
+// esquina contraria a 0.1 px del centro del enemigo. "Arrastrar plano" pasa a
+// ser un gesto que significa "a la esquina, por la linea".
+//
+// Antes era 75 grados a secas, y con eso ese tiro era imposible: la bala subia
+// 107 px en los primeros 400 de recorrido y pasaba por encima de todo. Era lo
+// que se notaba jugando: de lejos, contra alguien pegado al borde, no habia
+// manera de acertar.
+const AIM_LIM = Math.atan2(VW - 32, ROMA_Y - LINE_Y);
 
 export default {
   meta: {
@@ -1240,61 +1257,27 @@ export default {
         return;
       }
       if (ev.id === this.fireId) {
-        // Apuntado: el angulo sale de cuanto se arrastro el pulgar desde donde
-        // se apoyo. Con menos de 4 px no se considera apuntado (un pulgar
-        // apretando nunca esta del todo quieto y el disparo bailaria solo).
+        // Apuntado: el angulo es la DIRECCION en que se arrastro el pulgar desde
+        // donde se apoyo. Arrastras en diagonal, dispara en diagonal: el pulgar
+        // apunta y el tiro le sigue. Con menos de 6 px no se considera apuntado
+        // (un pulgar apretando nunca esta del todo quieto y el disparo bailaria
+        // solo).
         //
-        // La zona muerta mide el arrastre LATERAL, no la distancia total. Antes
-        // miraba la hipotenusa, y por eso bajar el pulgar en recto (que no
-        // cambia el angulo ni un grado) ya encendia la mira de "apuntando".
-        const dx = ev.x - this.fireX;
-        if (Math.abs(dx) < 4) { this.aiming = false; this.aim = -Math.PI / 2; return; }
+        // Hubo una version (1b278f1) en la que el angulo salia de CUANTO se
+        // desplazaba el pulgar de lado, con una curva. Se probo en el telefono
+        // y era incomoda: arrastrar 20 px en diagonal a 45 grados daba 12, y
+        // habia que llevar el pulgar lejos para que el tiro se abriese. El
+        // gesto por direccion es el que se sentia bien; lo unico que le fallaba
+        // era el tope, y eso se arregla abajo.
+        const dx = ev.x - this.fireX, dy = ev.y - this.fireY;
+        if (Math.hypot(dx, dy) < 6) { this.aiming = false; this.aim = -Math.PI / 2; return; }
         this.aiming = true;
         // Solo se apunta hacia ARRIBA: disparar hacia abajo no sirve de nada
         // (los enemigos vienen de arriba) y con el pulgar es facil hacerlo sin
-        // querer. Pero el limite tiene que dejar llegar al PEOR CASO REAL, que
-        // es un enemigo en el borde contrario justo encima de la linea:
-        //
-        //   Roma esta limitada a x 16..584 y dispara desde y=242; la linea que
-        //   defiende esta en y=226. Roma en un borde, enemigo en el otro:
-        //     dx = 568, dy = 16  ->  atan2(568,16) = 88.4 grados de la vertical
-        //
-        // Con el limite viejo de 75 grados ese tiro era IMPOSIBLE: la bala sube
-        // 54 px en los primeros 200 px de recorrido y 107 px en 400, o sea que
-        // pasaba muy por encima del enemigo y se iba por el techo. Es justo lo
-        // que se notaba jugando: de lejos, contra alguien pegado al borde, no
-        // habia manera de acertar.
-        //
-        // A 89 grados la bala cruza los 520 px de ancho subiendo solo 9 px y
-        // llega a la altura de la linea, que es donde esta el enemigo. Los 89
-        // (y no 90) dejan un grado de margen para que nunca salga horizontal
-        // pura ni pueda cruzar hacia abajo.
-        const LIM = Math.PI * 89 / 180;
-        // El angulo NO sale ya del arrastre crudo. Un pulgar apoyado en el
-        // boton tiene sitio para arrastrar unos 44 px antes de salirse del
-        // lienzo, y para pedir 88 grados con el gesto crudo habria que
-        // arrastrar casi en horizontal muchisimo mas de lo que cabe: por eso
-        // los angulos rasantes no se alcanzaban ni subiendo el limite.
-        //
-        // Se amplifica el gesto: todo el abanico se reparte en un arrastre
-        // lateral de +-38 px, que si cabe bajo el pulgar.
-        //
-        // La curva es CUBICA a proposito, y eso la hace mas precisa que el
-        // gesto viejo donde mas se usa. Grados de apuntado segun el arrastre:
-        //
-        //   arrastre     5px    10px    20px    32px    38px
-        //   viejo        14      27      45      ~70     75 (tope)
-        //   nuevo         3       7      20       59     89
-        //
-        // O sea: en los tiros normales (casi verticales, que son casi todos) el
-        // nuevo se mueve la mitad por px y se apunta mas fino, y solo cuando de
-        // verdad estiras el pulgar al final del recorrido se abre hasta lo
-        // rasante. Antes era al reves: sensible donde estorba y topado donde
-        // hacia falta.
-        const R = 38;
-        const t = clamp(dx / R, -1, 1);
-        const m = Math.abs(t);
-        const off = Math.sign(t) * (m * m * m * 0.75 + m * 0.25) * LIM;
+        // querer. El tope es AIM_LIM, que no es un numero redondo a proposito:
+        // es exactamente el angulo al peor enemigo posible, asi que "arrastrar
+        // plano" acierta a la esquina (ver AIM_LIM arriba).
+        const off = clamp(normalizar(Math.atan2(dy, dx) + Math.PI / 2), -AIM_LIM, AIM_LIM);
         this.aim = -Math.PI / 2 + off;
       }
       return;
@@ -1801,8 +1784,6 @@ export default {
       padId: this.padId, padDX: this.padDX,
       firing: this.firing, aiming: this.aiming, aim: this.aim,
       latF: this.latF, fireKick: this.fireKick, rastro: this.rastro,
-      // Donde esta Roma ahora mismo: el rastro se aparta si ella se acerca.
-      romaX: this._romaX(),
       bomb: this.bomb, bombCd: this._bombCd(),
     }, drawStar);
   },
