@@ -25,6 +25,9 @@ import { SKILLS, offerCards } from './surv-skills.js';
 import { biomaFor, bossFor, entraBioma, drawBioma } from './surv-biomas.js';
 import { pose, carga, mkCorpse, updateCorpse, posarCorpse } from './surv-anim.js';
 import { drawPicker, cardAt } from './surv-cards.js';
+import {
+  drawControles, mkRastro, pasoRastro, BOMB_X, BOMB_Y, BOMB_R,
+} from './surv-controles.js';
 import { poseRoma, brilloRoma, alphaRoma, mkEstadoRoma, updateRoma } from './surv-roma.js';
 import { bloom, bloomLibre } from '../bloom.js';
 
@@ -62,9 +65,15 @@ const BRILLO = 0.4;
 // En apaisado los pulgares caen en las esquinas de abajo, asi que ahi van los
 // controles: la mitad izquierda mueve y la derecha dispara. El area de cada uno
 // es MUCHO mas grande que su dibujo, porque un pulgar no apunta fino.
-const PAD_X = 52, PAD_Y = VH - 48, PAD_R = 30;      // cruceta virtual
-const FIRE_X = VW - 48, FIRE_Y = VH - 44, FIRE_R = 26;
-const BOMB_X = VW - 104, BOMB_Y = VH - 32, BOMB_R = 18;
+// El DIBUJO de los controles vive en surv-controles.js, con sus medidas.
+//
+// Aqui no queda ninguna constante de tacto para mover y disparar, y no es un
+// olvido: el reparto es por MITADES DE PANTALLA (ver onInput). Toda la mitad
+// izquierda mueve y toda la derecha dispara, caiga el pulgar donde caiga, que
+// es lo que hace que no haya que mirar los controles para usarlos. Lo unico que
+// tiene un area propia es la bomba, porque esa si es un boton concreto dentro
+// de la mitad derecha, y sus medidas las manda el modulo del dibujo para que el
+// circulo que se ve y el que responde no puedan separarse nunca.
 
 export default {
   meta: {
@@ -143,6 +152,13 @@ export default {
     this.fireX = 0; this.fireY = 0;
     this.aim = -Math.PI / 2;
     this.aiming = false;
+    // El latido del boton de fuego (lo dibuja surv-controles.js). `latF` es la
+    // fase 0..1 del ciclo del corazon; `fireKick` es el golpe que acusa cada
+    // bala y que decae solo.
+    this.latF = 0; this.fireKick = 0;
+    // Las posiciones por las que ha pasado el cometa de la cruceta. Vive aqui,
+    // y NO en el modulo del dibujo, porque es estado de ESTA partida.
+    this.rastro = mkRastro();
 
     this.over = false;
     this.overT = 0;
@@ -196,6 +212,14 @@ export default {
       dt *= 0.34;
     }
     this.t += dt;
+    // El corazon del boton late mas rapido mientras ella dispara. Va con el dt
+    // del JUEGO, asi que la camara lenta de un jefe tambien le frena el pulso,
+    // igual que al corazon de Roma.
+    this.latF = (this.latF + dt * (this.firing ? 1.9 : 1.0)) % 1;
+    if (this.fireKick > 0) this.fireKick = Math.max(0, this.fireKick - dt * 6);
+    // El rastro de la cruceta se apunta AQUI y no al dibujar: si corriese al
+    // ritmo de la pantalla duraria la mitad en un telefono de 120 Hz.
+    pasoRastro(this.rastro, this.padDX);
     if (this.shake > 0) this.shake -= dt;
     if (this.tutorial > 0) this.tutorial -= dt;
 
@@ -284,6 +308,8 @@ export default {
 
   _fire() {
     const r = this.roma;
+    // El corazon del boton acusa la bala: es lo que se siente bajo el pulgar.
+    this.fireKick = 1;
     const ar = this._lvl('ardiente');
     const ardiendo = this._ardiendo();
     const mega = this.power.mega > 0 || ardiendo;
@@ -1215,18 +1241,60 @@ export default {
       }
       if (ev.id === this.fireId) {
         // Apuntado: el angulo sale de cuanto se arrastro el pulgar desde donde
-        // se apoyo. Con menos de 6 px no se considera apuntado (un pulgar
+        // se apoyo. Con menos de 4 px no se considera apuntado (un pulgar
         // apretando nunca esta del todo quieto y el disparo bailaria solo).
-        const dx = ev.x - this.fireX, dy = ev.y - this.fireY;
-        const d = Math.hypot(dx, dy);
-        if (d < 6) { this.aiming = false; this.aim = -Math.PI / 2; return; }
+        //
+        // La zona muerta mide el arrastre LATERAL, no la distancia total. Antes
+        // miraba la hipotenusa, y por eso bajar el pulgar en recto (que no
+        // cambia el angulo ni un grado) ya encendia la mira de "apuntando".
+        const dx = ev.x - this.fireX;
+        if (Math.abs(dx) < 4) { this.aiming = false; this.aim = -Math.PI / 2; return; }
         this.aiming = true;
         // Solo se apunta hacia ARRIBA: disparar hacia abajo no sirve de nada
         // (los enemigos vienen de arriba) y con el pulgar es facil hacerlo sin
-        // querer. El angulo se limita a +-75 grados de la vertical.
-        let a = Math.atan2(dy, dx);
-        const LIM = Math.PI * 75 / 180;
-        const off = clamp(normalizar(a + Math.PI / 2), -LIM, LIM);
+        // querer. Pero el limite tiene que dejar llegar al PEOR CASO REAL, que
+        // es un enemigo en el borde contrario justo encima de la linea:
+        //
+        //   Roma esta limitada a x 16..584 y dispara desde y=242; la linea que
+        //   defiende esta en y=226. Roma en un borde, enemigo en el otro:
+        //     dx = 568, dy = 16  ->  atan2(568,16) = 88.4 grados de la vertical
+        //
+        // Con el limite viejo de 75 grados ese tiro era IMPOSIBLE: la bala sube
+        // 54 px en los primeros 200 px de recorrido y 107 px en 400, o sea que
+        // pasaba muy por encima del enemigo y se iba por el techo. Es justo lo
+        // que se notaba jugando: de lejos, contra alguien pegado al borde, no
+        // habia manera de acertar.
+        //
+        // A 89 grados la bala cruza los 520 px de ancho subiendo solo 9 px y
+        // llega a la altura de la linea, que es donde esta el enemigo. Los 89
+        // (y no 90) dejan un grado de margen para que nunca salga horizontal
+        // pura ni pueda cruzar hacia abajo.
+        const LIM = Math.PI * 89 / 180;
+        // El angulo NO sale ya del arrastre crudo. Un pulgar apoyado en el
+        // boton tiene sitio para arrastrar unos 44 px antes de salirse del
+        // lienzo, y para pedir 88 grados con el gesto crudo habria que
+        // arrastrar casi en horizontal muchisimo mas de lo que cabe: por eso
+        // los angulos rasantes no se alcanzaban ni subiendo el limite.
+        //
+        // Se amplifica el gesto: todo el abanico se reparte en un arrastre
+        // lateral de +-38 px, que si cabe bajo el pulgar.
+        //
+        // La curva es CUBICA a proposito, y eso la hace mas precisa que el
+        // gesto viejo donde mas se usa. Grados de apuntado segun el arrastre:
+        //
+        //   arrastre     5px    10px    20px    32px    38px
+        //   viejo        14      27      45      ~70     75 (tope)
+        //   nuevo         3       7      20       59     89
+        //
+        // O sea: en los tiros normales (casi verticales, que son casi todos) el
+        // nuevo se mueve la mitad por px y se apunta mas fino, y solo cuando de
+        // verdad estiras el pulgar al final del recorrido se abre hasta lo
+        // rasante. Antes era al reves: sensible donde estorba y topado donde
+        // hacia falta.
+        const R = 38;
+        const t = clamp(dx / R, -1, 1);
+        const m = Math.abs(t);
+        const off = Math.sign(t) * (m * m * m * 0.75 + m * 0.25) * LIM;
         this.aim = -Math.PI / 2 + off;
       }
       return;
@@ -1539,18 +1607,43 @@ export default {
     const cx = Math.cos(this.aim), cy = Math.sin(this.aim);
     const col = this.aiming ? 'rgba(255,138,212,0.85)' : 'rgba(255,138,212,0.35)';
     g.fillStyle = col;
-    for (let d = 20; d < 92; d += 9) {
-      const k = 1 - d / 110;
-      g.globalAlpha = k;
+
+    // HASTA DONDE LLEGA LA MIRA. Quieta se queda corta a proposito (no estorba
+    // la vista), pero APUNTANDO sigue la bala hasta donde vaya a morir: contra
+    // el techo o contra el borde lateral, lo que pase antes.
+    //
+    // Antes moria siempre a 96 px y ese era el fallo que se sentia jugando. En
+    // un tiro rasante (que ahora llega a 89 grados) el enemigo puede estar a
+    // 568 px de distancia, o sea que la mira se paraba a la sexta parte del
+    // camino: por ahi no habia forma de saber si ibas a acertar o a pasarle por
+    // encima, que es justo lo que el describio como "no puedo dispararle de
+    // forma precisa". La bala viaja recta y sin gravedad, asi que la mira puede
+    // decir la verdad entera sin simular nada.
+    let largo = 96;
+    if (this.aiming) {
+      // Cuanto falta para el techo y para el borde hacia el que va. El +-3 es
+      // el mismo margen con el que mueren las balas (ver _updateBullets).
+      const tTecho = cy < -0.001 ? (ROMA_Y - 3) / -cy : 1e9;
+      const tLado = cx > 0.001 ? (VW - 3 - rx) / cx
+                  : cx < -0.001 ? (rx - 3) / -cx : 1e9;
+      largo = Math.min(tTecho, tLado);
+    }
+
+    // Los puntos se separan mas segun se alejan: asi una mira de 600 px no
+    // cuesta 60 rectangulos ni se lee como una linea continua que tape el
+    // campo. Van de 20 en adelante y se apagan con la distancia.
+    for (let d = 20, paso = 9; d < largo; d += paso, paso += 0.55) {
+      g.globalAlpha = Math.max(0.12, 1 - d / (largo + 40));
       g.fillRect(rx + cx * d - 1.2, ROMA_Y + cy * d - 1.2, 2.4, 2.4);
     }
     g.globalAlpha = 1;
-    // Punta de la mira, mas marcada cuando se esta apuntando de verdad.
+    // Punta de la mira, mas marcada cuando se esta apuntando de verdad. Va
+    // donde de verdad acaba el recorrido, no a 96 px fijos.
     if (this.aiming) {
       g.strokeStyle = 'rgba(255,138,212,0.75)';
       g.lineWidth = 1.5;
       g.beginPath();
-      g.arc(rx + cx * 96, ROMA_Y + cy * 96, 4.5, 0, 7);
+      g.arc(rx + cx * largo, ROMA_Y + cy * largo, 4.5, 0, 7);
       g.stroke();
     }
   },
@@ -1699,70 +1792,19 @@ export default {
   },
 
   // ---------- Los controles, dibujados ----------
+  // El arte vive en surv-controles.js: ahi se ve entero y se puede revisar sin
+  // arrancar una partida (tools/ver-controles.html lo dibuja en todos sus
+  // estados). Aqui solo se le pasa el estado que necesita.
   _drawControls(g) {
-    g.save();
-    g.globalAlpha = 0.5;
-
-    // Cruceta: el aro base y, si hay dedo, el punto donde esta.
-    g.strokeStyle = '#6bf0ff'; g.lineWidth = 2;
-    g.beginPath(); g.arc(PAD_X, PAD_Y, PAD_R, 0, 7); g.stroke();
-    // Flechitas a los lados del aro.
-    g.fillStyle = '#6bf0ff';
-    for (const s of [-1, 1]) {
-      const ax = PAD_X + s * (PAD_R - 9);
-      g.beginPath();
-      g.moveTo(ax + s * 5, PAD_Y);
-      g.lineTo(ax - s * 3, PAD_Y - 6);
-      g.lineTo(ax - s * 3, PAD_Y + 6);
-      g.fill();
-    }
-    if (this.padId !== null) {
-      g.globalAlpha = 0.85;
-      g.fillStyle = '#6bf0ff';
-      g.beginPath();
-      g.arc(PAD_X + this.padDX * (PAD_R - 8), PAD_Y, 10, 0, 7);
-      g.fill();
-      g.globalAlpha = 0.5;
-    }
-
-    // Boton de disparo.
-    g.strokeStyle = '#ff3ec9'; g.lineWidth = 2;
-    g.beginPath(); g.arc(FIRE_X, FIRE_Y, FIRE_R, 0, 7); g.stroke();
-    if (this.firing) {
-      g.globalAlpha = 0.5;
-      g.fillStyle = '#ff3ec9';
-      g.beginPath(); g.arc(FIRE_X, FIRE_Y, FIRE_R - 3, 0, 7); g.fill();
-      // Aguja dentro del boton apuntando a donde saldra la bala: confirma el
-      // gesto ahi donde esta el pulgar, sin tener que mirar a Roma.
-      g.globalAlpha = 0.95;
-      g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.lineCap = 'round';
-      g.beginPath();
-      g.moveTo(FIRE_X, FIRE_Y);
-      g.lineTo(FIRE_X + Math.cos(this.aim) * (FIRE_R - 7),
-               FIRE_Y + Math.sin(this.aim) * (FIRE_R - 7));
-      g.stroke();
-      g.globalAlpha = 0.5;
-    }
-    g.globalAlpha = 0.9;
-    textCenter(g, 'FUEGO', FIRE_X, FIRE_Y - 3, '#ff8ad4', 1);
-    g.globalAlpha = 0.5;
-
-    // Boton de bomba: apagado mientras se recarga, con su cuenta atras.
-    const ready = this.bomb.ready;
-    g.strokeStyle = ready ? '#ffe14d' : 'rgba(120,110,90,0.8)';
-    g.lineWidth = 2;
-    g.beginPath(); g.arc(BOMB_X, BOMB_Y, BOMB_R, 0, 7); g.stroke();
-    if (!ready) {
-      // Arco que se va cerrando segun se recarga.
-      g.strokeStyle = 'rgba(255,225,77,0.55)';
-      g.beginPath();
-      g.arc(BOMB_X, BOMB_Y, BOMB_R, -Math.PI / 2,
-            -Math.PI / 2 + (1 - this.bomb.cd / this._bombCd()) * Math.PI * 2);
-      g.stroke();
-    }
-    g.globalAlpha = 0.9;
-    drawStar(g, BOMB_X, BOMB_Y, ready ? '#ffe14d' : 'rgba(140,130,100,0.8)');
-    g.restore();
+    drawControles(g, {
+      t: this.t,
+      padId: this.padId, padDX: this.padDX,
+      firing: this.firing, aiming: this.aiming, aim: this.aim,
+      latF: this.latF, fireKick: this.fireKick, rastro: this.rastro,
+      // Donde esta Roma ahora mismo: el rastro se aparta si ella se acerca.
+      romaX: this._romaX(),
+      bomb: this.bomb, bombCd: this._bombCd(),
+    }, drawStar);
   },
 
   _drawBanner(g) {

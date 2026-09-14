@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<!-- Hoja de contactos de los CONTROLES de SURVIVAL. Dibuja la cruceta y el
+     boton de fuego en todos sus estados, sobre el fondo real del juego y al
+     tamano real al que se ven jugando (que es como hay que juzgarlos).
+     Se abre con: node tools/ver.js tools/ver-controles.html salida.png 1240 900 -->
+<meta charset="utf-8">
+<title>controles de survival</title>
+<style>
+  body { margin:0; background:#0d0620; font:11px/1.4 monospace; color:#c8b8ff; }
+  #hoja { padding:12px; }
+  h2 { font-size:12px; color:#ff5c9d; margin:14px 0 8px; letter-spacing:2px; }
+  .fila { display:flex; flex-wrap:wrap; gap:10px; }
+  .col { text-align:center; background:#150a2e; padding:6px 4px 4px; border:1px solid #2a1a54; }
+  .col span { display:block; margin-top:3px; color:#7a6aa8; font-size:9px; }
+  canvas { display:block; margin:0 auto; image-rendering:auto; }
+</style>
+<div id="hoja"></div>
+<script type="module">
+import { drawControles } from '../www/js/games/surv-controles.js';
+
+const hoja = document.getElementById('hoja');
+
+// La estrella de la bomba la dibuja survival.js; aqui una equivalente para ver
+// el conjunto con su tercer boton en su sitio.
+function estrella(g, x, y, col) {
+  g.save(); g.translate(x, y); g.fillStyle = col; g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 ? 4 : 9, a = -Math.PI / 2 + i * Math.PI / 5;
+    const fx = Math.cos(a) * r, fy = Math.sin(a) * r;
+    i ? g.lineTo(fx, fy) : g.moveTo(fx, fy);
+  }
+  g.closePath(); g.fill(); g.restore();
+}
+
+// Un recorte del lienzo real (600x270) alrededor de cada control, al tamano
+// que se ve jugando y ampliado x3 para revisar el detalle.
+function panel(titulo, casos, rect, escalas) {
+  const h = document.createElement('h2');
+  h.textContent = titulo;
+  hoja.appendChild(h);
+  const fila = document.createElement('div');
+  fila.className = 'fila';
+  for (const c of casos) {
+    for (const s of escalas) {
+      const col = document.createElement('div');
+      col.className = 'col';
+      const cv = document.createElement('canvas');
+      cv.width = rect.w * s; cv.height = rect.h * s;
+      const g = cv.getContext('2d');
+      // Fondo del juego: violeta oscuro con la linea rosa que Roma defiende.
+      g.fillStyle = '#140a2c';
+      g.fillRect(0, 0, cv.width, cv.height);
+      g.save();
+      g.scale(s, s);
+      g.translate(-rect.x, -rect.y);
+      // La linea de defensa, para ver el contraste real contra ella.
+      g.strokeStyle = 'rgba(255,62,201,0.55)';
+      g.lineWidth = 1;
+      g.beginPath(); g.moveTo(0, 226.5); g.lineTo(600, 226.5); g.stroke();
+      drawControles(g, c.st, estrella);
+      g.restore();
+      col.appendChild(cv);
+      const sp = document.createElement('span');
+      sp.textContent = c.label + (s > 1 ? ' x' + s : ' jugando');
+      col.appendChild(sp);
+      fila.appendChild(col);
+    }
+  }
+  hoja.appendChild(fila);
+}
+
+// Estado falso, con la misma forma que el juego le pasa a drawControles.
+const base = {
+  t: 3.7, padId: null, padDX: 0, firing: false, aiming: false,
+  aim: -Math.PI / 2, latF: 0.06, fireKick: 0,
+  romaX: 300, rastro: { x: new Float32Array(6), i: 0 },
+  bomb: { ready: true, cd: 0 }, bombCd: 12,
+};
+const st = o => Object.assign({}, base, o);
+
+const IZQ = { x: 6, y: 212, w: 100, h: 56 };
+const DER = { x: 494, y: 176, w: 106, h: 78 };
+
+panel('MOVERSE — reposo, empujando a cada lado', [
+  { label: 'reposo',        st: st({}) },
+  { label: 'izquierda',     st: st({ padId: 1, padDX: -1 }) },
+  { label: 'medio derecha', st: st({ padId: 1, padDX: 0.45 }) },
+  { label: 'derecha',       st: st({ padId: 1, padDX: 1 }) },
+  { label: 'Roma encima',   st: st({ romaX: 52 }) },
+], IZQ, [1, 4]);
+
+panel('DISPARAR — reposo, disparando, y apuntando rasante a cada lado', [
+  { label: 'reposo',      st: st({}) },
+  { label: 'recto',       st: st({ firing: true, fireKick: 0.9 }) },
+  { label: 'rasante izq', st: st({ firing: true, aiming: true, fireKick: 0.4, aim: -Math.PI / 2 - Math.PI * 88 / 180 }) },
+  { label: 'rasante der', st: st({ firing: true, aiming: true, fireKick: 0.4, aim: -Math.PI / 2 + Math.PI * 88 / 180 }) },
+  { label: 'diagonal',    st: st({ firing: true, aiming: true, fireKick: 0, aim: -Math.PI / 2 + Math.PI * 45 / 180 }) },
+], DER, [1, 4]);
+
+panel('BOMBA — lista y recargando', [
+  { label: 'lista',       st: st({}) },
+  { label: 'recargando',  st: st({ bomb: { ready: false, cd: 7 } }) },
+], DER, [1, 3]);
+
+document.title = 'listo';
+</script>

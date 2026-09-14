@@ -24,9 +24,10 @@
     // Donde hay que tocar para cada control, en pantalla.
     return {
       fase: 'coordenadas',
-      fuego: [Math.round(px(600 - 48)), Math.round(py(270 - 44))],
-      bomba: [Math.round(px(600 - 104)), Math.round(py(270 - 32))],
-      pad:   [Math.round(px(52)), Math.round(py(270 - 48))],
+      // Las mismas medidas que surv-controles.js (FIRE_Y, BOMB_Y, PAD_Y).
+      fuego: [Math.round(px(600 - 48)), Math.round(py(270 - 52))],
+      bomba: [Math.round(px(600 - 104)), Math.round(py(270 - 40))],
+      pad:   [Math.round(px(52)), Math.round(py(270 - 30))],
       lienzo: [g.meta.vw, g.meta.vh],
       escala: +v.scale.toFixed(3),
     };
