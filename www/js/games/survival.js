@@ -238,12 +238,12 @@ export default {
     // EL ANGULO DE TIRO SE SUAVIZA hacia lo que pide el pulgar, con una
     // constante de ~33 ms (dos frames). No es cosmetico: con el angulo sacado
     // de la direccion del arrastre, 1 px de temblor del pulgar a 10 px de
-    // donde se apoyo son 5.7 grados, y en la punta de una mira de 500 px eso
-    // son 50 px de baile, que se van tambien a las balas. Con 33 ms el
-    // temblor de un pulgar (mas rapido que eso) se promedia y un giro
-    // deliberado llega entero en dos frames: no se nota el retraso y si se
-    // nota la calma. Va en update() y no en draw() por lo de siempre: a 120
-    // Hz suavizaria el doble de rapido.
+    // donde se apoyo son 5.7 grados, y a 300 px de distancia (un enemigo al
+    // otro lado) eso son 30 px de desvio en la bala: el temblor de la mano se
+    // va derecho a la punteria. Con 33 ms el temblor de un pulgar (mas rapido
+    // que eso) se promedia y un giro deliberado llega entero en dos frames:
+    // no se nota el retraso y si se nota la calma. Va en update() y no en
+    // draw() por lo de siempre: a 120 Hz suavizaria el doble de rapido.
     this.aim += (this.aimRaw - this.aim) * Math.min(1, dt * 30);
     if (this.shake > 0) this.shake -= dt;
     if (this.tutorial > 0) this.tutorial -= dt;
@@ -1625,11 +1625,21 @@ export default {
     }
   },
 
-  // La linea de puntos que sale de Roma hacia donde apunta. Sin ella no hay
-  // forma de saber por donde va a salir la bala hasta que sale.
+  // La linea de puntos que sale de Roma hacia donde apunta: CORTA a proposito.
+  //
+  // Mide 96 px y no llega al enemigo. Hubo una version que la alargaba hasta
+  // el techo o el borde, con la punta donde iba a morir la bala, para que se
+  // supiera si ibas a acertar. El la jugo y dijo que "la linea de disparo se
+  // siente rara... antes era divertido porque no se sabia bien a donde
+  // apuntar". Tiene razon y es una decision de diseño, no de tacto: la mira
+  // dice HACIA DONDE sale la bala, y lo demas lo pone la punteria. Con una
+  // regla que llega al enemigo, apuntar deja de ser habilidad y la pantalla
+  // se llena de una raya de 500 px cada vez que se aprieta.
+  //
+  // (El arreglo de verdad para los tiros rasantes era el tope del angulo, no
+  // el largo de la mira: ver AIM_LIM.)
   _drawAim(g) {
     if (!this.firing) return;
-    const r = this.roma;
     // La mira sale de Roma, asi que tiene que salir de la MISMA Roma que se
     // dibuja. Si la mira partiese de r.x crudo y el cuerpo de la interpolada,
     // la linea de puntos se despegaria del personaje hasta 3.2 px virtuales
@@ -1637,48 +1647,18 @@ export default {
     // ancho de Roma. Es el fallo que mas se veria de los siete.
     const rx = this._romaX();
     const cx = Math.cos(this.aim), cy = Math.sin(this.aim);
-    const col = this.aiming ? 'rgba(255,138,212,0.85)' : 'rgba(255,138,212,0.35)';
-    g.fillStyle = col;
-
-    // HASTA DONDE LLEGA LA MIRA: siempre hasta donde vaya a morir la bala,
-    // contra el techo o contra el borde lateral, lo que pase antes.
-    //
-    // Antes moria a 96 px y ese era el fallo que se sentia jugando. En un tiro
-    // rasante (que llega a 88.4 grados) el enemigo puede estar a 568 px de
-    // distancia, o sea que la mira se paraba a la sexta parte del camino: por
-    // ahi no habia forma de saber si ibas a acertar o a pasarle por encima,
-    // que es justo lo que el describio como "no puedo dispararle de forma
-    // precisa". La bala viaja recta y sin gravedad, asi que la mira puede
-    // decir la verdad entera sin simular nada.
-    //
-    // Y se calcula SIEMPRE, no solo apuntando. Hubo una version en la que sin
-    // apuntar median 96 px fijos y apuntando el recorrido entero: como la
-    // zona muerta del pulgar esta a 6 px (1.5 mm), cada vez que el dedo la
-    // rondaba la mira saltaba entre 96 y 500 px, en medio del campo, justo
-    // donde se mira al disparar. Era lo mas "tosco" del disparo y no estaba
-    // en el tacto. Ahora `aiming` solo cambia el brillo y la punta.
-    //
-    // El +-3 es el mismo margen con el que mueren las balas (_updateBullets).
-    const tTecho = cy < -0.001 ? (ROMA_Y - 3) / -cy : 1e9;
-    const tLado = cx > 0.001 ? (VW - 3 - rx) / cx
-                : cx < -0.001 ? (rx - 3) / -cx : 1e9;
-    const largo = Math.min(tTecho, tLado);
-
-    // Los puntos se separan mas segun se alejan: asi una mira de 600 px no
-    // cuesta 60 rectangulos ni se lee como una linea continua que tape el
-    // campo. Van de 20 en adelante y se apagan con la distancia.
-    for (let d = 20, paso = 9; d < largo; d += paso, paso += 0.55) {
-      g.globalAlpha = Math.max(0.12, 1 - d / (largo + 40));
+    g.fillStyle = this.aiming ? 'rgba(255,138,212,0.85)' : 'rgba(255,138,212,0.35)';
+    for (let d = 20; d < 92; d += 9) {
+      g.globalAlpha = 1 - d / 110;
       g.fillRect(rx + cx * d - 1.2, ROMA_Y + cy * d - 1.2, 2.4, 2.4);
     }
     g.globalAlpha = 1;
-    // Punta de la mira, mas marcada cuando se esta apuntando de verdad. Va
-    // donde de verdad acaba el recorrido, no a 96 px fijos.
+    // Punta de la mira, mas marcada cuando se esta apuntando de verdad.
     if (this.aiming) {
       g.strokeStyle = 'rgba(255,138,212,0.75)';
       g.lineWidth = 1.5;
       g.beginPath();
-      g.arc(rx + cx * largo, ROMA_Y + cy * largo, 4.5, 0, 7);
+      g.arc(rx + cx * 96, ROMA_Y + cy * 96, 4.5, 0, 7);
       g.stroke();
     }
   },
