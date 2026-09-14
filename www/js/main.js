@@ -1,6 +1,6 @@
 // ROMINA'S ARCADE — arranque, bucle de tiempo fijo, gestor de escenas y menu.
 import { VW, VH, BASE_VW, BASE_VH, MENU_VW, MENU_VH, setVirtual, setSmooth, setSupersample, baseTransform, requestOrientation, giroNativo, isLandscape, initCanvas, view, makeRng, Save, cam } from './core.js';
-import { initInput, pointers } from './input.js';
+import { initInput, pointers, toques } from './input.js';
 import { initAudio, unlockAudio, SFX, toggleMute, suspendAudio, resumeAudio, playMusic, stopMusic, SONGS, currentSong } from './audio.js';
 import { text, textCenter, measure } from './font.js';
 import { particles, updateParticles, drawParticles } from './gfx.js';
@@ -274,6 +274,13 @@ function frame(now) {
   frameNo++;
   let dt = now - prev; prev = now;
   if (dt > MAX_FRAME) dt = MAX_FRAME;      // absorbe pausas (background, GC, MIUI)
+  // Al reanudar (salir de pausa, volver al primer plano) `prev` se pone con
+  // performance.now(), pero el `now` que trae el primer rAF suele ser ANTERIOR
+  // a ese instante: dt sale negativo, el acumulador queda por debajo de cero y
+  // el alpha de interpolacion tambien, o sea que ese frame se dibuja todo un
+  // pelo hacia ATRAS. Es un tiron justo al reanudar. Un frame de cero dt es lo
+  // correcto ahi: no ha pasado tiempo de juego.
+  if (dt < 0) dt = 0;
   acc += dt;
   let n = 0;
   const s = STEP / 1000;
@@ -686,7 +693,7 @@ function boot() {
 // `cancion` devuelve el NOMBRE del tema que suena: es la unica forma de
 // comprobar desde fuera que SURVIVAL cambia de musica al entrar el jefe.
 window.__arcade = {
-  sm, ctx, Menu, GameOver, GAMES, view, Pausa,
+  sm, ctx, Menu, GameOver, GAMES, view, Pausa, toques,
   get cancion() {
     const s = currentSong();
     return s ? (Object.keys(SONGS).find(k => SONGS[k] === s) || '?') : null;

@@ -25,9 +25,7 @@ import { SKILLS, offerCards } from './surv-skills.js';
 import { biomaFor, bossFor, entraBioma, drawBioma } from './surv-biomas.js';
 import { pose, carga, mkCorpse, updateCorpse, posarCorpse } from './surv-anim.js';
 import { drawPicker, cardAt } from './surv-cards.js';
-import {
-  drawControles, mkRastro, pasoRastro, BOMB_X, BOMB_Y, BOMB_R,
-} from './surv-controles.js';
+import { drawControles, BOMB_X, BOMB_Y, BOMB_R } from './surv-controles.js';
 import { poseRoma, brilloRoma, alphaRoma, mkEstadoRoma, updateRoma } from './surv-roma.js';
 import { bloom, bloomLibre } from '../bloom.js';
 
@@ -167,15 +165,16 @@ export default {
     // `aim` es el angulo en radianes; -PI/2 es recto hacia arriba.
     this.fireId = null; this.firing = false;
     this.fireX = 0; this.fireY = 0;
-    this.aim = -Math.PI / 2;
+    this.aim = -Math.PI / 2;      // el angulo REAL, suavizado en update()
+    this.aimRaw = -Math.PI / 2;   // el que pide el pulgar ahora mismo
     this.aiming = false;
+    this.aimOn = false;           // estado de la histeresis de la zona muerta
+    // Para la gracia de re-agarre de la cruceta (ver onInput).
+    this.padUpT = -1; this.padUpDX = 0;
     // El latido del boton de fuego (lo dibuja surv-controles.js). `latF` es la
     // fase 0..1 del ciclo del corazon; `fireKick` es el golpe que acusa cada
     // bala y que decae solo.
     this.latF = 0; this.fireKick = 0;
-    // Las posiciones por las que ha pasado el cometa de la cruceta. Vive aqui,
-    // y NO en el modulo del dibujo, porque es estado de ESTA partida.
-    this.rastro = mkRastro();
 
     this.over = false;
     this.overT = 0;
@@ -233,10 +232,19 @@ export default {
     // del JUEGO, asi que la camara lenta de un jefe tambien le frena el pulso,
     // igual que al corazon de Roma.
     this.latF = (this.latF + dt * (this.firing ? 1.9 : 1.0)) % 1;
-    if (this.fireKick > 0) this.fireKick = Math.max(0, this.fireKick - dt * 6);
-    // El rastro de la cruceta se apunta AQUI y no al dibujar: si corriese al
-    // ritmo de la pantalla duraria la mitad en un telefono de 120 Hz.
-    pasoRastro(this.rastro, this.padDX);
+    // El golpe de cada bala decae en 100 ms: mas largo, con TURBO estaba
+    // activo el 100% del tiempo y se comia el latido.
+    if (this.fireKick > 0) this.fireKick = Math.max(0, this.fireKick - dt * 10);
+    // EL ANGULO DE TIRO SE SUAVIZA hacia lo que pide el pulgar, con una
+    // constante de ~33 ms (dos frames). No es cosmetico: con el angulo sacado
+    // de la direccion del arrastre, 1 px de temblor del pulgar a 10 px de
+    // donde se apoyo son 5.7 grados, y en la punta de una mira de 500 px eso
+    // son 50 px de baile, que se van tambien a las balas. Con 33 ms el
+    // temblor de un pulgar (mas rapido que eso) se promedia y un giro
+    // deliberado llega entero en dos frames: no se nota el retraso y si se
+    // nota la calma. Va en update() y no en draw() por lo de siempre: a 120
+    // Hz suavizaria el doble de rapido.
+    this.aim += (this.aimRaw - this.aim) * Math.min(1, dt * 30);
     if (this.shake > 0) this.shake -= dt;
     if (this.tutorial > 0) this.tutorial -= dt;
 
@@ -1221,7 +1229,14 @@ export default {
     if (ev.type === 'down') {
       // Mitad derecha: disparar, o la bomba si cae en su boton.
       if (ev.x > VW * 0.5) {
-        if (Math.hypot(ev.x - BOMB_X, ev.y - BOMB_Y) < BOMB_R + 14) {
+        // La bomba SOLO se queda el toque si esta lista. Antes se lo quedaba
+        // siempre: si caia en su circulo durante la recarga (25 de cada 26 s),
+        // _useBomb no hacia nada y el toque moria ahi, sin disparar ni
+        // apuntar, hasta levantar el pulgar y volver a apoyar. Y su circulo de
+        // tacto llegaba a 1 px del aro del corazon: bastaba caer 7 mm a la
+        // izquierda del centro mirando a los enemigos y no al boton. Era una
+        // de las causas reales de "a veces no dispara".
+        if (this.bomb.ready && Math.hypot(ev.x - BOMB_X, ev.y - BOMB_Y) < BOMB_R + 8) {
           this._useBomb();
           return;
         }
@@ -1231,8 +1246,8 @@ export default {
           // El apuntado nace donde cae el pulgar: desde ese punto se mide
           // hacia donde se arrastra. Empieza recto arriba.
           this.fireX = ev.x; this.fireY = ev.y;
-          this.aim = -Math.PI / 2;
-          this.aiming = false;
+          this.aim = -Math.PI / 2; this.aimRaw = -Math.PI / 2;
+          this.aiming = false; this.aimOn = false;
           // El primer toque dispara ya, sin esperar la cadencia.
           this.roma.lastShot = -99;
         }
@@ -1241,8 +1256,21 @@ export default {
       // Mitad izquierda: la cruceta nace donde cae el pulgar.
       if (this.padId === null) {
         this.padId = ev.id;
-        this.padX = ev.x;
-        this.padDX = 0;
+        // GRACIA DE RE-AGARRE. Si el pulgar se levanto hace menos de 150 ms y
+        // vuelve a apoyarse, la cruceta sigue donde estaba en vez de nacer a
+        // cero. Un pulgar que aprieta o que se tensa cuando el otro dispara
+        // rebota (up + down en menos de 200 ms) sin que uno se entere, y sin
+        // esto Roma se quedaba PARADA hasta mover el dedo 4 px de nuevo: si
+        // el lo tenia quieto a tope, parada indefinidamente. Es la parada
+        // que se siente "al disparar". El centro se recoloca para que el
+        // punto donde cae el dedo signifique el mismo empuje que antes.
+        if (this.t - this.padUpT < 0.15 && this.padUpDX !== 0) {
+          this.padX = ev.x - this.padUpDX * 26;
+          this.padDX = this.padUpDX;
+        } else {
+          this.padX = ev.x;
+          this.padDX = 0;
+        }
       }
       return;
     }
@@ -1270,24 +1298,45 @@ export default {
         // gesto por direccion es el que se sentia bien; lo unico que le fallaba
         // era el tope, y eso se arregla abajo.
         const dx = ev.x - this.fireX, dy = ev.y - this.fireY;
-        if (Math.hypot(dx, dy) < 6) { this.aiming = false; this.aim = -Math.PI / 2; return; }
-        this.aiming = true;
+        const d = Math.hypot(dx, dy);
+        // La zona muerta tiene HISTERESIS: se entra a apuntar a 6 px y se sale
+        // a 3. Sin ella, un pulgar rondando los 6 px (1.5 mm en el telefono,
+        // lo que se mueve al apretar y aflojar) encendia y apagaba el apuntado
+        // varias veces por segundo, y con el la mira cambiaba de brillo y de
+        // punta a saltos.
+        this.aimOn = this.aimOn ? d >= 3 : d >= 6;
+        this.aiming = this.aimOn;
+        if (!this.aimOn) { this.aimRaw = -Math.PI / 2; return; }
+        // Pulgar POR DEBAJO de donde se apoyo (dy >= 0) y casi sin desvio
+        // lateral: recto arriba. Sin esto, apretar mas fuerte (que baja el
+        // punto reportado 2-6 px) con 1 px de dx daba un tiro horizontal a un
+        // lado, y 2 px de temblor lo mandaban a la esquina CONTRARIA. Con 6 px
+        // o mas de dx si se respeta: es el "arrastrar plano" a proposito.
+        if (dy >= 0 && Math.abs(dx) < 6) { this.aimRaw = -Math.PI / 2; return; }
         // Solo se apunta hacia ARRIBA: disparar hacia abajo no sirve de nada
         // (los enemigos vienen de arriba) y con el pulgar es facil hacerlo sin
         // querer. El tope es AIM_LIM, que no es un numero redondo a proposito:
         // es exactamente el angulo al peor enemigo posible, asi que "arrastrar
         // plano" acierta a la esquina (ver AIM_LIM arriba).
+        //
+        // Esto es el OBJETIVO del angulo; el angulo real (this.aim) se acerca
+        // a el en update(), suavizado. Ver alli el porque.
         const off = clamp(normalizar(Math.atan2(dy, dx) + Math.PI / 2), -AIM_LIM, AIM_LIM);
-        this.aim = -Math.PI / 2 + off;
+        this.aimRaw = -Math.PI / 2 + off;
       }
       return;
     }
 
     if (ev.type === 'up') {
-      if (ev.id === this.padId) { this.padId = null; this.padDX = 0; }
+      if (ev.id === this.padId) {
+        // Se recuerda cuando y con que empuje se solto, para la gracia de
+        // re-agarre del 'down'.
+        this.padUpT = this.t; this.padUpDX = this.padDX;
+        this.padId = null; this.padDX = 0;
+      }
       if (ev.id === this.fireId) {
-        this.fireId = null; this.firing = false; this.aiming = false;
-        this.aim = -Math.PI / 2;
+        this.fireId = null; this.firing = false; this.aiming = false; this.aimOn = false;
+        this.aim = -Math.PI / 2; this.aimRaw = -Math.PI / 2;
       }
     }
   },
@@ -1591,26 +1640,29 @@ export default {
     const col = this.aiming ? 'rgba(255,138,212,0.85)' : 'rgba(255,138,212,0.35)';
     g.fillStyle = col;
 
-    // HASTA DONDE LLEGA LA MIRA. Quieta se queda corta a proposito (no estorba
-    // la vista), pero APUNTANDO sigue la bala hasta donde vaya a morir: contra
-    // el techo o contra el borde lateral, lo que pase antes.
+    // HASTA DONDE LLEGA LA MIRA: siempre hasta donde vaya a morir la bala,
+    // contra el techo o contra el borde lateral, lo que pase antes.
     //
-    // Antes moria siempre a 96 px y ese era el fallo que se sentia jugando. En
-    // un tiro rasante (que ahora llega a 89 grados) el enemigo puede estar a
-    // 568 px de distancia, o sea que la mira se paraba a la sexta parte del
-    // camino: por ahi no habia forma de saber si ibas a acertar o a pasarle por
-    // encima, que es justo lo que el describio como "no puedo dispararle de
-    // forma precisa". La bala viaja recta y sin gravedad, asi que la mira puede
+    // Antes moria a 96 px y ese era el fallo que se sentia jugando. En un tiro
+    // rasante (que llega a 88.4 grados) el enemigo puede estar a 568 px de
+    // distancia, o sea que la mira se paraba a la sexta parte del camino: por
+    // ahi no habia forma de saber si ibas a acertar o a pasarle por encima,
+    // que es justo lo que el describio como "no puedo dispararle de forma
+    // precisa". La bala viaja recta y sin gravedad, asi que la mira puede
     // decir la verdad entera sin simular nada.
-    let largo = 96;
-    if (this.aiming) {
-      // Cuanto falta para el techo y para el borde hacia el que va. El +-3 es
-      // el mismo margen con el que mueren las balas (ver _updateBullets).
-      const tTecho = cy < -0.001 ? (ROMA_Y - 3) / -cy : 1e9;
-      const tLado = cx > 0.001 ? (VW - 3 - rx) / cx
-                  : cx < -0.001 ? (rx - 3) / -cx : 1e9;
-      largo = Math.min(tTecho, tLado);
-    }
+    //
+    // Y se calcula SIEMPRE, no solo apuntando. Hubo una version en la que sin
+    // apuntar median 96 px fijos y apuntando el recorrido entero: como la
+    // zona muerta del pulgar esta a 6 px (1.5 mm), cada vez que el dedo la
+    // rondaba la mira saltaba entre 96 y 500 px, en medio del campo, justo
+    // donde se mira al disparar. Era lo mas "tosco" del disparo y no estaba
+    // en el tacto. Ahora `aiming` solo cambia el brillo y la punta.
+    //
+    // El +-3 es el mismo margen con el que mueren las balas (_updateBullets).
+    const tTecho = cy < -0.001 ? (ROMA_Y - 3) / -cy : 1e9;
+    const tLado = cx > 0.001 ? (VW - 3 - rx) / cx
+                : cx < -0.001 ? (rx - 3) / -cx : 1e9;
+    const largo = Math.min(tTecho, tLado);
 
     // Los puntos se separan mas segun se alejan: asi una mira de 600 px no
     // cuesta 60 rectangulos ni se lee como una linea continua que tape el
@@ -1783,7 +1835,7 @@ export default {
       t: this.t,
       padId: this.padId, padDX: this.padDX,
       firing: this.firing, aiming: this.aiming, aim: this.aim,
-      latF: this.latF, fireKick: this.fireKick, rastro: this.rastro,
+      latF: this.latF, fireKick: this.fireKick,
       bomb: this.bomb, bombCd: this._bombCd(),
     }, drawStar);
   },

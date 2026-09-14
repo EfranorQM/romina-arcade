@@ -31,11 +31,18 @@ import { VW, VH } from './surv-defs.js';
 // BOMB_R) y van aparte a proposito: el area que responde al pulgar es mucho mas
 // grande que lo que se ve, porque un pulgar no apunta fino.
 //
-// PAD_Y baja a VH-30 y no se queda a la altura del boton de fuego. A su altura
-// vieja el rastro cruzaba y=226, que es LINE_Y, la linea rosa que Roma
-// defiende: dos barras horizontales pegadas, una cian y otra rosa, compitiendo
-// por el mismo sitio. Aqui el rastro queda por debajo de la linea.
-const PAD_X = 52, PAD_Y = VH - 30;
+// PAD_Y esta a la MISMA altura que el boton de fuego (VH-52), y no es un
+// detalle: los dos pulgares tienen que apoyarse nivelados. Hubo una version a
+// VH-30, 18 px mas abajo, por no cruzar la linea rosa que Roma defiende; en
+// el telefono eso ponia el pulgar izquierdo a 7.5 mm del borde inferior (el
+// derecho a 12.9), con el agarre torcido y el dedo metido en la franja donde
+// MIUI escucha los gestos del sistema y puede quedarse el toque. Y la excusa
+// no valia: el aro del fuego cruza la linea igual y a nadie le molesta.
+//
+// A esta altura la pista (halo incluido, y 212..224) queda ENCIMA de la linea
+// (226) y por encima del cuerpo de Roma (227..258), asi que ella pasa por
+// debajo sin que nada la tape, ni en la pared izquierda.
+const PAD_X = 52, PAD_Y = VH - 52;
 // PISTA=36 y no mas: con el halo (9 px por lado) la pista ocupa x 7..97, o sea
 // 7 px de margen contra el borde del lienzo. A 40 tocaba el 0.
 const PISTA = 36;                   // media longitud de la pista del rastro
@@ -60,30 +67,6 @@ const COMETA = 8;                   // radio del cometa
 // lo que hacia falta para los angulos rasantes (ver el apuntado en survival.js).
 const FIRE_X = VW - 48, FIRE_Y = VH - 52;
 const ARO = 23;                     // radio del aro del boton de fuego
-
-// ---------- El rastro de la cruceta ----------
-// El rastro NO se puede apuntar mientras se dibuja. Este proyecto ya tiene dos
-// cicatrices de eso (el latido de Roma en survival.js:95 y el destello de la
-// bomba en _drawFx): lo que se actualiza al dibujar corre al ritmo de la
-// PANTALLA, asi que en un telefono de 120 Hz iria al doble y el rastro duraria
-// la mitad; y ademas draw() se sigue llamando cuando update() no avanza (la
-// pantalla de cartas), o sea que la estela correria sola mientras ella elige.
-//
-// Por eso las posiciones las apunta el JUEGO en update() (survival.js llama a
-// pasoRastro) y aqui solo se leen. El buffer es de instancia, no de modulo, y
-// se crea con mkRastro() al empezar la partida: de modulo arrancaria cada
-// partida con las posiciones de la anterior.
-export const ESTELA = 6;
-
-export function mkRastro() {
-  return { x: new Float32Array(ESTELA), i: 0 };
-}
-
-// Un paso del rastro. Lo llama update(), una vez por paso de simulacion.
-export function pasoRastro(r, dx) {
-  r.i = (r.i + 1) % ESTELA;
-  r.x[r.i] = PAD_X + dx * RECORRIDO;
-}
 
 // hex + alpha -> rgba. Tres lineas, y el proyecto ya lo tiene duplicado en
 // varios sitios; no vale la pena un import por esto.
@@ -152,11 +135,15 @@ function drawRastro(g, st) {
   // clara. La caida va al CUADRADO (f*f) — lineal dejaba las capas casi igual
   // de opacas y se leia como una barra maciza con borde, no como luz. Respira
   // despacio, a 2.2 rad/s.
+  //
+  // El halo es fino a proposito (12.8 px de grosor maximo, no 17.8): asi la
+  // pista entera cabe entre y 212 y 224, encima de la linea rosa (226) sin
+  // tocarla. Lo que se pierde de resplandor lo compensa la caida al cuadrado.
   const resp = 0.5 + Math.sin(st.t * 2.2) * 0.5;
   for (let i = 4; i >= 1; i--) {
     const f = 1 - i / 5;
-    g.strokeStyle = rgba('#6bf0ff', 0.16 * f * f * (0.55 + resp * 0.45) * (vivo ? 1.7 : 1));
-    g.lineWidth = 5 + i * 3.2;
+    g.strokeStyle = rgba('#6bf0ff', 0.18 * f * f * (0.55 + resp * 0.45) * (vivo ? 1.7 : 1));
+    g.lineWidth = 4 + i * 2.2;
     g.beginPath(); g.moveTo(PAD_X - PISTA, PAD_Y); g.lineTo(PAD_X + PISTA, PAD_Y); g.stroke();
   }
   g.strokeStyle = rgba('#6bf0ff', 0.24);
@@ -173,16 +160,22 @@ function drawRastro(g, st) {
     g.beginPath(); g.arc(PAD_X + s * PISTA, PAD_Y, 4 + carga * 3.2, 0, 7); g.stroke();
   }
 
-  // LA ESTELA. Se leen hacia atras las ultimas posiciones que apunto update(),
-  // cada una mas tenue y mas pequena. Quieta no se ve (todas caen en el mismo
-  // sitio, debajo del cometa): solo aparece cuando corre, que es justo cuando
-  // dice algo.
-  const r = st.rastro;
-  for (let k = 1; k < ESTELA; k++) {
-    const i = (r.i - k + ESTELA) % ESTELA;
-    const a = 1 - k / ESTELA;
-    g.fillStyle = rgba('#6bf0ff', a * a * 0.30);
-    g.beginPath(); g.arc(r.x[i], PAD_Y, COMETA * a, 0, 7); g.fill();
+  // LA ESTELA: cinco motas DETRAS del cometa, hacia el lado contrario al que
+  // empuja, tan largas como fuerte sea el empuje. Es luz que se queda atras.
+  //
+  // NO es un historial de posiciones. Hubo una version con un buffer de las
+  // ultimas posiciones del cometa, y en la practica no se veia nunca: el
+  // cometa solo depende de cuanto empujas, y corriendo a tope se empuja
+  // QUIETO, asi que las seis posiciones caian en el mismo sitio. Solo asomaba
+  // 83 ms tras cambiar de empuje. Esta version dice lo mismo sin estado y se
+  // ve mientras corres, que es cuando importa.
+  if (vivo && Math.abs(dx) > 0.05) {
+    const largo = 14 * Math.abs(dx);
+    for (let i = 1; i <= 5; i++) {
+      const f = 1 - i / 6;
+      g.fillStyle = rgba('#6bf0ff', f * f * 0.32);
+      g.beginPath(); g.arc(cx - Math.sign(dx) * largo * (i / 5), PAD_Y, COMETA * f, 0, 7); g.fill();
+    }
   }
 
   // El cometa: halo, cuerpo y un corazon casi blanco.
@@ -240,7 +233,11 @@ function drawFuego(g, st) {
   g.rotate(norm(st.aim + Math.PI / 2) * 0.34);
   // Late, y ademas acusa cada bala con un golpe seco (fireKick). Apuntar lo
   // ESTIRA un poco, como quien se asoma.
-  const sc = 1 + (lat - 0.18) * 0.15 + kick * 0.14;
+  // El golpe de cada bala (kick) es mas chico que el latido (0.08 contra
+  // 0.123 de pico) y dura 100 ms: si fuera mayor o mas largo, con TURBO el
+  // kick estaria activo el 100% del tiempo y se comeria el latido, que es lo
+  // que hace que esto sea un corazon y no un boton que vibra.
+  const sc = 1 + (lat - 0.18) * 0.15 + kick * 0.08;
   g.scale(sc, sc * (st.aiming ? 1.16 : 1));
 
   // El resplandor: la misma forma agrandada y sumada con 'lighter'. Es la

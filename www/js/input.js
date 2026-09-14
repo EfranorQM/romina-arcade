@@ -4,6 +4,14 @@ import { view, VW, VH, clamp } from './core.js';
 
 export const pointers = new Map();   // pointerId -> {x,y,sx,sy,owner}
 
+// Cuantos toques han acabado por 'pointerup' (el dedo se levanto) y cuantos
+// por 'pointercancel' (el SISTEMA se quedo el toque: un gesto del borde, la
+// barra de navegacion, un aviso de MIUI, el rechazo de palma). Los juegos ven
+// las dos cosas como un 'up', y esta bien que sea asi; pero sin este contador
+// una Roma que "se para sola" no se distingue de un pulgar que se levanto de
+// verdad. Se lee por chrome://inspect en el telefono: __arcade.toques.
+export const toques = { up: 0, cancel: 0 };
+
 // Pasa un toque de la pantalla al lienzo, deshaciendo el escalado y el centrado
 // que fit() aplico al canvas.
 function toVirtual(e) {
@@ -39,6 +47,7 @@ export function initInput(canvas, onEvent) {
     if (!rec) return;
     const p = toVirtual(e);
     pointers.delete(e.pointerId);
+    if (e.type === 'pointercancel') toques.cancel++; else toques.up++;
     emit('up', e, p);
   };
   canvas.addEventListener('pointerup', up, { passive: false });

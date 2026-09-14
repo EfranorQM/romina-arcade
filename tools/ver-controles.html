@@ -73,12 +73,11 @@ function panel(titulo, casos, rect, escalas) {
 const base = {
   t: 3.7, padId: null, padDX: 0, firing: false, aiming: false,
   aim: -Math.PI / 2, latF: 0.06, fireKick: 0,
-  rastro: { x: new Float32Array(6), i: 0 },
   bomb: { ready: true, cd: 0 }, bombCd: 12,
 };
 const st = o => Object.assign({}, base, o);
 
-const IZQ = { x: 6, y: 212, w: 100, h: 56 };
+const IZQ = { x: 6, y: 190, w: 100, h: 56 };
 const DER = { x: 494, y: 176, w: 106, h: 78 };
 
 panel('MOVERSE — reposo, empujando a cada lado', [
