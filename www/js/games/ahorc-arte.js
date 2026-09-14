@@ -346,7 +346,9 @@ export function drawParticulas(g) {
 // Centradas en x=270 entre y 744 y 796. Ancho = clamp(floor(500/L) - 6, 30, 48),
 // L = caracteres incluidos espacios; un espacio es un hueco de medio ancho sin
 // raya. `letras[i]` = lo que se ve en la casilla i ('' = nada), `col[i]` su
-// color, `voltea[i]` = segundos que le quedan al volteo (0 = quieta).
+// color, `voltea[i]` = segundos que le quedan al volteo (0 = quieta). `y0` es
+// el borde superior del bloque (52 px de alto); por defecto el del panel, pero
+// al escribir la secreta en A DOS se dibujan en el cielo, donde hay sitio.
 export function geoCasillas(palabra) {
   const L = palabra.length;
   const w = Math.max(30, Math.min(48, Math.floor(500 / Math.max(L, 1)) - 6)), hueco = 6;
@@ -356,19 +358,19 @@ export function geoCasillas(palabra) {
   for (let i = 0; i < L; i++) { const cw = palabra[i] === ' ' ? w * 0.5 : w; xs.push(x); x += cw + hueco; }
   return { w, xs };
 }
-export function drawCasillas(g, palabra, letras, cols, voltea, cursor) {
+export function drawCasillas(g, palabra, letras, cols, voltea, cursor, y0 = 744) {
   const geo = geoCasillas(palabra);
   const w = geo.w, esc = w >= 40 ? 4 : 3;
   for (let i = 0; i < palabra.length; i++) {
     const x = geo.xs[i];
     if (palabra[i] === ' ') continue;
-    g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(x, 793, w, 3);
+    g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(x, y0 + 49, w, 3);
     const L = letras[i];
     if (!L) continue;
     let sx = 1;
     if (voltea && voltea[i] > 0) { const u = voltea[i] / 0.2; sx = Math.abs(Math.cos(u * Math.PI)); if (u > 0.5) continue; }
     g.save();
-    g.translate(x + w / 2, 770); g.scale(Math.max(0.05, sx), 1);
+    g.translate(x + w / 2, y0 + 26); g.scale(Math.max(0.05, sx), 1);
     text(g, L, Math.round(-measure(L, esc) / 2), Math.round(-7 * esc / 2), cols[i] || '#ffffff', esc);
     g.restore();
   }
@@ -376,6 +378,6 @@ export function drawCasillas(g, palabra, letras, cols, voltea, cursor) {
   if (cursor !== undefined && cursor >= 0) {
     const i = Math.min(cursor, palabra.length);
     const x = i < geo.xs.length ? geo.xs[i] : (geo.xs.length ? geo.xs[geo.xs.length - 1] + w + 6 : 270 - w / 2);
-    g.fillStyle = '#5cffd8'; g.fillRect(x + 2, 752, 3, 38);
+    g.fillStyle = '#5cffd8'; g.fillRect(x + 2, y0 + 8, 3, 38);
   }
 }

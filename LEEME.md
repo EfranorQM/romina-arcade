@@ -209,7 +209,9 @@ cara. El diseño completo, con cada número, está en `docs/design-ahorcado.md`.
 - **SOLA** puntúa para el récord: +5 por casilla, y por palabra
   (100 + 15·letras + 25·globos que quedan) × racha (x1, x2 desde la tercera,
   x3 desde la sexta); PERFECTA +100. Al ganar suben 3 globos nuevos (tope 6);
-  la partida termina en el primer chapuzón. Las palabras vienen de una lista
+  la partida termina en el primer chapuzón, con una pantalla de fin propia: el
+  muñeco sigue flotando con la rana encima, y sobre el panel el puntaje, el
+  récord (con confeti), cuántas palabras adivinó y OTRA VEZ / AL MENU. Las palabras vienen de una lista
   de 445 en 12 categorías, en español latino y sin acentos (CAMION), con la Ñ.
   La dificultad es por letras, no por largo: PIÑA es más difícil que ELEFANTE.
 - **A DOS** no toca el récord: uno escribe (el muñeco se tapa los ojos), elige

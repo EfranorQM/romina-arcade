@@ -42,6 +42,9 @@ const RANA_X = 110, RANA_Y = 646;
 const MSGS_SOLA = ['ESO ROMINA!', 'GENIA', 'LO SABIA', 'NADIE COMO TU', 'ASI SE HACE'];
 const MSGS_DUO = ['ADIVINADA!', 'GENIAL', 'ESA ES', 'BIEN AHI'];
 const PISTAS_DUO = ['ANIMAL', 'COMIDA', 'LUGAR', 'COSA', 'NOSOTROS', 'SIN PISTA'];
+// Lo que dice la pantalla de fin: carinoso si hay record, ligero si no.
+const MSGS_RECORD = ['ERES INCREIBLE ROMINA', 'NADIE COMO TU', 'TE AMO CAMPEONA', 'ESA ES MI CHICA', 'BRUTAL ROMINA'];
+const MSGS_FIN = ['LA PROXIMA ES TUYA', 'CASI CASI', 'LA RANA DICE GRACIAS', 'A SECARSE Y VOLVER', 'NI EL AGUA TE PARA'];
 
 export default {
   meta: {
@@ -271,9 +274,13 @@ export default {
   },
   botonesEscribir() {
     const ok = this.duo.secreto.replace(/ /g, '').length >= 3 && !this.duo.secreto.endsWith(' ');
+    // La palabra que se escribe va ARRIBA, en el cielo (drawEscribir): en el
+    // panel no cabian la raya y los botones sin que quedaran pegados (la raya
+    // terminaba en y=793 y el boton empezaba en 796). Asi los botones tienen
+    // 60 px de alto y 44 de aire hasta el teclado.
     this.bot.poner([
-      { id: 'espacio', x: 21, y: 796, w: 240, h: 44, txt: 'ESPACIO', esc: 2, col: '#8a7ab8', on: !this.duo.secreto.includes(' ') && this.duo.secreto.length > 0 && this.duo.secreto.length < 13 },
-      { id: 'listo', x: 279, y: 796, w: 240, h: 44, txt: 'LISTO', esc: 2, col: '#5cffd8', on: ok },
+      { id: 'espacio', x: 21, y: 746, w: 240, h: 60, txt: 'ESPACIO', esc: 3, col: '#8a7ab8', on: !this.duo.secreto.includes(' ') && this.duo.secreto.length > 0 && this.duo.secreto.length < 13 },
+      { id: 'listo', x: 279, y: 746, w: 240, h: 60, txt: 'LISTO', esc: 3, col: '#5cffd8', on: ok },
     ]);
   },
   teclaEscribir(L) {
@@ -362,7 +369,7 @@ export default {
     // caderas del muneco.
     const r = this.rana;
     r.boca += (clamp(1 - (F.WATER - F.lowestFoot(S)) / 80, 0, 1) - r.boca) * Math.min(1, dt * 6);
-    if (this.estado === 'caida' && this.flotando) r.boca += (0 - r.boca) * 0.2;
+    if ((this.estado === 'caida' && this.flotando) || this.estado === 'fin') r.boca += (0 - r.boca) * 0.2;
     r.mira = { x: (S.x[F.CR] + S.x[F.CL]) / 2, y: (S.y[F.CR] + S.y[F.CL]) / 2 };
     if (r.salto > 0) r.salto = Math.max(0, r.salto - 80 * dt);
     r.croaT -= dt;
@@ -431,7 +438,7 @@ export default {
       rana: { x: r.x, y: r.y },
       globoAlto: globoAlto || { x: S.x[F.NUDO], y: S.y[F.NUDO] - 80 },
       palabra: { x: 270, y: 770 },
-      estado: this.estado === 'caida' && this.flotando ? 'flotando' : this.estado,
+      estado: (this.estado === 'caida' && this.flotando) || this.estado === 'fin' ? 'flotando' : this.estado,
       tocada: this.tocada,
       eh: this.eh,
     }, dt);
@@ -449,6 +456,8 @@ export default {
       if (this.estT >= 2.2) this.siguiente();
     } else if (this.estado === 'caida') {
       this.updateCaida(dt, ctx);
+    } else if (this.estado === 'fin') {
+      this.updateFlotar(dt);
     } else if (this.estado === 'escribir') {
       if (this.cara.asoma > 0 && !this.asomando) { this.asomando = true; }
       if (this.cara.asoma <= 0) this.asomando = false;
@@ -496,16 +505,7 @@ export default {
       this.mensaje('', '#ff9b4d', 0);
     }
     if (this.flotando) {
-      const rn = this.rana;
-      if (rn.saltoT !== undefined && rn.saltoT < 0.4) {
-        rn.saltoT += dt;
-        const u = Math.min(1, rn.saltoT / 0.4);
-        const tx = (S.x[F.CR] + S.x[F.CL]) / 2, ty = (S.y[F.CR] + S.y[F.CL]) / 2 - 14;
-        rn.x = rn.bx + (tx - rn.bx) * u; rn.y = rn.by + (ty - rn.by) * u - Math.sin(u * Math.PI) * 60;
-        if (u >= 1) { rn.enBarriga = true; rn.saltoT = 1; }
-      } else if (rn.enBarriga) {
-        rn.x = (S.x[F.CR] + S.x[F.CL]) / 2; rn.y = (S.y[F.CR] + S.y[F.CL]) / 2 - 14; rn.mira = { x: 270, y: -400 };
-      }
+      this.updateFlotar(dt);
       // Se revelan las letras que faltaban, en naranja, una cada 80 ms.
       this.revelT -= dt;
       while (this.revelT <= 0 && this.revelI < this.palabra.length) {
@@ -520,8 +520,63 @@ export default {
   terminar(ctx) {
     if (this.terminado) return;
     this.terminado = true;
-    if (this.modo === 'sola') ctx.gameOver(Math.floor(this.puntaje));
+    if (this.modo === 'sola') this.irFin();
     else { this.terminado = false; this.irResultado(false); }
+  },
+
+  // ---------- La pantalla de fin de SOLA ----------
+  // No se usa la generica del motor (ctx.gameOver): esa es una pantalla negra
+  // con un numero, pensada para reintentar un juego de accion en un segundo. Aqui
+  // el fin ES la escena -- el muneco flotando con la rana en la barriga y la
+  // palabra revelada -- y encima va la tarjeta con el puntaje, el record y dos
+  // botones. El record se guarda igual (Save.submit) y suena lo mismo.
+  irFin() {
+    this.estado = 'fin'; this.estT = 0;
+    const pts = Math.floor(this.puntaje);
+    this.esRecord = Save.submit('ahorcado', pts);
+    this.tec.ocultar();
+    if (this.esRecord) { SFX.record(); this.msgFin = MSGS_RECORD[Math.floor(this.rnd() * MSGS_RECORD.length)]; this.confetiT = 1.2; }
+    else { SFX.gameover(); this.msgFin = MSGS_FIN[Math.floor(this.rnd() * MSGS_FIN.length)]; this.confetiT = 0; }
+    this.bot.poner([
+      { id: 'otravez', x: 50, y: 954, w: 440, h: 90, txt: 'OTRA VEZ', esc: 4, col: '#5cffd8' },
+      { id: 'menu', x: 50, y: 1064, w: 440, h: 90, txt: 'AL MENU', esc: 4, col: '#ff5c9d' },
+    ]);
+    playMusic(SONGS.ahorcado);
+  },
+
+  drawFin(g) {
+    g.fillStyle = 'rgba(13,6,32,0.92)'; g.fillRect(0, 800, 540, 400);
+    const pts = Math.floor(this.puntaje);
+    textCenter(g, String(pts), 270, 812, '#ffffff', 7);
+    if (this.esRecord) {
+      const f = Math.sin(this.t * 8) > 0 ? '#ffe14d' : '#ff5c9d';
+      textCenter(g, 'RECORD NUEVO!', 270, 874, f, 3);
+    } else {
+      textCenter(g, 'MEJOR ' + Save.best('ahorcado'), 270, 878, '#8a7ab8', 2);
+    }
+    const n = this.racha;
+    textCenter(g, n === 1 ? '1 PALABRA ADIVINADA' : n + ' PALABRAS ADIVINADAS', 270, 904, '#ffffff', 2);
+    textCenter(g, this.msgFin, 270, 926, '#5cffd8', 2);
+  },
+
+  // Mientras flota (en la caida y en la pantalla de fin): la rana sigue la
+  // barriga, alguna burbuja, y si hubo record cae confeti desde arriba.
+  updateFlotar(dt) {
+    const S = this.S, rn = this.rana;
+    if (rn.saltoT !== undefined && rn.saltoT < 0.4) {
+      rn.saltoT += dt;
+      const u = Math.min(1, rn.saltoT / 0.4);
+      const tx = (S.x[F.CR] + S.x[F.CL]) / 2, ty = (S.y[F.CR] + S.y[F.CL]) / 2 - 14;
+      rn.x = rn.bx + (tx - rn.bx) * u; rn.y = rn.by + (ty - rn.by) * u - Math.sin(u * Math.PI) * 60;
+      if (u >= 1) { rn.enBarriga = true; rn.saltoT = 1; }
+    } else if (rn.enBarriga) {
+      rn.x = (S.x[F.CR] + S.x[F.CL]) / 2; rn.y = (S.y[F.CR] + S.y[F.CL]) / 2 - 14; rn.mira = { x: 270, y: -400 };
+    }
+    if (this.rnd() < 0.02) A.particula(A.BURBUJA, S.x[F.CAB] + (this.rnd() - 0.5) * 40, F.WATER + 20 + this.rnd() * 20, 0, -60, 0.8, '#fff', 2 + this.rnd() * 3, 0, this.rnd() * 6);
+    if (this.confetiT > 0) {
+      this.confetiT -= dt;
+      for (let k = 0; k < 2; k++) A.particula(A.CONFETI, 40 + this.rnd() * 460, -10, (this.rnd() - 0.5) * 60, 80 + this.rnd() * 120, 3.5, A.COLORES[Math.floor(this.rnd() * 6)], 5, 140, this.rnd() * 6);
+    }
   },
 
   // ---------- Entrada ----------
@@ -555,7 +610,7 @@ export default {
       }
       if (ev.y >= PANEL_Y) return;
       // La escena: el muneco es un juguete. Un solo dedo a la vez.
-      if (this.dedoEscena >= 0 || st === 'caida' || st === 'resultado') return;
+      if (this.dedoEscena >= 0 || st === 'caida' || st === 'fin' || st === 'resultado') return;
       this.dedoEscena = ev.id; this.dedo = { x: ev.x, y: ev.y };
       this.dedoT = 0; this.dedoX0 = ev.x; this.dedoY0 = ev.y; this.dedoMov = 0; this.frota = 0; this.frotaEv = false; this.dedoT0 = performance.now();
       const i = F.nearest(S, ev.x, ev.y);
@@ -636,6 +691,7 @@ export default {
     else if (b.id.startsWith('pista:')) { this.duo.pista = b.id.slice(6); this.irPasar(); }
     else if (b.id === 'otra') { this.duo.escribe = this.duo.escribe === 1 ? 2 : 1; this.irEscribir(); }
     else if (b.id === 'menu') { this.ctx.toMenu(); }
+    else if (b.id === 'otravez') { this.empezarSola(); }
   },
 
   // ---------- Dibujo ----------
@@ -664,7 +720,7 @@ export default {
     g.fillStyle = '#0d0620'; g.fillRect(0, 724, 540, 1200 - 724);
 
     // ---------- Panel ----------
-    if (st === 'ronda' || st === 'ganada' || st === 'caida') this.drawPalabra(g);
+    if (st === 'ronda' || st === 'ganada' || st === 'caida' || st === 'fin') this.drawPalabra(g);
     else if (st === 'escribir') this.drawEscribir(g);
     else if (st === 'pista') textCenter(g, 'PISTA PARA QUIEN ADIVINA', 270, PISTA_Y + 20, '#5cffd8', 2);
     if (this.msgT > 0 && this.msg) textCenter(g, this.msg, 270, MSG_Y, this.msgCol, 3);
@@ -678,6 +734,7 @@ export default {
     // los botones OTRA y AL MENU, que se veian apagados como si no se pudieran
     // tocar (visto en captura).
     if (st === 'resultado') this.drawResultado(g);
+    if (st === 'fin') this.drawFin(g);
     this.tec.draw(g);
     this.bot.draw(g);
     if (st === 'pasar') this.drawPasar(g, a);
@@ -685,7 +742,7 @@ export default {
   },
 
   drawPalabra(g) {
-    const perdida = this.estado === 'caida' && this.flotando;
+    const perdida = (this.estado === 'caida' && this.flotando) || this.estado === 'fin';
     if (perdida) textCenter(g, 'SE MOJO... ERA:', 270, PISTA_Y, '#ff9b4d', 2);
     else if (this.cat) textCenter(g, this.cat, 270, PISTA_Y, '#5cffd8', 2);
     const letras = [], cols = [];
@@ -708,13 +765,18 @@ export default {
   },
 
   drawEscribir(g) {
-    textCenter(g, 'ESCRIBE LA PALABRA SECRETA', 270, PISTA_Y, '#5cffd8', 2);
+    // La secreta se escribe en el cielo, justo debajo del muneco que se tapa
+    // los ojos: ahi sobra sitio, y en el panel la raya quedaba pegada a los
+    // botones. Un velo suave detras para que la letra blanca se lea sobre el
+    // cielo claro del horizonte.
+    g.fillStyle = 'rgba(13,6,32,0.28)'; g.fillRect(40, 486, 460, 100);
+    textCenter(g, 'ESCRIBE LA PALABRA SECRETA', 270, 494, '#5cffd8', 2);
     const s = this.duo.secreto;
     const letras = [], cols = [];
     for (const c of s) { letras.push(c === ' ' ? '' : c); cols.push('#ffffff'); }
     const cursor = Math.floor(this.t * 2) % 2 === 0 ? s.length : -1;
     // Sin nada escrito se ensenan cuatro rayas vacias, para que se vea donde va.
-    A.drawCasillas(g, s.length ? s : 'XXXX', letras, cols, null, cursor);
+    A.drawCasillas(g, s.length ? s : 'XXXX', letras, cols, null, cursor, 520);
   },
 
   drawPasar(g, a) {
@@ -750,7 +812,7 @@ export default {
     if (this.estado === 'pasar') return;
     // En A DOS quien adivina puede ser Anderson: el rotulo es neutro.
     text(g, this.modo === 'duo' ? 'A DOS' : 'ROMINA', 16, 12, '#ffffff', 2);
-    if (this.modo === 'sola') {
+    if (this.modo === 'sola' && this.estado !== 'fin') {
       text(g, String(this.puntaje), 16, 34, '#ffffff', 2);
       if (this.racha > 0) {
         const mult = this.n <= 2 ? 1 : this.n <= 5 ? 2 : 3;
