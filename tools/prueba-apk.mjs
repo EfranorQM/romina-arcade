@@ -106,8 +106,34 @@ for (const f of ['js/update.js', 'sw.js', 'js/main.js', 'js/menu.js', 'js/games/
 ok(distintos.length === 0, `los ficheros del APK son identicos a www/ (${iguales}/5)` +
    (distintos.length ? ' -> distintos: ' + distintos.join(', ') : ''));
 
+// --- El arranque del actualizador ---
+// Comprueba el fallo que se le colo al telefono: la actualizacion se
+// descargaba pero NO se ejecutaba, por dos causas que solo se ven aqui dentro.
+// El worker se registraba DENTRO de main.js -- cuando los modulos ya se habian
+// pedido -- y guardaba la version en una variable que perdia cada vez que
+// Android lo mataba.
+console.log('\n== 5) EL ARRANQUE DEL ACTUALIZADOR ==');
+const idx = leeDelApk('assets/public/index.html').toString('utf8');
+const swTxt = leeDelApk('assets/public/sw.js').toString('utf8');
+// Sin comentarios: el propio sw.js DOCUMENTA el fallo viejo citando el codigo
+// malo, y buscarlo en crudo daba un falso positivo.
+const swCode = swTxt.replace(/\/\/.*/g, '');
+
+ok(!/<script[^>]+src=["']js\/main\.js/.test(idx),
+   'main.js NO se carga con un <script src> directo (llegaria antes que el worker)');
+ok(idx.includes('navigator.serviceWorker.register'),
+   'index.html registra el worker antes de cargar el juego');
+ok(idx.includes('MessageChannel'),
+   'index.html espera a que el worker confirme que version sirve');
+ok(idx.includes('rom.pend'),
+   'index.html estrena la version descargada al arrancar');
+ok(swCode.includes('caches.open(MARCA)') && swCode.includes('leeVersion'),
+   'el worker lee la version de la cache, que sobrevive a que lo maten');
+ok(!swCode.includes('let VERSION'),
+   'el worker NO guarda la version en una variable suelta');
+
 // --- La version ---
-console.log('\n== 5) VERSION ==');
+console.log('\n== 6) VERSION ==');
 const upd = leeDelApk('assets/public/js/update.js').toString('utf8');
 const ver = (upd.match(/VERSION_APK = '([\d.]+)'/) || [])[1];
 const origen = (upd.match(/ORIGEN = '([^']+)'/) || [])[1];
