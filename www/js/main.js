@@ -7,6 +7,7 @@ import { particles, updateParticles, drawParticles } from './gfx.js';
 import { GAMES } from './games.js';
 import { Menu } from './menu.js';
 import { drawBoton, tocaBoton, drawPantalla, onInputPantalla, olvidaToques } from './pausa.js';
+import { iniciaUpdate } from './update.js';
 
 let g = null;
 const rnd = makeRng(0x1234abcd);
@@ -553,6 +554,11 @@ function boot() {
   const el = document.getElementById('c');
   g = initCanvas(el);
   initAudio();
+  // Las actualizaciones: se arrancan aparte y sin await. Si fallara (sin
+  // Service Worker, sin permiso, lo que sea), el juego tiene que seguir
+  // cargando igual -- por eso el catch se traga todo y no hay nada que
+  // esperar aqui.
+  try { iniciaUpdate().catch(() => {}); } catch {}
   initInput(el, ev => {
     if (ev.type === 'down') unlockAudio();   // desbloqueo de audio en el primer toque
     // Con el aviso de girar puesto sobre un juego pausado se descartan los

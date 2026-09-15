@@ -12,6 +12,7 @@ import { text, textCenter, measure } from './font.js';
 import { SFX, toggleMute } from './audio.js';
 import { GAMES } from './games.js';
 import { cover, CW, CH } from './covers.js';
+import { Update, buscaActualizacion, versionActual } from './update.js';
 
 // ---------- Geometria de la estanteria ----------
 // El escenario tiene 270 de alto y hay que repartirlo sin que nada se corte:
@@ -190,6 +191,25 @@ export const Menu = {
     const snd = Save.muted ? 'SONIDO OFF' : 'SONIDO ON';
     text(g, snd, VW - measure(snd, 2) - 10, VH - 18,
          Save.muted ? '#5a4a88' : '#7a6aa8', 2);
+
+    // ---------- Version y boton de actualizar, abajo a la izquierda ----------
+    // Simetrico con el rotulo del sonido. Se toca la version para buscar una
+    // actualizacion; mientras busca o baja, el propio rotulo es el aviso.
+    const est = Update.estado;
+    let vtxt, vcol;
+    if (est === 'buscando')      { vtxt = 'BUSCANDO...';  vcol = '#c8b8ff'; }
+    else if (est === 'bajando')  { vtxt = 'BAJANDO ' + Math.round(Update.progreso * 100) + '%'; vcol = '#5cffd8'; }
+    else if (est === 'lista')    { vtxt = 'REINICIA LA APP'; vcol = '#5cffd8'; }
+    else if (est === 'aldia')    { vtxt = 'AL DIA  v' + versionActual(); vcol = '#7a6aa8'; }
+    else if (est === 'error')    { vtxt = Update.msg;      vcol = '#ff5c9d'; }
+    else                         { vtxt = 'v' + versionActual(); vcol = '#5a4a88'; }
+    text(g, vtxt, 10, VH - 18, vcol, 2);
+    this._vw = measure(vtxt, 2);
+    // Barra de progreso mientras baja
+    if (est === 'bajando') {
+      g.fillStyle = '#2a1a58'; g.fillRect(10, VH - 6, 90, 2);
+      g.fillStyle = '#5cffd8'; g.fillRect(10, VH - 6, Math.round(90 * Update.progreso), 2);
+    }
   },
 
   drawCover(g, i, s) {
@@ -233,6 +253,14 @@ export const Menu = {
     if (ev.type === 'down') {
       // El toque en el rotulo de sonido no arrastra.
       if (ev.y > VH - 26 && ev.x > VW - 96) { toggleMute(); SFX.blip(); return; }
+      // Ni el de la version: ahi se buscan actualizaciones. La zona de toque
+      // es mas ancha que el texto (minimo 70 px) para que se pueda dar con el
+      // pulgar aunque ponga solo 'v1.0.0'.
+      if (ev.y > VH - 26 && ev.x < Math.max(70, (this._vw || 0) + 16)) {
+        SFX.blip();
+        buscaActualizacion();
+        return;
+      }
       this.drag = { id: ev.id, x0: ev.x, last: ev.x, pos0: this.pos, moved: 0, t: 0, vx: 0 };
       this.vel = 0;
       this.dest = this.pos;      // mientras el dedo esta puesto, manda el dedo
