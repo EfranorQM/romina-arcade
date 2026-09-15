@@ -75,6 +75,9 @@ export default {
     this.ver = versionActual();
     this.colorVer = colorDeVersion(this.ver);
     this.pide = this.nuevoObjetivo();
+    // Sello de la compilacion: lo lee la prueba de punta a punta para
+    // distinguir 'se descargo' de 'se esta ejecutando'.
+    this.sello = 'SELLO-B';
   },
 
   // Un orden aleatorio de las caratulas, para que cada columna baje distinta.
