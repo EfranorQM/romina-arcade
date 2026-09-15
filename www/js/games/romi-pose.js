@@ -502,61 +502,129 @@ export function dibujaPose(p) {
 
 // La cara: ojos grandes con brillo, cejas, nariz de un pixel y boca.
 function dibujaCara(L, cx, cy, p) {
+  // LA CARA, REDIBUJADA PARA EL TAMAÑO AL QUE SE JUEGA.
+  //
+  // El sprite mide 128x180 y la cara 56 px de alto, pero JUGANDO el lienzo de
+  // 1200x540 se estira x1.95: la cara acaba en 109 px de pantalla, casi tres
+  // veces mas pequeña que en tools/ver-cara.html (que la pinta a x5.5). Por
+  // eso "en el HTML se ve genial y jugando se siente simple": es el mismo
+  // dibujo, visto 2.8 veces mas chico.
+  //
+  // Lo que se pierde al encoger NO es parejo. Los rasgos finos se disuelven y
+  // los de contraste sobreviven. Medido a x1.95: el chispazo del ojo caia a
+  // 2 px, la nariz a 3, el labio a 3 -- manchitas que no se leen como rasgos.
+  // Mientras tanto las CEJAS (3 px de grosor, oscuras) eran lo primero que se
+  // veia y aplastaban los ojos: cara de enfado permanente hasta en reposo.
+  // Eso era el "sin vida".
+  //
+  // Asi que se redibuja con la ley que siguen Soul Knight, Stardew y Dead
+  // Cells -- POCAS FORMAS, MUY CONTRASTADAS -- pero aprovechando que aqui hay
+  // 56 px de cara y no 7:
+  //   1. El OJO manda. Mas grande y mas abierto, con el blanco amplio y la
+  //      pupila bien negra: es lo unico que aguanta cualquier escala.
+  //   2. Las CEJAS obedecen. Finas, mas altas y en un tono que no compite con
+  //      la pupila. Expresan, no gritan.
+  //   3. El COLORETE en rosa fundido, no en marron recortado.
+  //   4. Fuera lo que mide 2-3 px y no aporta (el chispazo, la nariz de
+  //      elipse). La nariz pasa a ser una sombra suave de dos celdas.
   const oy = cy + 2;
+  const OJX = 8.5;              // separacion de los ojos respecto al centro
+
   if (p.ojos === 'cerrados') {
-    for (const dx of [-8, 8]) {
-      curva(L, cx + dx - 5, oy, cx + dx, oy + 3, cx + dx + 5, oy, 2.5, 2.5, P.out);
-    }
-  } else {
-    const alto = p.ojos === 'esfuerzo' ? 4 : p.ojos === 'dolor' ? 3 : 6;
-    for (const dx of [-8, 8]) {
-      // El ojo: blanco, iris cafe en dos tonos, pupila y DOS brillos.
-      // OJO CON EL SOMBREADO: probe una sombra de parpado sobre el blanco y
-      // una linea bajo el ojo, y a 46 px de cara se comian el ojo entero --
-      // quedaban dos manchas oscuras con cara de enfado permanente. A este
-      // tamaño el ojo se lee por CONTRASTE (blanco grande, pupila negra), no
-      // por bandas de sombra. Renderizado a x7 para verlo, no a ojo.
-      elipse(L, cx + dx, oy, 5, alto + 1, P.ojoB);
-      elipse(L, cx + dx + 1, oy + 1, 3.5, alto * 0.75, P.ojo2);
-      elipse(L, cx + dx + 1, oy + 1.5, 3, alto * 0.62, P.ojo);
-      elipse(L, cx + dx + 1, oy + 1, 1.8, alto * 0.42, P.out);
-      elipse(L, cx + dx - 1, oy - 1.5, 1.5, 1.5, P.ojoB);   // el brillo grande
-      elipse(L, cx + dx + 2.5, oy + 2, 0.9, 0.9, P.ojoB);   // el chispazo chico
-      // Pestañas arriba
-      linea(L, cx + dx - 5, oy - alto, cx + dx + 5, oy - alto - 1, 2.5, P.out);
-      // la pestaña que sobresale en el rabillo, como en las referencias
+    // Cerrados: un arco grueso y limpio, con la pestaña marcada abajo. A
+    // tamaño de juego una linea fina desaparece, asi que va en 3 px.
+    // OJO con el grosor: con 3 px y 5 de hondo los dos arcos se leian como una
+    // VENDA negra cruzando la cara. Un ojo cerrado es una linea curva fina, no
+    // una barra: 2.2 px y una curvatura corta bastan, y asi se distingue de
+    // las cejas, que estan justo encima.
+    for (const dx of [-OJX, OJX]) {
+      curva(L, cx + dx - 5.5, oy - 0.5, cx + dx, oy + 2.6, cx + dx + 5.5, oy - 0.5, 2.2, 2.2, P.out);
       const s = Math.sign(dx);
-      curva(L, cx + dx + s * 4, oy - alto, cx + dx + s * 6, oy - alto - 1.5,
-               cx + dx + s * 7.5, oy - alto - 2.5, 2, 1, P.out);
+      curva(L, cx + dx + s * 4.8, oy - 0.8, cx + dx + s * 6.6, oy - 2,
+               cx + dx + s * 8, oy - 3.2, 1.8, 0.9, P.out);
+    }
+  } else {
+    // El ojo abierto. `alto` lo achica en esfuerzo y dolor.
+    const alto = p.ojos === 'esfuerzo' ? 4.5 : p.ojos === 'dolor' ? 3.5 : 7;
+    for (const dx of [-OJX, OJX]) {
+      const s = Math.sign(dx);
+      // 1. El blanco, GRANDE: es el que hace que el ojo se lea de lejos.
+      elipse(L, cx + dx, oy, 5.6, alto + 1.2, P.ojoB);
+      // 2. El iris, en DOS tonos y no tres. El claro asoma solo por abajo,
+      //    que es donde entra la luz; arriba lo tapa el oscuro. Con tres
+      //    cafes, a x1.95 se promediaban en una mancha parda.
+      elipse(L, cx + dx + s * 0.5, oy + 1.5, 3.8, alto * 0.78, P.ojo2);
+      elipse(L, cx + dx + s * 0.5, oy + 0.4, 3.8, alto * 0.72, P.ojo);
+      // 3. La pupila, negra y gorda: el ancla de contraste de toda la cara.
+      elipse(L, cx + dx + s * 0.5, oy + 0.6, 2.2, alto * 0.5, P.out);
+      // 4. UN solo brillo, y grande. El chispazo de 0.9 px que habia se caia
+      //    a 2 px en pantalla y solo ensuciaba: fuera.
+      elipse(L, cx + dx - s * 1.4, oy - 1.8, 1.9, 1.9, P.ojoB);
+      // 5. La linea de pestañas, gruesa y solo ARRIBA: enmarca el ojo y lo
+      //    separa de la piel sin cerrarlo.
+      curva(L, cx + dx - 5.6, oy - alto + 0.5,
+               cx + dx, oy - alto - 2,
+               cx + dx + 5.6, oy - alto + 0.5, 2.6, 2.6, P.out);
+      // el rabillo que sobresale, que es lo que le da la mirada de princesa
+      curva(L, cx + dx + s * 5, oy - alto + 0.5, cx + dx + s * 7, oy - alto - 1,
+               cx + dx + s * 8.5, oy - alto - 2.5, 2.2, 1, P.out);
     }
   }
-  // Cejas
-  // CEJAS. Finas y separadas del ojo: con 2.5 px de grosor y pegadas encima
-  // se leian como un ceño de enfado permanente, hasta en la cara de reposo.
-  // Ahora son de 2 px, dos pixeles mas arriba, y en pel2 (no pel1) para que
-  // no compitan en negro con la pupila.
-  const cejaY = p.ojos === 'esfuerzo' || p.ojos === 'dolor' ? oy - 12 : oy - 13.5;
-  const cejaIncl = p.ojos === 'esfuerzo' ? 2 : p.ojos === 'dolor' ? -2 : 0;
-  curva(L, cx - 12, cejaY + cejaIncl, cx - 7.5, cejaY - 2.5, cx - 3.5, cejaY - 1 - cejaIncl, 2, 1.5, P.pel2);
-  curva(L, cx + 3.5, cejaY - 1 - cejaIncl, cx + 7.5, cejaY - 2.5, cx + 12, cejaY + cejaIncl, 1.5, 2, P.pel2);
-  // Nariz
-  elipse(L, cx + 1, oy + 8, 1.5, 1.5, P.piel1);
-  // Boca
-  if (p.boca === 'abierta') {
-    elipse(L, cx + 1, oy + 14, 4, 4.5, P.out);
-    elipse(L, cx + 1, oy + 15, 3, 3, P.boca);
-    elipse(L, cx + 1, oy + 16.5, 2, 1.2, P.ves4);   // la lengua, insinuada
-  } else if (p.boca === 'apretada') {
-    linea(L, cx - 4, oy + 14, cx + 6, oy + 14, 2.5, P.boca);
-    linea(L, cx - 3, oy + 15.5, cx + 5, oy + 15.5, 1.4, P.ves4);  // el labio
-  } else {
-    curva(L, cx - 4, oy + 13, cx + 1, oy + 16, cx + 6, oy + 13, 2.5, 2.5, P.boca);
-    // el labio de abajo, mas claro: es lo que hace que la sonrisa tenga boca
-    curva(L, cx - 3, oy + 15, cx + 1, oy + 17, cx + 5, oy + 15, 1.6, 1.6, P.ves4);
+
+  // LAS CEJAS. Eran el problema: 3 px de grosor en pel2 y pegadas al ojo, lo
+  // primero que se leia a tamaño de juego. Ahora van mas ALTAS (dejan ver el
+  // parpado), mas FINAS y en pel3, que es el pelo iluminado: se leen como
+  // cejas y no como dos barras de enfado. Siguen inclinandose para expresar.
+  // La ALTURA hay que medirla contra el ojo, no ponerla a ojo: en esfuerzo y
+  // dolor el ojo se achica (alto baja a 4.5 y 3.5) pero la ceja bajaba a la
+  // vez, asi que acababan tocandose y volvia el ceño. Ahora la ceja se ancla
+  // SIEMPRE a la misma distancia del borde de arriba del ojo, sea cual sea el
+  // gesto; lo que cambia es la INCLINACION, que es lo que de verdad expresa.
+  // Y OJO CON EL FLEQUILLO. Medido por el perfil vertical: con -6.5 la ceja
+  // caia en y34..40 y el flequillo estaba justo ahi, asi que la ceja quedaba
+  // DENTRO del pelo en vez de sobre la frente -- y en pel3, que es el pelo
+  // iluminado, se confundia con el. Ahora baja a la frente y va en su propio
+  // tono (cejaCol), oscuro pero no tan negro como la pupila.
+  const altoOjo = p.ojos === 'esfuerzo' ? 4.5 : p.ojos === 'dolor' ? 3.5 : 7;
+  const cejaY = oy - altoOjo - 4.5;
+  const cejaIncl = p.ojos === 'esfuerzo' ? 2.5 : p.ojos === 'dolor' ? -2.5 : 0;
+  for (const s of [-1, 1]) {
+    curva(L, cx + s * 12, cejaY + cejaIncl,
+             cx + s * 7.8, cejaY - 2,
+             cx + s * 3.8, cejaY - 0.5 - cejaIncl, 1.8, 1.3, P.ceja);
   }
-  // Colorete
-  elipse(L, cx - 13, oy + 7, 4, 2.5, P.piel1);
-  elipse(L, cx + 14, oy + 7, 4, 2.5, P.piel1);
+
+  // LA NARIZ. Era una elipse de 1.5 px en piel1 que a x1.95 quedaba en 3 px:
+  // un lunar. Ahora son dos celdas de sombra suave bajo el puente, que a
+  // tamaño de juego se leen como volumen y no como mancha.
+  elipse(L, cx + 1, oy + 7.5, 1.6, 1.2, P.piel1);
+
+  // LA BOCA. Mas ancha y con el labio en un tono que SEPARA de la piel.
+  if (p.boca === 'abierta') {
+    elipse(L, cx + 1, oy + 14, 4.2, 4.8, P.out);
+    elipse(L, cx + 1, oy + 14.6, 3.2, 3.4, P.boca);
+    elipse(L, cx + 1, oy + 16.2, 2, 1.3, P.rubor);    // la lengua
+  } else if (p.boca === 'apretada') {
+    // Apretada: una linea con una leve caida en los extremos, que es lo que
+    // lee como esfuerzo. Recta del todo parecia un tajo.
+    curva(L, cx - 5, oy + 13.4, cx + 1, oy + 14.6, cx + 6.5, oy + 13.4, 2.6, 2.6, P.boca);
+    curva(L, cx - 3.5, oy + 15.2, cx + 1, oy + 16, cx + 5, oy + 15.2, 1.6, 1.6, P.rubor);
+  } else {
+    // La sonrisa: mas ancha que antes y con las comisuras hacia arriba.
+    curva(L, cx - 5, oy + 12.8, cx + 1, oy + 16.4, cx + 6.5, oy + 12.8, 2.8, 2.8, P.boca);
+    curva(L, cx - 3.5, oy + 15, cx + 1, oy + 17.2, cx + 5, oy + 15, 1.8, 1.8, P.rubor);
+  }
+
+  // EL COLORETE, en ROSA y fundido. Antes iba en piel1 (un marron de sombra)
+  // y salian dos manchas marrones flotando en los pomulos -- a tamaño de
+  // juego parecian suciedad. Ahora va en rubor y en dos elipses concentricas,
+  // la de fuera mas tenue, para que se funda con la mejilla en vez de
+  // recortarse contra ella.
+  for (const s of [-1, 1]) {
+    const bx = cx + s * 13 + 0.5;
+    elipse(L, bx, oy + 6.5, 4.2, 2.8, P.rubor);
+    elipse(L, bx, oy + 6.5, 2.6, 1.6, P.piel1);
+  }
 }
 
 export function horneaPose(p) { return aCanvas(dibujaPose(p)); }

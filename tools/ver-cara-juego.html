@@ -1,0 +1,44 @@
+<!doctype html>
+<!-- LA CARA AL TAMAÑO EN QUE SE JUEGA. Este es el banco de pruebas que manda:
+     la columna x1.95 es como se ve de verdad en el Redmi, y es la unica en la
+     que se puede decidir si un rasgo aporta o estorba. La x5.5 esta al lado
+     solo para saber QUE se esta mirando.
+       node tools/ver.js tools/ver-cara-juego.html cara-juego.png 1500 900 -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#241c1a}canvas{display:block}</style>
+<canvas id="c" width="1500" height="900"></canvas>
+<script type="module">
+import { pose, dibujaPose } from '../www/js/games/romi-pose.js';
+import { aCanvas } from '../www/js/games/romi-art.js';
+import { text } from '../www/js/font.js';
+const g = document.getElementById('c').getContext('2d');
+g.imageSmoothingEnabled = false;
+g.fillStyle='#241c1a'; g.fillRect(0,0,1500,900);
+const SX=38, SY=12, SW=52, SH=68;
+const caras = [['normal','sonrisa'],['esfuerzo','apretada'],['cerrados','sonrisa'],['dolor','abierta']];
+
+text(g, 'COMO SE VE JUGANDO  (x1.95, el Redmi)', 24, 16, '#ff8fbc', 2);
+caras.forEach(([o,b],i)=>{
+  const cv = aCanvas(dibujaPose(pose({ojos:o, boca:b})));
+  g.save(); g.translate(24+i*150, 44); g.scale(1.95,1.95);
+  g.drawImage(cv, SX,SY,SW,SH, 0,0,SW,SH); g.restore();
+  text(g, o, 24+i*150, 190, '#8a97b8', 1);
+});
+
+// y sobre el fondo del juego, que es donde tiene que despegar
+text(g, 'SOBRE EL FONDO DEL CAMPO  (x1.95)', 24, 215, '#ff8fbc', 2);
+g.fillStyle = '#3a2a3a'; g.fillRect(24, 240, 600, 140);
+caras.forEach(([o,b],i)=>{
+  const cv = aCanvas(dibujaPose(pose({ojos:o, boca:b})));
+  g.save(); g.translate(34+i*150, 246); g.scale(1.95,1.95);
+  g.drawImage(cv, SX,SY,SW,SH, 0,0,SW,SH); g.restore();
+});
+
+text(g, 'AMPLIADA, solo para ver el pixel  (x5.5)', 24, 400, '#ffe066', 2);
+caras.forEach(([o,b],i)=>{
+  const cv = aCanvas(dibujaPose(pose({ojos:o, boca:b})));
+  g.save(); g.translate(24+i*360, 428); g.scale(5.5,5.5);
+  g.drawImage(cv, SX,SY,SW,SH, 0,0,SW,SH); g.restore();
+  text(g, o+' / '+b, 24+i*360, 812, '#ffe066', 2);
+});
+</script>

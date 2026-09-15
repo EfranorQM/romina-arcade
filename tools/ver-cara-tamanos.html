@@ -1,0 +1,54 @@
+<!doctype html>
+<!-- LA MISMA CARA A LOS DOS TAMAÑOS, para entender por que en el HTML se ve
+     detallada y jugando se ve simple. No es que el dibujo cambie: es que
+     jugando se ve casi TRES VECES mas pequeña.
+       node tools/ver.js tools/ver-cara-tamanos.html caras.png 1400 700 -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#241c1a}canvas{display:block}</style>
+<canvas id="c" width="1400" height="700"></canvas>
+<script type="module">
+import { pose, dibujaPose } from '../www/js/games/romi-pose.js';
+import { aCanvas } from '../www/js/games/romi-art.js';
+import { text } from '../www/js/font.js';
+const g = document.getElementById('c').getContext('2d');
+g.imageSmoothingEnabled = false;
+g.fillStyle='#241c1a'; g.fillRect(0,0,1400,700);
+const cv = aCanvas(dibujaPose(pose({})));
+// la cara: de la corona (y=14) a la barbilla (y=78), 52 de ancho
+const SX=38, SY=14, SW=52, SH=64;
+
+// 1. Como la ves en ver-cara.html: x5.5
+text(g, 'EN EL HTML  (x5.5)', 24, 20, '#ffe066', 2);
+g.save(); g.translate(24, 46); g.scale(5.5,5.5);
+g.drawImage(cv, SX,SY,SW,SH, 0,0,SW,SH); g.restore();
+
+// 2. Como se ve JUGANDO en el Redmi: x1.95
+text(g, 'JUGANDO, EN EL TELEFONO  (x1.95)', 360, 20, '#ff8fbc', 2);
+g.save(); g.translate(360, 46); g.scale(1.95,1.95);
+g.drawImage(cv, SX,SY,SW,SH, 0,0,SW,SH); g.restore();
+text(g, 'la misma cara:', 360, 200, '#8a97b8', 2);
+text(g, '2.8 veces mas', 360, 220, '#8a97b8', 2);
+text(g, 'pequena', 360, 240, '#8a97b8', 2);
+
+// 3. Y al tamaño del PNG de prueba (x0.97), que es donde mas simple se ve
+text(g, 'EN LA VENTANA DE PRUEBA  (x0.97)', 360, 300, '#8a97b8', 2);
+g.save(); g.translate(360, 326); g.scale(0.97,0.97);
+g.drawImage(cv, SX,SY,SW,SH, 0,0,SW,SH); g.restore();
+
+// 4. Los rasgos que se pierden, senalados sobre la version grande
+text(g, 'LO QUE SE BORRA AL ENCOGER:', 640, 300, '#ffe066', 2);
+const notas = [
+  'el chispazo del ojo:  0.9 celdas  ->  2 px',
+  'la nariz:             1.5 celdas  ->  3 px',
+  'el labio de abajo:    1.6 grosor  ->  3 px',
+  'la ceja:              1.75 grosor ->  3 px',
+  '',
+  'A ese tamano un rasgo de 2-3 px no se',
+  'lee como rasgo: se lee como ruido, o',
+  'desaparece contra la piel de al lado.',
+  '',
+  'Lo que SI sobrevive es el CONTRASTE:',
+  'el ojo entero (10x14) y la pupila (4x5).',
+];
+notas.forEach((s,i)=> text(g, s, 640, 330+i*24, i>=9?'#7fe8ff':'#d9c8d4', 2));
+</script>
