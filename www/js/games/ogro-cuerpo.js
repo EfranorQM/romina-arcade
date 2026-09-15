@@ -1,0 +1,300 @@
+// EL OGRO - su fisica y su maquina de estados. SIN DOM, como caba-cuerpo.js:
+// lo mueve exactamente igual el juego que el arnes de Node
+// (tools/prueba-ogro.mjs). Esa es la regla del proyecto y aqui se cumple.
+//
+// EL PRINCIPIO DE DISEÑO: cada ataque tiene UNA respuesta correcta distinta.
+// Un jefe donde todo se resuelve rodando es un jefe plano por muchos ataques
+// que tenga. Aqui:
+//   GARROTE   se para con el escudo (es el unico parryable)
+//   PISOTON   se salta (manda una onda por el suelo)
+//   BARRIDO   se rueda (pasa a la altura del pecho, el salto no salva)
+//   EMBESTIDA se esquiva a un lado, y si falla choca contra la pared
+// Si algun dia dos ataques comparten respuesta, el jefe pierde gracia.
+
+import { SUELO, AX0, AX1 } from './caba-cuerpo.js';
+
+// --- Medidas ---
+// EL RADIO DE COLISION NO ES EL TAMAÑO VISUAL. Es la leccion que ya costo
+// caro en SYMBIOTE (BODY_R no podia pasar de 12 o la criatura quedaba
+// encajonada). Aqui es peor si se hace mal: con un radio de 62 la separacion
+// minima entre centros seria 88 px, y los tajos de ella alcanzan 74 / 78 / 92.
+// O sea que el reves y el derecho NO LLEGARIAN NUNCA y ella tendria un combo
+// de tres donde los dos primeros golpes no tocan al jefe jamas.
+// Con 40 el empuje deja los centros a 66 px y los tres tajos alcanzan.
+export const CUERPO_R = 40;        // el radio SOLIDO, para empujar y para el daño
+export const ALTO = 232;           // lo que mide de alto (visual)
+export const CABEZA_Y = 178;       // altura de la mandibula: lo que se alcanza saltando
+
+export const HP0 = 24;             // su vida
+export const VEL = 120;            // anda a la mitad que ella (240)
+export const VEL_FURIA = 165;
+
+// --- Los ataques, en la MISMA forma que TAJOS[] de ella ---
+// [ciclo, activa0, activa1, avance, daño, alcance]
+// activa0 es TAMBIEN el final de la carga: igual que en ella, no hace falta
+// un campo aparte. Que los dos personajes usen el mismo convenio es lo que
+// permite leer el juego sin traducir.
+export const GARROTE = 0, PISOTON = 1, BARRIDO = 2, EMBESTIDA = 3;
+export const ATAQUES = [
+  // GARROTE: el basico. Carga larga y legible (0.42) para que se pueda parar.
+  // El parry util de ella va de 0.117 a 0.267 s desde que pulsa, asi que con
+  // 0.42 de carga le sobran ~0.15 s para elegir cuando pulsar. Leible sin
+  // ser gratis.
+  [0.95, 0.42, 0.52, 20, 1, 150],
+  // PISOTON: el lento a proposito. 0.62 de carga -- se ve venir de lejos --
+  // y de el nace la ONDA que viaja por el suelo. La recuperacion de 0.73 s
+  // es el hueco de castigo mas grande que da el jefe.
+  [1.45, 0.62, 0.72, 0, 2, 120],
+  // BARRIDO: pasa a la altura del pecho, POR ENCIMA de la rodada... no: pasa
+  // BAJO y hay que rodarlo. Su parte activa (0.16) no pasa de los 220 ms
+  // utiles de la ventana invulnerable de la rodada (ROLL_INV0 0.06 a
+  // ROLL_INV1 0.28), asi que rodar SIEMPRE tiene solucion si se clava.
+  [0.88, 0.40, 0.56, 34, 1, 190],
+  // EMBESTIDA: cruza la arena. Si ella se aparta, el ogro choca con la pared
+  // y queda abierto 1.25 s: el hueco mas grande del jefe.
+  [1.30, 0.50, 1.00, 0, 2, 70],
+];
+
+// --- La ONDA que manda el pisoton ---
+// 620 px/s: a 10.3 px por frame se VE viajar (a menos de 6 px/frame parece
+// teletransportarse). Muere al llegar a la pared, no rebota.
+export const ONDA_V = 620, ONDA_ALTO = 34, ONDA_ALCANCE = 620, ONDA_DANO = 1;
+// Los primeros 60 px no hacen daño: si no, el pisoton y su propia onda
+// pegarian en el mismo evento y seria imposible de leer.
+export const ONDA_CIEGA = 60;
+
+// Estados
+export const ESPERA = 0, ANDA = 1, ATACA = 2, ABIERTO = 3, DOLOR = 4, RUGE = 5, MUERTO = 6;
+
+// Las fases: al cruzar cada umbral RUGE (invulnerable 1.2 s) y cambia el paso.
+export const FASE2 = 0.66, FASE3 = 0.33;
+export const RUGE_T = 1.20;
+
+export function makeOgro(x) {
+  return {
+    x, y: SUELO, vx: 0, dir: -1,
+    st: ESPERA, t: 0, animT: 0,
+    hp: HP0, fase: 1, invul: 0,
+    atk: -1, atkT: 0, golpeo: 0,
+    abiertoT: 0, esperaT: 0.6,
+    ondas: [],
+    ultimo: -1, repes: 0,      // memoria, para no repetir el mismo ataque
+    vivo: true,
+  };
+}
+
+// El garrote esta haciendo daño en este instante.
+export function garroteActivo(O) {
+  if (O.st !== ATACA || O.atk < 0) return false;
+  const a = ATAQUES[O.atk];
+  return O.atkT >= a[1] && O.atkT <= a[2];
+}
+
+// Donde golpea: el alcance sale de la tabla, medido desde el BORDE del cuerpo.
+export function golpeOgro(O) {
+  const a = ATAQUES[O.atk];
+  return { x: O.x + O.dir * (CUERPO_R + a[5] * 0.5), r: a[5] * 0.5, dano: a[4] };
+}
+
+// El ogro esta ABIERTO: es la ventana en la que ella puede castigar.
+export function ogroAbierto(O) { return O.st === ABIERTO; }
+
+// Empuja a ella fuera del cuerpo solido del ogro. Sin esto, ella se mete
+// dentro de la barriga y todas las medidas de distancia dejan de significar
+// nada (se puede pegar desde dentro).
+export function empujaCuerpo(O, K, radioK = 26) {
+  const min = CUERPO_R + radioK;
+  const d = K.x - O.x;
+  const ad = Math.abs(d);
+  if (ad >= min) return;
+  const s = (d < 0 || (d === 0 && O.dir > 0)) ? -1 : 1;
+  K.x = O.x + s * min;
+  if (K.x < AX0) K.x = AX0;
+  if (K.x > AX1) K.x = AX1;
+}
+
+// ¿La espada de ella toca el cuerpo del ogro?
+//
+// LA ESPADA ES UN SEGMENTO, no un punto. Va del puño de ella hasta la punta,
+// y toca si ese TRAMO cruza el circulo del cuerpo -- no si la punta cae justo
+// encima. Probarlo solo con la punta da un fallo de los que no se ven hasta
+// que se juega: con ella pegada al ogro (66 px) y un alcance de 74, la punta
+// sale por DETRAS del ogro a 140 px del centro y el golpe contaria como
+// fallado, cuando en realidad la hoja le ha atravesado entero.
+export function espadaTocaOgro(O, puntaX, puñoX) {
+  const R = CUERPO_R + 8;
+  if (puñoX === undefined) return Math.abs(puntaX - O.x) <= R;
+  const a = Math.min(puñoX, puntaX), b = Math.max(puñoX, puntaX);
+  // el tramo [a,b] cruza el intervalo [O.x-R, O.x+R]
+  return b >= O.x - R && a <= O.x + R;
+}
+
+// Un paso del ogro. `rnd` se inyecta para que el arnes pueda fijar la semilla:
+// un jefe que llama a Math.random() por dentro no se puede probar.
+export function stepOgro(O, K, dt, rnd) {
+  const R = rnd || Math.random;
+  if (!O.vivo && O.st !== MUERTO) return;
+  O.t += dt; O.animT += dt;
+  if (O.invul > 0) O.invul -= dt;
+
+  // Las ondas viajan siempre, aunque el ogro este haciendo otra cosa.
+  for (const w of O.ondas) {
+    if (!w.vivo) continue;
+    w.x += w.dir * ONDA_V * dt;
+    w.rec += ONDA_V * dt;
+    if (w.rec > ONDA_ALCANCE || w.x < AX0 || w.x > AX1) w.vivo = false;
+  }
+
+  if (O.st === MUERTO) return;
+
+  // RUGE: al cambiar de fase se planta y ruge, invulnerable. Es lo que hace
+  // que el cambio de fase se LEA en vez de pasar en silencio.
+  if (O.st === RUGE) {
+    O.vx = 0;
+    if (O.t >= RUGE_T) { O.st = ESPERA; O.t = 0; O.esperaT = 0.3; }
+    return;
+  }
+
+  if (O.st === DOLOR) {
+    O.vx *= 0.82;
+    O.x += O.vx * dt;
+    if (O.t >= 0.24) { O.st = ESPERA; O.t = 0; O.esperaT = 0.18; }
+    return;
+  }
+
+  // ABIERTO: la ventana de castigo. No hace nada, y se deja pegar.
+  if (O.st === ABIERTO) {
+    O.vx *= 0.8; O.x += O.vx * dt;
+    if (O.t >= O.abiertoT) { O.st = ESPERA; O.t = 0; O.esperaT = 0.25; }
+    return;
+  }
+
+  if (O.st === ATACA) { pasoAtaque(O, K, dt); return; }
+
+  // ESPERA / ANDA: decide.
+  const d = K.x - O.x;
+  const ad = Math.abs(d);
+  O.dir = d < 0 ? -1 : 1;
+
+  if (O.esperaT > 0) { O.esperaT -= dt; O.vx = 0; O.st = ESPERA; return; }
+
+  const elegido = elige(O, ad, R);
+  if (elegido >= 0) {
+    O.st = ATACA; O.atk = elegido; O.atkT = 0; O.golpeo = 0; O.animT = 0;
+    O.repes = (elegido === O.ultimo) ? O.repes + 1 : 0;
+    O.ultimo = elegido;
+    return;
+  }
+
+  // Si no ataca, se acerca.
+  O.st = ANDA;
+  const v = (O.fase >= 3 ? VEL_FURIA : VEL);
+  O.vx = O.dir * v;
+  O.x += O.vx * dt;
+  if (O.x < AX0 + CUERPO_R) O.x = AX0 + CUERPO_R;
+  if (O.x > AX1 - CUERPO_R) O.x = AX1 - CUERPO_R;
+}
+
+// LA DECISION. Por distancia, con memoria: repetir el mismo ataque se
+// penaliza, porque un jefe predecible se aprende en dos intentos y deja de
+// dar miedo.
+function elige(O, ad, rnd) {
+  const cerca = ad < CUERPO_R + 170;
+  const medio = ad >= CUERPO_R + 120 && ad < CUERPO_R + 330;
+  const lejos = ad >= CUERPO_R + 300;
+
+  const pesos = [0, 0, 0, 0];
+  if (cerca) { pesos[GARROTE] = 5; pesos[BARRIDO] = 4; pesos[PISOTON] = 2; }
+  if (medio) { pesos[PISOTON] = 5; pesos[BARRIDO] = 2; pesos[EMBESTIDA] = 3; }
+  if (lejos) { pesos[PISOTON] = 4; pesos[EMBESTIDA] = 5; }
+  // En furia pisa mas: sube la presion sin tocar los tiempos, que son los que
+  // hacen justo o injusto al jefe.
+  if (O.fase >= 3) pesos[PISOTON] += 2;
+  // El castigo a la repeticion.
+  if (O.repes >= 1 && O.ultimo >= 0) pesos[O.ultimo] = Math.max(0, pesos[O.ultimo] - 3);
+
+  const tot = pesos.reduce(function (a, b) { return a + b; }, 0);
+  if (tot <= 0) return -1;
+  let r = rnd() * tot;
+  for (let i = 0; i < 4; i++) { r -= pesos[i]; if (r <= 0) return i; }
+  return -1;
+}
+
+function pasoAtaque(O, K, dt) {
+  const a = ATAQUES[O.atk];
+  const ciclo = a[0], a0 = a[1], a1 = a[2], avance = a[3];
+  O.atkT += dt;
+
+  // El avance del cuerpo durante la parte activa: es lo que hace que un
+  // garrotazo se sienta lanzado y no plantado.
+  if (O.atkT >= a0 && O.atkT <= a1 && avance > 0) {
+    O.x += O.dir * avance * dt / Math.max(0.001, a1 - a0);
+  }
+
+  // La EMBESTIDA corre de verdad mientras dura la parte activa.
+  if (O.atk === EMBESTIDA && O.atkT >= a0 && O.atkT <= a1) {
+    O.x += O.dir * 430 * dt;
+    if (O.x <= AX0 + CUERPO_R || O.x >= AX1 - CUERPO_R) {
+      // CHOCA CONTRA LA PARED y queda aturdido: es la recompensa por
+      // esquivarla bien, y lo que convierte la embestida en una oportunidad.
+      O.x = Math.max(AX0 + CUERPO_R, Math.min(AX1 - CUERPO_R, O.x));
+      O.st = ABIERTO; O.t = 0; O.abiertoT = 1.25; O.vx = 0; O.atk = -1;
+      return;
+    }
+  }
+
+  // El PISOTON suelta sus dos ondas en el instante del impacto.
+  if (O.atk === PISOTON && !O.golpeo && O.atkT >= a0) {
+    O.golpeo = 1;
+    for (const s of [-1, 1]) O.ondas.push({ x: O.x + s * 20, dir: s, rec: 0, vivo: true });
+  }
+
+  if (O.atkT >= ciclo) {
+    // Al acabar queda ABIERTO. La duracion sale del combo REAL de ella:
+    // 0.26 + 0.30 = 0.56 s los dos primeros, o 0.46 el giro solo.
+    const cual = O.atk;
+    O.st = ABIERTO; O.t = 0;
+    // El barrido estaba en 0.42 y el giro de ella dura 0.46: no cabia NI UN
+    // tajo, o sea que acertar la esquiva no tenia premio. A 0.50 cabe el
+    // giro (el golpe fuerte), que es el premio justo para el ataque que mas
+    // precision pide.
+    O.abiertoT = cual === PISOTON ? 0.73 : cual === BARRIDO ? 0.50 : 0.55;
+    O.atk = -1; O.vx = 0;
+  }
+}
+
+// Le pegan. Devuelve true si le entra.
+export function hiereOgro(O, dano, dirGolpe) {
+  if (!O.vivo || O.invul > 0 || O.st === MUERTO) return false;
+  O.hp -= dano;
+  if (O.hp <= 0) { O.hp = 0; O.vivo = false; O.st = MUERTO; O.t = 0; return true; }
+
+  // El cambio de FASE: ruge, se hace invulnerable un momento y sigue.
+  const fr = O.hp / HP0;
+  const faseNueva = fr <= FASE3 ? 3 : fr <= FASE2 ? 2 : 1;
+  if (faseNueva > O.fase) {
+    O.fase = faseNueva;
+    O.st = RUGE; O.t = 0; O.invul = RUGE_T; O.atk = -1; O.vx = 0;
+    return true;
+  }
+
+  // Si estaba ABIERTO, encajar le duele de verdad (retrocede). Si esta
+  // atacando, AGUANTA: si no, ella podria interrumpir cualquier ataque a
+  // botonazos y el jefe no existiria.
+  if (O.st === ABIERTO || O.st === DOLOR) {
+    O.st = DOLOR; O.t = 0; O.vx = dirGolpe * 150;
+  }
+  return true;
+}
+
+// Una onda esta tocando a ella: hay que tener los pies bajos.
+export function ondaGolpea(O, K) {
+  for (const w of O.ondas) {
+    if (!w.vivo || w.rec < ONDA_CIEGA) continue;
+    if (Math.abs(K.x - w.x) > 30) continue;
+    // Solo pega si tiene los pies bajos: por eso se salta.
+    if (SUELO - K.y > ONDA_ALTO) continue;
+    return w;
+  }
+  return null;
+}
