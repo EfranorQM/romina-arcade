@@ -1,4 +1,10 @@
-// Las FOTOS del telefono, para el juego GALERIA.
+// Las FOTOS del telefono.
+//
+// AHORA MISMO NO LO USA NADIE, y es a proposito. Se escribio para el juego
+// GALERIA, que existio solo para probar que las actualizaciones llegaban al
+// telefono; una vez probado, el juego se quito. El puente nativo y su permiso
+// se quedaron en el APK para que un juego futuro que quiera fotos pueda
+// llegar POR EL BOTON, sin reinstalar nada.
 //
 // Habla con el puente nativo AndroidFotos (android-src/MainActivity.java), que
 // devuelve las N fotos mas recientes como miniaturas en base64.

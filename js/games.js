@@ -8,5 +8,4 @@ import survival from './games/survival.js';
 import ahorcado from './games/ahorcado.js';
 import masa from './games/masa.js';
 import caballero from './games/caballero.js';
-import galeria from './games/galeria.js';
-export const GAMES = [skyline, neonfist, lastwave, symbiote, furia, survival, ahorcado, masa, caballero, galeria];
+export const GAMES = [skyline, neonfist, lastwave, symbiote, furia, survival, ahorcado, masa, caballero];
