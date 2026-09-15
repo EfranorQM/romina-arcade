@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- LA GUARDIA, ampliada. ¿Se lee como alguien listo para pelear?
+       node tools/ver.js tools/ver-guardia.html guardia.png 1400 700 -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#241c1a}canvas{display:block}</style>
+<canvas id="c" width="1400" height="700"></canvas>
+<script type="module">
+import { POSES } from '../www/js/games/romi-anim.js';
+import { dibujaPose } from '../www/js/games/romi-pose.js';
+import { aCanvas } from '../www/js/games/romi-art.js';
+import { text } from '../www/js/font.js';
+const g = document.getElementById('c').getContext('2d');
+g.imageSmoothingEnabled = false;
+g.fillStyle='#241c1a'; g.fillRect(0,0,1400,700);
+text(g, 'LOS SEIS FOTOGRAMAS DE LA GUARDIA (x2.6)', 20, 14, '#ffe066', 2);
+POSES.idle.forEach((p,i)=>{
+  const cv = aCanvas(dibujaPose(p));
+  g.save(); g.translate(20+i*225, 40); g.scale(2.6,2.6);
+  g.drawImage(cv, 0,0); g.restore();
+  text(g, 'f'+i, 20+i*225, 520, '#ff8fbc', 2);
+});
+text(g, 'A TAMANO DE JUEGO, sobre el campo', 20, 552, '#ff8fbc', 2);
+g.fillStyle='#3a2a3a'; g.fillRect(20, 576, 1100, 120);
+POSES.idle.forEach((p,i)=>{
+  const cv = aCanvas(dibujaPose(p));
+  g.save(); g.translate(30+i*180, 500); g.scale(1.95,1.95);
+  g.drawImage(cv, 0,60,192,120, 0,0,192,120); g.restore();
+});
+</script>
