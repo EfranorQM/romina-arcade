@@ -16,9 +16,22 @@
 //   Con el cuerpo a 232 px: de pie le pegas al vientre (172 < 232) y para
 //   darle en la CARA (la mandibula esta a 178) hay que saltar. Eso es
 //   exactamente lo que pide un jefe grande: que la altura sea una decision.
-export const W = 300, H = 268;   // el lienzo de un fotograma del ogro
-export const EJE = 128;          // donde cae el eje del cuerpo dentro del lienzo
-export const PIES = 260;         // la fila donde apoya los pies
+// EL LIENZO SE DIMENSIONA POR EL GARROTE, NO POR EL CUERPO. Es la misma
+// leccion que ya costo caro con la espada de ella: el cuerpo del ogro mide
+// 232x150, pero con el garrote (150 px desde el puño) bajado al costado la
+// maza llega a x=373 e y=332 -- o sea que en un lienzo de 300x268 el arma se
+// recortaba entera y solo se veia el mango. Con 420x360 cabe en todos los
+// angulos, incluido el garrote en alto de la carga.
+// Las cuentas, desde el EJE del cuerpo:
+//   a la derecha hacen falta 311 px = hombro (45) + brazo (82) + garrote (150)
+//     + el radio de la maza (34). Es el garrote EXTENDIDO hacia el enemigo.
+//   a la izquierda solo 82: el hombro y el brazo de atras.
+//   de alto, el garrote en alto sube 274 px sobre la cadera, que esta a 74
+//     del suelo: 348 en total.
+// Por eso el EJE no va centrado: va a 100, pegado al lado de atras.
+export const W = 430, H = 372;   // el lienzo de un fotograma del ogro
+export const EJE = 100;          // donde cae el eje del cuerpo dentro del lienzo
+export const PIES = 350;         // la fila donde apoya los pies
 export const ALTO_CUERPO = 232;  // de la coronilla al suelo
 export const ALTO_MANDIBULA = 178;
 

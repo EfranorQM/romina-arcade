@@ -1,0 +1,68 @@
+<!doctype html>
+<!-- EL OGRO: su silueta, al lado de ella y al tamaño al que se juega.
+     La prueba que manda es la de x1.95 sobre el campo: si ahi no se lee como
+     un ogro, no lo arregla ningun detalle.
+       node tools/ver.js tools/ver-ogro.html ogro.png 1500 900 -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#241c1a}canvas{display:block}</style>
+<canvas id="c" width="1500" height="900"></canvas>
+<script type="module">
+import { pose, dibujaPose, horneaPose } from '../www/js/games/ogro-pose.js';
+import { POSES } from '../www/js/games/romi-anim.js';
+import { horneaPose as horneaRomi } from '../www/js/games/romi-pose.js';
+import { text } from '../www/js/font.js';
+const g = document.getElementById('c').getContext('2d');
+g.imageSmoothingEnabled = false;
+g.fillStyle='#241c1a'; g.fillRect(0,0,1500,900);
+
+// 1. A TAMAÑO DE JUEGO, junto a ella, sobre el suelo del campo
+text(g, 'A TAMANO DE JUEGO (x1) sobre el campo -- el ogro y ella', 14, 12, '#ffe066', 2);
+g.fillStyle='#2b1f2e'; g.fillRect(0, 36, 1500, 296);
+g.fillStyle='#382c27'; g.fillRect(0, 300, 1500, 36);
+g.fillStyle='#241c1a'; g.fillRect(0, 330, 1500, 6);
+const og = horneaPose(pose({}));
+const ro = horneaRomi(POSES.idle[0]);
+// pies del ogro en 260 del lienzo -> se apoya en y=296
+g.drawImage(og, 40, 300 - 350);
+g.drawImage(ro, 500, 300 - 176);
+text(g, 'ogro 232 px', 150, 318, '#b0d46c', 2);
+text(g, 'ella 167 px', 540, 318, '#ef4a84', 2);
+
+// 2. las poses clave
+text(g, 'LAS POSES (x0.9)', 14, 352, '#ffe066', 2);
+const CLAVE = [
+  ['reposo', {}],
+  ['carga garrote', {garAng:-1.5, codD:[36,-14], manD:[44,-30], incl:-0.18, ojos:'furia'}],
+  ['garrotazo', {garAng:0.9, codD:[54,34], manD:[70,58], incl:0.3, estela:[-1.5,0.9], ojos:'furia'}],
+  ['pisoton', {garAng:1.6, cadY:260-58, flexion:1, incl:0.24, codD:[40,44], manD:[48,78], bocaAb:0.5}],
+  ['ruge', {bocaAb:1, ojos:'furia', incl:-0.2, codD:[50,-6], manD:[62,-18], codI:[-50,-6], manI:[-62,-18], garAng:-1.35}],
+  ['dolor', {ojos:'dolor', incl:-0.3, cabY:-24, garAng:1.9, sangra:1}],
+];
+let x = 14;
+for (const [nom, cam] of CLAVE) {
+  const cv = horneaPose(pose(cam));
+  g.save(); g.translate(x, 380); g.scale(0.62,0.62);
+  g.drawImage(cv, 0, 0); g.restore();
+  text(g, nom, x, 632, '#b0d46c', 2);
+  x += 248;
+}
+
+// 3. la silueta pura: ¿se reconoce a contraluz?
+text(g, 'LA SILUETA SOLA (si aqui no se lee como un ogro, no funciona)', 14, 664, '#ff8fbc', 2);
+x = 14;
+for (const [nom, cam] of CLAVE.slice(0,5)) {
+  const L = dibujaPose(pose(cam));
+  const cv = document.createElement('canvas');
+  cv.width = 430; cv.height = 372;
+  const c2 = cv.getContext('2d');
+  const img = c2.createImageData(cv.width, cv.height);
+  for (let i = 0; i < L.d.length; i++) {
+    if (!L.d[i]) continue;
+    img.data[i*4] = 176; img.data[i*4+1] = 212; img.data[i*4+2] = 108; img.data[i*4+3] = 255;
+  }
+  c2.putImageData(img, 0, 0);
+  g.save(); g.translate(x, 690); g.scale(0.55,0.55);
+  g.drawImage(cv, 0, 0); g.restore();
+  x += 248;
+}
+</script>
