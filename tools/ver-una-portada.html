@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>body{margin:0;background:#141018}canvas{display:block}</style>
+<canvas id="c" width="640" height="420"></canvas>
+<script type="module">
+import { cover, CW, CH } from '../www/js/covers.js';
+import { GAMES } from '../www/js/games.js';
+import { text } from '../www/js/font.js';
+const g=document.getElementById('c').getContext('2d');
+g.imageSmoothingEnabled=false;
+g.fillStyle='#141018'; g.fillRect(0,0,640,420);
+const G=GAMES.find(x=>x.meta.id==='galeria');
+const cv=cover(G.meta);
+// a x1, x2 y x3
+let x=20;
+for (const s of [1,2,3]) {
+  g.drawImage(cv, x, 40, CW*s, CH*s);
+  text(g,'x'+s, x, 16, '#ffe066', 2);
+  x += CW*s + 20;
+}
+</script>
