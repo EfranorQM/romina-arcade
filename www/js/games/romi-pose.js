@@ -20,7 +20,13 @@ export const BASE = {
   incl: 0,                  // inclinacion del torso, en radianes
   cabX: 0, cabY: -28,       // la cabeza, respecto al torso
   cabGiro: 0,               // giro de la cabeza
-  falAncho: 46,             // medio ancho de la falda abajo
+  // LA PROPORCION, medida. La cabeza tiene 53 px de ancho y el bajo del
+  // vestido tenia 102: CASI EL DOBLE. Salia una campana enorme con una cabeza
+  // pequeña encima -- pesada abajo, y por eso "no se sentia comoda" en
+  // movimiento: la silueta se leia como un cono, no como una persona.
+  // Con 37 el bajo queda en ~82 px = 1.55 veces la cabeza, que es la
+  // proporcion de una princesa de cuento estilizada y deja ver el cuerpo.
+  falAncho: 37,             // medio ancho de la falda abajo
   falAlto: 64,              // cuanto baja la falda desde la cadera
   falVuelo: 0,              // cuanto se abre hacia atras (al correr o saltar)
   falOnda: 0,               // desfase del borde ondulado
@@ -72,7 +78,10 @@ export function dibujaPose(p) {
   // cintura. Se ensancha un poco a la altura de la mandibula y se recoge al
   // final, que es como cae un pelo liso cortado a esa altura.
   const LARGO = 34;
-  const anchoPelo = t => 20 + Math.sin(t * 2.2) * 4 - t * t * 5;
+  // El ancho de la melena va ATADO al del ovalo de la cara (19): con la
+  // cabeza mas pequeña, la formula vieja (base 20) dejaba el pelo asomando
+  // por fuera del craneo como una peluca suelta.
+  const anchoPelo = t => 18 + Math.sin(t * 2.2) * 3.5 - t * t * 4.5;
   for (let i = 0; i <= 10; i++) {
     const t = i / 10;
     pelAtras.push(cab[0] - anchoPelo(t) - p.cabGiro * 6, cab[1] - 14 + t * LARGO);
@@ -245,7 +254,9 @@ export function dibujaPose(p) {
       curva(L, xTop, fy0 + p.falAlto * 0.32,
                xm, fy0 + p.falAlto * 0.66,
                bx * 0.88 + cad[0] * 0.12, by - 7,
-               0.9 + hondo * 0.5, 1.4 + hondo * 1.1, P.ves1);
+               // mas finos: en la falda estrecha los de 2.5 px se leian como
+               // rayas pintadas y no como tela.
+               0.8 + hondo * 0.4, 1.1 + hondo * 0.8, P.ves1);
     }
   }
 
@@ -258,10 +269,12 @@ export function dibujaPose(p) {
     for (let k = 0; k <= N; k++) {
       const t = k / N;
       const x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
-      elipse(L, x, y - 7, 3, 2, P.oro2);
-      if ((i * N + k) % 5 === 0) elipse(L, x, y - 7, 2, 2.5, P.oro3);
-      elipse(L, x, y - 1, 4, 3.5, P.bla2);
-      elipse(L, x, y + 2, 4, 2.5, P.bla1);
+      // La cenefa se dimensiono para un bajo de 102 px; en uno de 84 unos
+      // remates de 4 px de radio se comen el vestido. Afinada en proporcion.
+      elipse(L, x, y - 6, 2.4, 1.7, P.oro2);
+      if ((i * N + k) % 5 === 0) elipse(L, x, y - 6, 1.7, 2.1, P.oro3);
+      elipse(L, x, y - 1, 3.2, 2.9, P.bla2);
+      elipse(L, x, y + 1.6, 3.2, 2.1, P.bla1);
     }
   }
 
@@ -451,46 +464,57 @@ export function dibujaPose(p) {
 
 
   // === 8. La CABEZA ===
+  // LA CABEZA, un punto mas pequeña. El cuerpo medido daba 2.69 cabezas de
+  // alto -- territorio "chibi" (2 a 4) -- cuando una princesa estilizada va
+  // en 3.2-3.6. Bajando el ovalo de 21x23 a 19x21 el cuerpo sube a ~3.0
+  // cabezas y, sobre todo, la cabeza deja de competir en ancho con el bajo
+  // del vestido. La CARA no encoge: los rasgos siguen en su sitio, solo se
+  // recorta el ovalo que los rodea.
   const chx = cab[0] + p.cabGiro * 4;
-  elipse(L, chx, cab[1], 21, 23, P.piel2);
-  elipse(L, chx + 4, cab[1] - 3, 15, 17, P.piel3);   // luz en la cara
+  elipse(L, chx, cab[1], 19, 21, P.piel2);
+  elipse(L, chx + 4, cab[1] - 3, 14, 15.5, P.piel3);   // luz en la cara
   // El flequillo y el pelo de delante
   const flequi = [];
   for (let i = 0; i <= 12; i++) {
     const t = i / 12, ang = Math.PI * (1 + t);
-    flequi.push(chx + Math.cos(ang) * 23, cab[1] + Math.sin(ang) * 25);
+    flequi.push(chx + Math.cos(ang) * 21, cab[1] + Math.sin(ang) * 23);
   }
-  flequi.push(chx + 20, cab[1] - 2, chx + 12, cab[1] - 12, chx, cab[1] - 6, chx - 12, cab[1] - 13, chx - 21, cab[1] - 1);
+  flequi.push(chx + 18, cab[1] - 2, chx + 11, cab[1] - 11, chx, cab[1] - 5.5, chx - 11, cab[1] - 12, chx - 19, cab[1] - 1);
   poly(L, flequi, P.pel2);
   // Mechones del flequillo, mas claros
   for (const [dx, dy, cx2, cy2, ex2, ey2] of [
-    [-20, -8, -12, -20, -2, -10], [-4, -14, 4, -22, 12, -12], [12, -12, 19, -18, 22, -4],
-  ]) curva(L, chx + dx, cab[1] + dy, chx + cx2, cab[1] + cy2, chx + ex2, cab[1] + ey2, 7, 5, P.pel3);
+    [-18, -7, -11, -18, -2, -9], [-4, -13, 4, -20, 11, -11], [11, -11, 17, -16, 20, -4],
+  ]) curva(L, chx + dx, cab[1] + dy, chx + cx2, cab[1] + cy2, chx + ex2, cab[1] + ey2, 6.5, 4.5, P.pel3);
   // Los dos mechones largos que enmarcan la cara
-  curva(L, chx - 20, cab[1] - 6, chx - 24, cab[1] + 8, chx - 20, cab[1] + 22, 8, 5, P.pel2);
-  curva(L, chx + 20, cab[1] - 6, chx + 24, cab[1] + 8, chx + 21, cab[1] + 20, 8, 5, P.pel2);
+  curva(L, chx - 18, cab[1] - 6, chx - 21.5, cab[1] + 7, chx - 18, cab[1] + 20, 7, 4.5, P.pel2);
+  curva(L, chx + 18, cab[1] - 6, chx + 21.5, cab[1] + 7, chx + 19, cab[1] + 18, 7, 4.5, P.pel2);
 
   // La cara
   dibujaCara(L, chx, cab[1], p);
 
   // === 9. La CORONA ===
-  const cy3 = cab[1] - 22;
+  // LA CORONA, medida contra la cabeza nueva. Daba 33 px de ancho para una
+  // cara de 34: 0.97x, o sea calada hasta las orejas como un casco. Una
+  // corona se apoya DENTRO del craneo, asi que tiene que ir por 0.8-0.85.
+  // Con el paso de 3.8 y seis bolas en vez de siete queda en ~27 px.
+  const cy3 = cab[1] - 20;
+  const PASO = 3.8;
   // El aro: con sombra abajo y brillo arriba, no una fila de bolas iguales.
-  for (let i = -3; i <= 3; i++) elipse(L, chx + i * 4.5, cy3 + 3, 3, 3, P.oro1);
-  for (let i = -3; i <= 3; i++) elipse(L, chx + i * 4.5, cy3 + 2, 3, 3, P.oro2);
-  for (let i = -3; i <= 3; i++) elipse(L, chx + i * 4.5, cy3 + 0.5, 2.5, 1.5, P.oro3);
+  for (let i = -3; i <= 3; i++) elipse(L, chx + i * PASO, cy3 + 3, 2.6, 2.6, P.oro1);
+  for (let i = -3; i <= 3; i++) elipse(L, chx + i * PASO, cy3 + 2, 2.6, 2.6, P.oro2);
+  for (let i = -3; i <= 3; i++) elipse(L, chx + i * PASO, cy3 + 0.5, 2.2, 1.3, P.oro3);
   // Las puntas, cada una con su cara en sombra: asi tienen volumen.
-  for (const [dx, alto] of [[-9, 7], [0, 11], [9, 7]]) {
-    poly(L, [chx + dx - 4, cy3, chx + dx + 4, cy3, chx + dx, cy3 - alto], P.oro2);
-    poly(L, [chx + dx - 4, cy3, chx + dx, cy3, chx + dx, cy3 - alto], P.oro1);
-    poly(L, [chx + dx + 1, cy3 - 1, chx + dx + 3, cy3 - 1, chx + dx, cy3 - alto + 1], P.oro3);
+  for (const [dx, alto] of [[-7.6, 6], [0, 9.5], [7.6, 6]]) {
+    poly(L, [chx + dx - 3.4, cy3, chx + dx + 3.4, cy3, chx + dx, cy3 - alto], P.oro2);
+    poly(L, [chx + dx - 3.4, cy3, chx + dx, cy3, chx + dx, cy3 - alto], P.oro1);
+    poly(L, [chx + dx + 0.8, cy3 - 1, chx + dx + 2.6, cy3 - 1, chx + dx, cy3 - alto + 1], P.oro3);
   }
   // Las piedras, con su brillo de un pixel arriba a la izquierda
-  elipse(L, chx, cy3 - 11, 3.5, 3.5, P.joya);
-  elipse(L, chx - 1, cy3 - 12, 1.2, 1.2, P.bla2);
+  elipse(L, chx, cy3 - 9.5, 3, 3, P.joya);
+  elipse(L, chx - 1, cy3 - 10.5, 1.1, 1.1, P.bla2);
   for (const s of [-1, 1]) {
-    elipse(L, chx + s * 9, cy3 - 7, 2.5, 2.5, P.joya2);
-    elipse(L, chx + s * 9 - 1, cy3 - 8, 1, 1, P.bla2);
+    elipse(L, chx + s * 7.6, cy3 - 6, 2.2, 2.2, P.joya2);
+    elipse(L, chx + s * 7.6 - 1, cy3 - 7, 0.9, 0.9, P.bla2);
   }
 
   // === 10. El ESCUDO POR DELANTE, al bloquear ===
