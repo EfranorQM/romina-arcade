@@ -45,8 +45,13 @@ export const BASE = {
   escAng: 0,                // angulo del escudo
   escX: -34, escY: 16,      // el escudo, en el antebrazo izquierdo
   escZ: 0,                  // 1 = el escudo va DELANTE del cuerpo (bloquear)
+  // Los GESTOS son tablas en dibujaCara(), asi que añadir uno nuevo cuesta
+  // una linea, no un dibujo. Y como se combinan libremente (9 ojos x 6 bocas)
+  // salen 54 caras distintas sin horneaar ni un fotograma de mas.
   ojos: 'normal',           // normal | cerrados | esfuerzo | dolor
+                            // alegre | sorpresa | decidida | cansada | reojo
   boca: 'sonrisa',          // sonrisa | abierta | apretada
+                            // grito | triste | sonrisota
 };
 
 export function pose(cambios) { return Object.assign({}, BASE, cambios); }
@@ -530,96 +535,137 @@ function dibujaCara(L, cx, cy, p) {
   const oy = cy + 2;
   const OJX = 8.5;              // separacion de los ojos respecto al centro
 
-  if (p.ojos === 'cerrados') {
-    // Cerrados: un arco grueso y limpio, con la pestaña marcada abajo. A
-    // tamaño de juego una linea fina desaparece, asi que va en 3 px.
-    // OJO con el grosor: con 3 px y 5 de hondo los dos arcos se leian como una
-    // VENDA negra cruzando la cara. Un ojo cerrado es una linea curva fina, no
-    // una barra: 2.2 px y una curvatura corta bastan, y asi se distingue de
-    // las cejas, que estan justo encima.
+  // ---- LOS OJOS ----
+  // Cada gesto define tres cosas: cuanto se abre el ojo (alto), si el parpado
+  // lo tapa por arriba (tapa) y hacia donde mira la pupila (mirX, mirY).
+  // Mover la PUPILA es lo que mas expresion da por menos pixeles: la misma
+  // cara mirando al frente, de reojo o hacia arriba son tres personajes
+  // distintos, y no cuesta un dibujo nuevo -- cuesta dos numeros.
+  const OJOS = {
+    normal:   { alto: 7,   tapa: 0,   mirX: 0,    mirY: 0,    ceja:  0   },
+    cerrados: { alto: 0,   tapa: 0,   mirX: 0,    mirY: 0,    ceja:  0   },
+    // OJO CON SUMAR 'alto' PEQUEÑO Y 'tapa' GRANDE: se restan del mismo ojo.
+    // Medido, dolor y cansada quedaban en 22-24 celdas de blanco visible (la
+    // cara normal tiene 148): dos rendijas negras, no unos ojos entornados.
+    // Si el ojo ya es bajo, el parpado tiene que ser suave.
+    esfuerzo: { alto: 5,   tapa: 0.8, mirX: 0.6,  mirY: 0,    ceja:  2.5 },
+    dolor:    { alto: 4.5, tapa: 0.6, mirX: 0,    mirY: 0.5,  ceja: -2.5 },
+    // --- los nuevos ---
+    // ALEGRE: ojos en arco hacia arriba, la sonrisa de los ojos. Es la cara
+    // de victoria, y en pixel art se hace con la curva al REVES que cerrados.
+    alegre:   { alto: 0,   tapa: 0,   mirX: 0,    mirY: 0,    ceja:  1,   arco: 1 },
+    // SORPRESA: ojo muy abierto y pupila pequeña -- el truco clasico. La
+    // pupila chica en un blanco grande es lo que lee como susto.
+    sorpresa: { alto: 8.5, tapa: 0,   mirX: 0,    mirY: 0,    ceja:  3,   pup: 0.62 },
+    // DECIDIDA: entrecerrados y mirando al frente, cejas bajas. La cara de
+    // encarar al jefe. Distinta de 'esfuerzo': aqui no sufre, amenaza.
+    decidida: { alto: 5.5, tapa: 0.7, mirX: 0.5,  mirY: 0,    ceja:  1.8 },
+    // CANSADA: parpados caidos y mirada baja, sin el ceño del dolor.
+    cansada:  { alto: 5,   tapa: 1.2, mirX: 0,    mirY: 0.7,  ceja: -1   },
+    // DE REOJO: mira a un lado sin girar la cabeza. Sirve para que MIRE al
+    // enemigo cuando lo tiene al lado, que es puro caracter.
+    reojo:    { alto: 6.5, tapa: 0.3, mirX: 1.0,  mirY: 0,    ceja:  0.5 },
+  };
+  const E = OJOS[p.ojos] || OJOS.normal;
+
+  if (E.alto === 0) {
+    // Ojo cerrado (o en arco de alegria). El grosor importa: con 3 px los dos
+    // arcos se leian como una VENDA cruzando la cara. 2.2 basta.
+    const s2 = E.arco ? -1 : 1;     // arco hacia arriba = alegre
     for (const dx of [-OJX, OJX]) {
-      curva(L, cx + dx - 5.5, oy - 0.5, cx + dx, oy + 2.6, cx + dx + 5.5, oy - 0.5, 2.2, 2.2, P.out);
+      curva(L, cx + dx - 5.5, oy - 0.5 * s2,
+               cx + dx, oy + 2.6 * s2,
+               cx + dx + 5.5, oy - 0.5 * s2, 2.2, 2.2, P.out);
       const s = Math.sign(dx);
       curva(L, cx + dx + s * 4.8, oy - 0.8, cx + dx + s * 6.6, oy - 2,
                cx + dx + s * 8, oy - 3.2, 1.8, 0.9, P.out);
     }
   } else {
-    // El ojo abierto. `alto` lo achica en esfuerzo y dolor.
-    const alto = p.ojos === 'esfuerzo' ? 4.5 : p.ojos === 'dolor' ? 3.5 : 7;
+    const alto = E.alto;
+    const pup = E.pup || 1;          // sorpresa achica la pupila
     for (const dx of [-OJX, OJX]) {
       const s = Math.sign(dx);
+      // la pupila se desplaza segun la mirada: hacia donde ella mira
+      // La pupila se mueve DENTRO del blanco, nunca fuera: el blanco tiene
+      // 5.6 de radio y la pupila 2.2, asi que el centro no puede alejarse mas
+      // de ~2.6 px del centro del ojo o asoma por el borde y parece bizca.
+      const TOPE = 2.6;
+      const mx = Math.max(-TOPE, Math.min(TOPE, E.mirX * s * 1.6));
+      const my = Math.max(-2, Math.min(2, E.mirY * 2));
+      const px = cx + dx + s * 0.5 + mx;
+      const py = oy + 0.6 + my;
       // 1. El blanco, GRANDE: es el que hace que el ojo se lea de lejos.
       elipse(L, cx + dx, oy, 5.6, alto + 1.2, P.ojoB);
-      // 2. El iris, en DOS tonos y no tres. El claro asoma solo por abajo,
-      //    que es donde entra la luz; arriba lo tapa el oscuro. Con tres
-      //    cafes, a x1.95 se promediaban en una mancha parda.
-      elipse(L, cx + dx + s * 0.5, oy + 1.5, 3.8, alto * 0.78, P.ojo2);
-      elipse(L, cx + dx + s * 0.5, oy + 0.4, 3.8, alto * 0.72, P.ojo);
+      // 2. El iris en DOS tonos: el claro asoma por abajo, donde da la luz.
+      elipse(L, px, py + 0.9, 3.8 * pup, alto * 0.78, P.ojo2);
+      elipse(L, px, py - 0.2, 3.8 * pup, alto * 0.72, P.ojo);
       // 3. La pupila, negra y gorda: el ancla de contraste de toda la cara.
-      elipse(L, cx + dx + s * 0.5, oy + 0.6, 2.2, alto * 0.5, P.out);
-      // 4. UN solo brillo, y grande. El chispazo de 0.9 px que habia se caia
-      //    a 2 px en pantalla y solo ensuciaba: fuera.
-      elipse(L, cx + dx - s * 1.4, oy - 1.8, 1.9, 1.9, P.ojoB);
-      // 5. La linea de pestañas, gruesa y solo ARRIBA: enmarca el ojo y lo
-      //    separa de la piel sin cerrarlo.
-      curva(L, cx + dx - 5.6, oy - alto + 0.5,
-               cx + dx, oy - alto - 2,
-               cx + dx + 5.6, oy - alto + 0.5, 2.6, 2.6, P.out);
-      // el rabillo que sobresale, que es lo que le da la mirada de princesa
-      curva(L, cx + dx + s * 5, oy - alto + 0.5, cx + dx + s * 7, oy - alto - 1,
-               cx + dx + s * 8.5, oy - alto - 2.5, 2.2, 1, P.out);
+      elipse(L, px, py, 2.2 * pup, alto * 0.5, P.out);
+      // 4. UN brillo, y grande. El chispazo de 0.9 px se caia a 2 px: fuera.
+      elipse(L, px - s * 1.4, py - 2.4, 1.9, 1.9, P.ojoB);
+      // 5. El PARPADO que baja por arriba. Es lo que separa 'cansada' de
+      //    'normal' sin cambiar nada mas, y se pinta en piel para que parezca
+      //    parpado y no sombra.
+      if (E.tapa > 0) {
+        elipse(L, cx + dx, oy - alto - 1.2 + E.tapa, 5.8, E.tapa + 1.4, P.piel2);
+      }
+      // 6. La linea de pestañas, gruesa y solo ARRIBA.
+      curva(L, cx + dx - 5.6, oy - alto + 0.5 + E.tapa,
+               cx + dx, oy - alto - 2 + E.tapa,
+               cx + dx + 5.6, oy - alto + 0.5 + E.tapa, 2.6, 2.6, P.out);
+      curva(L, cx + dx + s * 5, oy - alto + 0.5 + E.tapa,
+               cx + dx + s * 7, oy - alto - 1 + E.tapa,
+               cx + dx + s * 8.5, oy - alto - 2.5 + E.tapa, 2.2, 1, P.out);
     }
   }
 
-  // LAS CEJAS. Eran el problema: 3 px de grosor en pel2 y pegadas al ojo, lo
-  // primero que se leia a tamaño de juego. Ahora van mas ALTAS (dejan ver el
-  // parpado), mas FINAS y en pel3, que es el pelo iluminado: se leen como
-  // cejas y no como dos barras de enfado. Siguen inclinandose para expresar.
-  // La ALTURA hay que medirla contra el ojo, no ponerla a ojo: en esfuerzo y
-  // dolor el ojo se achica (alto baja a 4.5 y 3.5) pero la ceja bajaba a la
-  // vez, asi que acababan tocandose y volvia el ceño. Ahora la ceja se ancla
-  // SIEMPRE a la misma distancia del borde de arriba del ojo, sea cual sea el
-  // gesto; lo que cambia es la INCLINACION, que es lo que de verdad expresa.
-  // Y OJO CON EL FLEQUILLO. Medido por el perfil vertical: con -6.5 la ceja
-  // caia en y34..40 y el flequillo estaba justo ahi, asi que la ceja quedaba
-  // DENTRO del pelo en vez de sobre la frente -- y en pel3, que es el pelo
-  // iluminado, se confundia con el. Ahora baja a la frente y va en su propio
-  // tono (cejaCol), oscuro pero no tan negro como la pupila.
-  const altoOjo = p.ojos === 'esfuerzo' ? 4.5 : p.ojos === 'dolor' ? 3.5 : 7;
-  const cejaY = oy - altoOjo - 4.5;
-  const cejaIncl = p.ojos === 'esfuerzo' ? 2.5 : p.ojos === 'dolor' ? -2.5 : 0;
+  // ---- LAS CEJAS ----
+  // La ALTURA se ancla SIEMPRE a la misma distancia del borde de arriba del
+  // ojo: antes bajaba con el gesto y acababa tocandolo, y volvia el ceño. Lo
+  // que expresa es la INCLINACION (E.ceja), no la altura. Y van sobre la
+  // FRENTE, no dentro del flequillo, en tono propio (P.ceja): medido por el
+  // perfil vertical, caian en y34..40 justo donde esta el pelo.
+  const cejaY = oy - (E.alto || 5) - 4.5;
   for (const s of [-1, 1]) {
-    curva(L, cx + s * 12, cejaY + cejaIncl,
+    curva(L, cx + s * 12, cejaY + E.ceja,
              cx + s * 7.8, cejaY - 2,
-             cx + s * 3.8, cejaY - 0.5 - cejaIncl, 1.8, 1.3, P.ceja);
+             cx + s * 3.8, cejaY - 0.5 - E.ceja, 1.8, 1.3, P.ceja);
   }
 
-  // LA NARIZ. Era una elipse de 1.5 px en piel1 que a x1.95 quedaba en 3 px:
-  // un lunar. Ahora son dos celdas de sombra suave bajo el puente, que a
-  // tamaño de juego se leen como volumen y no como mancha.
+  // LA NARIZ: dos celdas de sombra suave. Era una elipse que a x1.95 quedaba
+  // en 3 px -- un lunar.
   elipse(L, cx + 1, oy + 7.5, 1.6, 1.2, P.piel1);
 
-  // LA BOCA. Mas ancha y con el labio en un tono que SEPARA de la piel.
-  if (p.boca === 'abierta') {
-    elipse(L, cx + 1, oy + 14, 4.2, 4.8, P.out);
-    elipse(L, cx + 1, oy + 14.6, 3.2, 3.4, P.boca);
-    elipse(L, cx + 1, oy + 16.2, 2, 1.3, P.rubor);    // la lengua
-  } else if (p.boca === 'apretada') {
-    // Apretada: una linea con una leve caida en los extremos, que es lo que
-    // lee como esfuerzo. Recta del todo parecia un tajo.
+  // ---- LA BOCA ----
+  // Tambien por tabla. Una boca son dos curvas (el labio de arriba en P.boca
+  // y el de abajo en P.rubor) o una elipse si esta abierta.
+  const B = p.boca;
+  if (B === 'abierta' || B === 'grito') {
+    // GRITO: la misma boca abierta pero mas alta y estirada. Para el salto y
+    // el golpe fuerte.
+    const h = B === 'grito' ? 6.2 : 4.8;
+    const w = B === 'grito' ? 3.6 : 4.2;
+    elipse(L, cx + 1, oy + 14, w, h, P.out);
+    elipse(L, cx + 1, oy + 14.6, w - 1, h - 1.4, P.boca);
+    elipse(L, cx + 1, oy + 15.6 + h * 0.15, w - 2.2, 1.3, P.rubor);
+  } else if (B === 'apretada') {
     curva(L, cx - 5, oy + 13.4, cx + 1, oy + 14.6, cx + 6.5, oy + 13.4, 2.6, 2.6, P.boca);
     curva(L, cx - 3.5, oy + 15.2, cx + 1, oy + 16, cx + 5, oy + 15.2, 1.6, 1.6, P.rubor);
+  } else if (B === 'triste') {
+    // La sonrisa AL REVES: comisuras hacia abajo. Un solo signo cambiado y es
+    // otra cara entera.
+    curva(L, cx - 5, oy + 15.6, cx + 1, oy + 12.6, cx + 6.5, oy + 15.6, 2.6, 2.6, P.boca);
+  } else if (B === 'sonrisota') {
+    // La sonrisa ANCHA de victoria: mas abierta y con el labio marcado.
+    curva(L, cx - 6.5, oy + 12.4, cx + 1, oy + 17.4, cx + 8, oy + 12.4, 3, 3, P.boca);
+    curva(L, cx - 4.5, oy + 14.8, cx + 1, oy + 18.4, cx + 6, oy + 14.8, 2, 2, P.rubor);
   } else {
-    // La sonrisa: mas ancha que antes y con las comisuras hacia arriba.
     curva(L, cx - 5, oy + 12.8, cx + 1, oy + 16.4, cx + 6.5, oy + 12.8, 2.8, 2.8, P.boca);
     curva(L, cx - 3.5, oy + 15, cx + 1, oy + 17.2, cx + 5, oy + 15, 1.8, 1.8, P.rubor);
   }
 
-  // EL COLORETE, en ROSA y fundido. Antes iba en piel1 (un marron de sombra)
-  // y salian dos manchas marrones flotando en los pomulos -- a tamaño de
-  // juego parecian suciedad. Ahora va en rubor y en dos elipses concentricas,
-  // la de fuera mas tenue, para que se funda con la mejilla en vez de
-  // recortarse contra ella.
+  // EL COLORETE, en ROSA y fundido. En piel1 (un marron de sombra) salian dos
+  // manchas que a tamaño de juego parecian suciedad en los pomulos.
   for (const s of [-1, 1]) {
     const bx = cx + s * 13 + 0.5;
     elipse(L, bx, oy + 6.5, 4.2, 2.8, P.rubor);

@@ -1,0 +1,54 @@
+<!doctype html>
+<!-- TODOS LOS GESTOS DE ROMINA, al tamaño al que se juega.
+     Añadir una expresion cuesta una linea en la tabla OJOS o en la de bocas
+     de dibujaCara(); no cuesta un fotograma. Esta pagina es para elegir
+     cuales valen la pena, viendolos a x1.95 como se ven de verdad.
+       node tools/ver.js tools/ver-gestos.html gestos.png 1560 1000 -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#241c1a}canvas{display:block}</style>
+<canvas id="c" width="1560" height="1000"></canvas>
+<script type="module">
+import { pose, dibujaPose } from '../www/js/games/romi-pose.js';
+import { aCanvas } from '../www/js/games/romi-art.js';
+import { text } from '../www/js/font.js';
+const g = document.getElementById('c').getContext('2d');
+g.imageSmoothingEnabled = false;
+g.fillStyle='#241c1a'; g.fillRect(0,0,1560,1000);
+const SX=38, SY=12, SW=52, SH=68;
+const OJOS=['normal','alegre','sorpresa','decidida','cansada','reojo','esfuerzo','dolor','cerrados'];
+const BOCAS=['sonrisa','sonrisota','abierta','grito','apretada','triste'];
+
+text(g, 'LOS NUEVE OJOS  (boca: sonrisa)   -- a x3 para elegir', 20, 14, '#ffe066', 2);
+OJOS.forEach((o,i)=>{
+  const cv = aCanvas(dibujaPose(pose({ojos:o})));
+  g.save(); g.translate(20+i*170, 40); g.scale(3,3);
+  g.drawImage(cv, SX,SY,SW,SH, 0,0,SW,SH); g.restore();
+  text(g, o, 20+i*170, 250, '#ff8fbc', 2);
+});
+
+text(g, 'LAS SEIS BOCAS  (ojos: normal)', 20, 285, '#ffe066', 2);
+BOCAS.forEach((b,i)=>{
+  const cv = aCanvas(dibujaPose(pose({boca:b})));
+  g.save(); g.translate(20+i*170, 310); g.scale(3,3);
+  g.drawImage(cv, SX,SY,SW,SH, 0,0,SW,SH); g.restore();
+  text(g, b, 20+i*170, 520, '#ff8fbc', 2);
+});
+
+text(g, 'COMBINADOS, AL TAMAÑO DE JUEGO (x1.95) -- asi se ven de verdad', 20, 556, '#ffe066', 2);
+const COMB=[
+  ['alegre','sonrisota','victoria'],['sorpresa','abierta','susto'],
+  ['decidida','apretada','encara'],['cansada','triste','agotada'],
+  ['reojo','sonrisa','de reojo'],['esfuerzo','grito','grito'],
+  ['dolor','abierta','dolor'],['cerrados','sonrisa','dormida'],
+  ['normal','sonrisa','reposo'],
+];
+g.fillStyle='#3a2a3a'; g.fillRect(20, 580, 1180, 150);
+COMB.forEach(([o,b,n],i)=>{
+  const cv = aCanvas(dibujaPose(pose({ojos:o, boca:b})));
+  g.save(); g.translate(30+i*130, 586); g.scale(1.95,1.95);
+  g.drawImage(cv, SX,SY,SW,SH, 0,0,SW,SH); g.restore();
+  text(g, n, 30+i*130, 740, '#7fe8ff', 2);
+});
+
+text(g, '9 ojos x 6 bocas = 54 caras, sin un fotograma nuevo.', 20, 780, '#d9c8d4', 2);
+</script>

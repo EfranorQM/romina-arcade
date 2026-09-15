@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- LAS CARAS DE CADA ANIMACION, al tamaño al que se juegan.
+     Sirve para ver si cada accion tiene la cara que le toca, o si todas
+     ponen la misma (que era el caso: casi todo era esfuerzo/apretada).
+       node tools/ver.js tools/ver-caras-anim.html caras-anim.png 1500 1150 -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#241c1a}canvas{display:block}</style>
+<canvas id="c" width="1500" height="1150"></canvas>
+<script type="module">
+import { POSES } from '../www/js/games/romi-anim.js';
+import { dibujaPose } from '../www/js/games/romi-pose.js';
+import { aCanvas } from '../www/js/games/romi-art.js';
+import { text } from '../www/js/font.js';
+const g = document.getElementById('c').getContext('2d');
+g.imageSmoothingEnabled = false;
+g.fillStyle='#241c1a'; g.fillRect(0,0,1500,1150);
+const SX=38, SY=12, SW=52, SH=68;
+let y = 14;
+for (const k in POSES) {
+  text(g, k.toUpperCase(), 14, y, '#ffe066', 2);
+  let x = 130;
+  for (const p of POSES[k]) {
+    const cv = aCanvas(dibujaPose(p));
+    g.save(); g.translate(x, y - 8); g.scale(1.7,1.7);
+    g.drawImage(cv, SX,SY,SW,SH, 0,0,SW,SH); g.restore();
+    text(g, (p.ojos||'norm').slice(0,5), x, y + 108, '#8a97b8', 1);
+    text(g, (p.boca||'sonr').slice(0,5), x, y + 120, '#ff8fbc', 1);
+    x += 100;
+  }
+  y += 135;
+}
+</script>
