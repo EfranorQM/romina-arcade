@@ -57,7 +57,7 @@ export function makeCaballero(x) {
   return {
     x, y: SUELO, vx: 0, vy: 0, dir: 1,
     st: QUIETO, t: 0,
-    enSuelo: true, coyote: 0, buffer: 0, cortable: 0,
+    enSuelo: true, coyote: 0, buffer: 0, cortable: 0, aterriza: 0,
     rollT: 0, rollCd: 0,
     bloqT: 0, bloqHit: 0,
     tajoT: 0, tajoId: 0, golpeo: 0,
@@ -84,6 +84,7 @@ export function stepCaballero(K, inp, dt) {
 
   // --- Bloquear: mientras se mantiene el boton y este en el suelo ---
   if (K.bloqHit > 0) K.bloqHit -= dt;
+  if (K.aterriza > 0) K.aterriza -= dt;
   if (inp.bloquea && K.enSuelo && puedeActuar && K.st !== TAJO) {
     if (K.st !== BLOQUEA) { K.st = BLOQUEA; K.bloqT = 0; K.animT = 0; }
     K.bloqT += dt;
@@ -148,6 +149,10 @@ export function stepCaballero(K, inp, dt) {
     K.vy += (K.vy < 0 ? GRAV_UP : GRAV_DN) * dt;
     K.y += K.vy * dt;
     if (K.y >= SUELO) {
+      // ATERRIZAJE. Se guarda cuanto venia cayendo para que el dibujo pueda
+      // amortiguar: caer de un salto entero y bajar un escalon no se ven
+      // igual. Dura poco (0.12 s) y NO quita el control -- solo se dibuja.
+      if (!K.enSuelo && K.vy > 300) K.aterriza = 0.12;
       K.y = SUELO; K.vy = 0; K.enSuelo = true;
       if (K.st === SALTA) { K.st = QUIETO; K.animT = 0; }
     }
@@ -207,11 +212,19 @@ export function herir(K, sx) {
 
 // Que pose y que fotograma toca dibujar. Devuelve [pose, frame].
 export function pose(K) {
-  if (K.st === DOLOR || K.st === MUERTO) return ['hurt', 0];
+  // DOLOR: tres fotogramas en los 0.28 s que dura. MUERTO se queda en el
+  // arqueado, que es donde mas se lee que le ha entrado.
+  if (K.st === MUERTO) return ['hurt', 1];
+  if (K.st === DOLOR) {
+    const u = (K.t - K.hurtIni) / 0.28;
+    return ['hurt', u < 0.28 ? 0 : u < 0.62 ? 1 : 2];
+  }
   // BLOQUEAR: 0 levantando, 1 plantada, 2 el impacto. El 0 dura lo que tarda
   // el escudo en subir (BLOQ_SUBE), que es justo cuando todavia no para.
   if (K.st === BLOQUEA) {
-    if (K.bloqHit > 0) return ['block', 2];
+    // bloqHit dura 0.22 s: los primeros 0.10 es el IMPACTO (2) y el resto
+    // es rehacerse (3), para que parar un golpe tenga su recuperacion visible.
+    if (K.bloqHit > 0) return ['block', K.bloqHit > 0.12 ? 2 : 3];
     return ['block', K.bloqT < BLOQ_SUBE ? 0 : 1];
   }
   if (K.st === RUEDA) return ['roll', Math.min(3, Math.floor(K.rollT / ROLL_T * 4))];
@@ -226,11 +239,31 @@ export function pose(K) {
     if (t < TAJO_T - 0.04) return ['atk', 3];
     return ['atk', 4];
   }
-  if (!K.enSuelo) return ['jump', K.vy < -80 ? 0 : K.vy > 80 ? 2 : 1];
+  // SALTAR: seis fotogramas mapeados por la VELOCIDAD vertical, no por un
+  // reloj, para que el dibujo sea siempre lo que el cuerpo hace de verdad.
+  // JUMP_V es 860: subiendo fuerte -> despegue, subiendo flojo -> cumbre,
+  // cayendo -> las dos de caida.
+  if (!K.enSuelo) {
+    const v = K.vy;
+    // El 0 es el IMPULSO agachado: los dos primeros frames tras despegar, que
+    // es lo unico que dura la flexion. (El salto es instantaneo -- no hay
+    // ventana de anticipacion en el suelo -- asi que si este fotograma no se
+    // ata aqui no se alcanza NUNCA y es un dibujo tirado. Lo cazo el arnes.)
+    if (K.st === SALTA && K.animT < 0.04) return ['jump', 0];
+    if (v < -620) return ['jump', 1];    // acaba de despegar
+    if (v < -200) return ['jump', 2];    // subiendo
+    if (v <  160) return ['jump', 3];    // la cumbre: casi parada
+    if (v <  520) return ['jump', 4];    // cayendo
+    return ['jump', 5];                  // buscando el suelo
+  }
+  // ATERRIZAJE: se dibuja amortiguando aunque ya tenga el control. Va despues
+  // del aire y antes de correr, porque se puede aterrizar andando.
+  if (K.aterriza > 0) return ['jump', 6];
   if (K.st === CORRE) {
     // El ciclo avanza con la DISTANCIA recorrida, no con el reloj: asi los
-    // pies no patinan cuando acelera o frena.
-    const paso = Math.abs(K.x * 0.034) % 4;
+    // pies no patinan cuando acelera o frena. Seis fotogramas, y el paso se
+    // reescala para que un ciclo siga midiendo lo mismo en el suelo.
+    const paso = Math.abs(K.x * 0.034 * 1.5) % 6;
     return ['run', Math.floor(paso)];
   }
   return ['idle', Math.floor(K.animT / 0.42) % 4];

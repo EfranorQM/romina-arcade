@@ -1,0 +1,21 @@
+<!doctype html>
+<!-- La cara de Romina en grande: node tools/ver.js tools/ver-cara.html cara.png 1300 460 -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#241c1a}canvas{display:block}</style>
+<canvas id="c" width="1300" height="460"></canvas>
+<script type="module">
+import { pose, dibujaPose } from '../www/js/games/romi-pose.js';
+import { aCanvas } from '../www/js/games/romi-art.js';
+import { text } from '../www/js/font.js';
+const g = document.getElementById('c').getContext('2d');
+g.imageSmoothingEnabled = false;
+g.fillStyle='#241c1a'; g.fillRect(0,0,1300,460);
+const caras = [['normal','sonrisa'],['esfuerzo','apretada'],['cerrados','sonrisa'],['dolor','abierta']];
+caras.forEach(([o,b],i)=>{
+  const cv = aCanvas(dibujaPose(pose({ojos:o, boca:b})));
+  g.save(); g.translate(20+i*320, 30); g.scale(5.5,5.5);
+  g.drawImage(cv, 38, 14, 52, 64, 0, 0, 52, 64);   // corona (17) a barbilla (73)
+  g.restore();
+  text(g, o+' / '+b, 24+i*320, 420, '#ffe066', 2);
+});
+</script>

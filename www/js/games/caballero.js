@@ -161,12 +161,26 @@ export default {
       }
     }
 
-    // Sombra del caballero: se encoge cuanto mas alto esta
+    // Sombra de Romina. Era un fillRect: un rectangulo negro de 5 px que se
+    // veia como una barra debajo de los pies, y saltando aun peor. Ahora es
+    // una ELIPSE rasterizada a la rejilla -- se dibuja por bandas de pixeles
+    // enteros, sin antialias, para que sea pixel art como el resto.
+    //
+    // Se encoge Y se aclara con la altura: es lo que hace leer a que altura
+    // esta en el aire, que es informacion util al saltar.
     const altura = SUELO - K.y;
-    const sw = Math.max(14, 48 - altura * 0.12);
-    g.globalAlpha = Math.max(0.15, 0.45 - altura * 0.002);
+    const sw = Math.max(13, 30 - altura * 0.075);   // semiancho
+    const sh = Math.max(2.5, 7 - altura * 0.018);   // semialto
+    const sx0 = K.x - cx;
+    g.globalAlpha = Math.max(0.12, 0.42 - altura * 0.0019);
     g.fillStyle = '#000000';
-    g.fillRect(Math.round(K.x - cx - sw / 2), SUELO - 3, Math.round(sw), 5);
+    // Elipse por bandas: cada fila de pixeles es un rectangulo de 1 px de alto
+    for (let dy = -Math.ceil(sh); dy <= Math.ceil(sh); dy++) {
+      const u = dy / sh;
+      if (u * u > 1) continue;
+      const w = sw * Math.sqrt(1 - u * u);
+      g.fillRect(Math.round(sx0 - w), SUELO - 2 + dy, Math.round(w * 2), 1);
+    }
     g.globalAlpha = 1;
 
     // El caballero

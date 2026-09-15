@@ -177,7 +177,7 @@ console.log('== 7) POSES ==');
   // REAL de poses de cada accion (atk tiene 5, block 3, jump 3...), no contra
   // un 0..3 fijo: ese tope fijo habria dejado pasar un desbordamiento el dia
   // que se añadieron fotogramas al tajo.
-  const CUENTA = { idle: 4, run: 4, jump: 3, roll: 4, atk: 5, block: 3, hurt: 1 };
+  const CUENTA = { idle: 4, run: 6, jump: 7, roll: 4, atk: 5, block: 4, hurt: 3 };
   const K2 = makeCaballero(300);
   let malo = null;
   const vistos = {};
@@ -197,6 +197,42 @@ console.log('== 7) POSES ==');
   const fAtk = vistos.atk ? vistos.atk.size : 0;
   console.log(`fotogramas del tajo alcanzados: ${fAtk} de ${CUENTA.atk}`);
   ok(fAtk === CUENTA.atk, 'los cinco fotogramas del tajo se alcanzan jugando');
+
+  // TODOS los fotogramas de TODAS las poses tienen que salir jugando. Un
+  // dibujo que no se alcanza nunca es trabajo tirado, y al subir run de 4 a 6
+  // y jump de 3 a 7 es exactamente el riesgo: que el mapeo no llegue a los
+  // nuevos. Se aporrea con un piloto que ademas bloquea y recibe golpes.
+  // El piloto tiene que hacer TODO lo que hace una persona, no solo aporrear:
+  // tambien quedarse QUIETO (o los fotogramas de respirar no salen nunca) y
+  // COMER GOLPES MIENTRAS BLOQUEA (o no salen los del impacto del escudo).
+  // La primera version solo aporreaba y daba 3 falsos fallos por eso: el
+  // arnes medía al piloto, no al juego.
+  const K3 = makeCaballero(300);
+  const v3 = {};
+  for (let i = 0; i < 12000; i++) {
+    // Cada 600 frames se esta 120 quieto del todo: eso es respirar.
+    const quieto = (i % 600) < 120;
+    const bloqueando = !quieto && (i % 113) < 26;
+    const inp = quieto
+      ? { dx: 0, salta: false, golpea: false, rueda: false, saltaAbajo: false, bloquea: false }
+      : { dx: Math.sin(i / 23) * 1.4, salta: i % 41 === 0, golpea: i % 31 === 0,
+          rueda: i % 67 === 0, saltaAbajo: i % 41 < 10, bloquea: bloqueando };
+    stepCaballero(K3, inp, DT);
+    // Le pegan DE FRENTE mientras tiene el escudo arriba: eso dispara bloqHit
+    // y con el los dos fotogramas del impacto.
+    if (bloqueando && i % 59 === 0) herir(K3, K3.x + K3.dir * 60);
+    if (i % 173 === 0) { K3.iframe = 0; herir(K3, K3.x + K3.dir * 60); }
+    if (!K3.vivo) { K3.vivo = true; K3.hp = HP0; K3.st = 0; }
+    const [p2, f2] = pose(K3);
+    (v3[p2] = v3[p2] || new Set()).add(f2);
+  }
+  for (const nombre in CUENTA) {
+    const vistas = v3[nombre] ? v3[nombre].size : 0;
+    const faltan = [];
+    for (let f = 0; f < CUENTA[nombre]; f++) if (!v3[nombre] || !v3[nombre].has(f)) faltan.push(f);
+    console.log(`  ${nombre.padEnd(6)} ${vistas}/${CUENTA[nombre]}` + (faltan.length ? '  faltan: ' + faltan.join(',') : ''));
+    ok(faltan.length === 0, `todos los fotogramas de ${nombre} se alcanzan jugando`);
+  }
 }
 
 console.log(fallos ? `\n${fallos} FALLOS` : '\nTODO OK');

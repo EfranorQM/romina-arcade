@@ -69,6 +69,18 @@ export function dibujaPose(p) {
     pelAtras.push(cab[0] + anchoPelo(t) - p.cabGiro * 6, cab[1] - 14 + t * LARGO);
   }
   poly(L, pelAtras, P.pel2);
+  // El pelo en SOMBRA por el lado de dentro: sin esto la melena es una mancha
+  // plana. La luz viene de la derecha, asi que el lado izquierdo se oscurece.
+  const pelSombra = [];
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10;
+    pelSombra.push(cab[0] - anchoPelo(t) - p.cabGiro * 6, cab[1] - 14 + t * LARGO);
+  }
+  for (let i = 10; i >= 0; i--) {
+    const t = i / 10;
+    pelSombra.push(cab[0] - anchoPelo(t) * 0.35 - p.cabGiro * 6, cab[1] - 14 + t * LARGO);
+  }
+  poly(L, pelSombra, P.pel1);
   // Mechones sueltos que salen de la masa
   for (const [dx, dy, cx, cy, ex, ey, g] of [
     [-16, 0, -22, 12, -19, 24, 8],
@@ -76,6 +88,16 @@ export function dibujaPose(p) {
     [-10, 8, -20, 20, -15, 30, 5],
     [12, 9, 21, 21, 17, 29, 5],
   ]) curva(L, cab[0] + dx, cab[1] + dy, cab[0] + cx, cab[1] + cy, cab[0] + ex, cab[1] + ey, g, g * 0.5, P.pel1);
+  // BRILLO del pelo: la banda clara que recorre la melena por el lado de la
+  // luz. Es LO que hace que un pelo negro se lea como pelo y no como un
+  // agujero -- y pel4 estaba definido en la paleta pero no se usaba en ningun
+  // sitio. Va en dos trazos rotos, como se pinta un reflejo en pixel art.
+  for (const [t0, t1, gr] of [[0.12, 0.42, 4], [0.54, 0.80, 3]]) {
+    const y0 = cab[1] - 14 + t0 * LARGO, y1 = cab[1] - 14 + t1 * LARGO;
+    const x0 = cab[0] + anchoPelo(t0) * 0.62 - p.cabGiro * 6;
+    const x1 = cab[0] + anchoPelo(t1) * 0.58 - p.cabGiro * 6;
+    curva(L, x0, y0, (x0 + x1) / 2 + 2, (y0 + y1) / 2, x1, y1, gr, gr * 0.6, P.pel4);
+  }
 
   // === 2. La FALDA, de atras hacia adelante ===
   // Arranca en la CADERA (17 px, el mismo ancho con el que acaba el cuerpo) y
@@ -128,6 +150,19 @@ export function dibujaPose(p) {
   for (let i = 0; i < 3; i++) {
     const t = 0.3 + i * 0.2;
     curva(L, cad[0] + 12, fy0 + 10, cad[0] + 24 + i * 4, fy0 + 30, cad[0] + 30 + i * 6 + vuelo * 0.2, fy1 - 8, 4, 2, P.ves3);
+  }
+  // BORDADO DE ORO sobre el borde: una cenefa que sigue la onda, justo encima
+  // del forro blanco. Es el detalle que mas "sube" el vestido en las
+  // referencias, y cuesta doce pixeles.
+  for (let i = 0; i <= 28; i++) {
+    const u = i / 28;
+    const x = cad[0] - p.falAncho - vuelo + u * (p.falAncho * 2 + vuelo * 1.3);
+    const onda = Math.sin(u * 9 + p.falOnda) * 5;
+    elipse(L, x, fy1 + onda - 7, 3, 2, P.oro2);
+    // rombos espaciados sobre la cenefa
+    if (i % 4 === 0) {
+      elipse(L, x, fy1 + onda - 7, 2, 2.5, P.oro3);
+    }
   }
   // El forro blanco del borde de abajo
   for (let i = 0; i <= 24; i++) {
@@ -214,6 +249,18 @@ export function dibujaPose(p) {
   // El escote y el cuello
   elipse(L, tor[0] + sx, yPecho + 1, 11, 5, P.piel2);
   linea(L, cab[0], cab[1] + 12, tor[0] + sx * 0.75, yPecho + 2, 11, P.piel2);
+  // RIBETE DE ORO en el escote. Sus referencias lo tienen y es lo que separa
+  // un vestido de una camiseta rosa: el borde del corpino rematado en oro.
+  for (let i = -1; i <= 1; i += 2) {
+    curva(L, tor[0] + sx + i * 11, yPecho + 2,
+             tor[0] + sx + i * 16, yPecho + 1,
+             tor[0] + sx + i * (aPecho - 2), yPecho + 3, 2.5, 2.5, P.oro2);
+  }
+  linea(L, tor[0] + sx - 10, yPecho + 4, tor[0] + sx + 10, yPecho + 4, 2, P.oro3);
+  // El COLLAR: una gargantilla fina con su gota. Detalle de princesa.
+  linea(L, cab[0] - 7, cab[1] + 19, cab[0] + 7, cab[1] + 19, 2, P.oro2);
+  elipse(L, cab[0] + 1, cab[1] + 22, 2.5, 3, P.joya2);
+  elipse(L, cab[0], cab[1] + 21, 1, 1, P.bla2);
   // Cinturon de oro EN EL TALLE (antes iba recto y ancho, lo que borraba la
   // cintura justo donde hacia falta verla). Ahora es estrecho y se cine.
   for (let i = -aTalle; i <= aTalle; i++) {
@@ -234,13 +281,28 @@ export function dibujaPose(p) {
     const hx = tor[0] + hom + Math.sin(p.incl) * 8, hy = tor[1] - th * 0.18;
     const cx = hx + codo[0], cy = hy + codo[1];
     const mx = hx + mano[0], my = hy + mano[1];
-    // Manga abullonada del hombro (las referencias la tienen)
-    elipse(L, hx, hy + 2, 11, 10, P.ves3);
-    elipse(L, hx - lado * 2, hy, 8, 7, P.ves4);
-    // Antebrazo y brazo
+    // MANGA abullonada del hombro. Tres bandas en vez de dos: base, luz y
+    // brillo, mas el pliegue de abajo donde la tela se recoge. Con dos tonos
+    // salia una pelota plana pegada al hombro.
+    elipse(L, hx, hy + 3, 12, 11, P.ves1);          // el fondo, en sombra
+    elipse(L, hx + lado * 1, hy + 1, 11, 10, P.ves3);
+    elipse(L, hx - lado * 2, hy - 1, 7.5, 6.5, P.ves4);
+    // los pliegues de la manga, que es lo que la hace tela y no globo
+    for (const a of [-0.6, 0.1, 0.8]) {
+      curva(L, hx + Math.cos(a) * 3, hy + 8,
+               hx + Math.cos(a) * 7, hy + 5,
+               hx + Math.cos(a) * 10, hy + 9, 1.8, 1.2, P.ves1);
+    }
+    // el puño de oro donde acaba la manga
+    elipse(L, hx + lado * 2, hy + 10, 8, 3, P.oro2);
+    // Antebrazo y brazo, con una banda de sombra por debajo
     linea(L, hx, hy + 6, cx, cy, 9, P.piel2);
     linea(L, cx, cy, mx, my, 8, P.piel2);
-    elipse(L, mx, my, 6, 6, P.piel3);       // la mano
+    linea(L, hx - lado, hy + 9, cx - lado, cy + 2, 3, P.piel1);
+    linea(L, cx - lado, cy + 2, mx - lado, my + 2, 2.5, P.piel1);
+    // La mano, con el nudillo insinuado
+    elipse(L, mx, my, 6, 6, P.piel3);
+    elipse(L, mx + lado * 2, my - 1, 3, 3.5, P.piel2);
   }
 
   // === 6. El ESCUDO, en el antebrazo izquierdo ===
@@ -335,13 +397,23 @@ export function dibujaPose(p) {
 
   // === 9. La CORONA ===
   const cy3 = cab[1] - 22;
-  for (let i = -3; i <= 3; i++) elipse(L, chx + i * 4.5, cy3 + 2, 3, 3.5, P.oro2);
+  // El aro: con sombra abajo y brillo arriba, no una fila de bolas iguales.
+  for (let i = -3; i <= 3; i++) elipse(L, chx + i * 4.5, cy3 + 3, 3, 3, P.oro1);
+  for (let i = -3; i <= 3; i++) elipse(L, chx + i * 4.5, cy3 + 2, 3, 3, P.oro2);
+  for (let i = -3; i <= 3; i++) elipse(L, chx + i * 4.5, cy3 + 0.5, 2.5, 1.5, P.oro3);
+  // Las puntas, cada una con su cara en sombra: asi tienen volumen.
   for (const [dx, alto] of [[-9, 7], [0, 11], [9, 7]]) {
-    poly(L, [chx + dx - 4, cy3, chx + dx + 4, cy3, chx + dx, cy3 - alto], P.oro3);
+    poly(L, [chx + dx - 4, cy3, chx + dx + 4, cy3, chx + dx, cy3 - alto], P.oro2);
+    poly(L, [chx + dx - 4, cy3, chx + dx, cy3, chx + dx, cy3 - alto], P.oro1);
+    poly(L, [chx + dx + 1, cy3 - 1, chx + dx + 3, cy3 - 1, chx + dx, cy3 - alto + 1], P.oro3);
   }
+  // Las piedras, con su brillo de un pixel arriba a la izquierda
   elipse(L, chx, cy3 - 11, 3.5, 3.5, P.joya);
-  elipse(L, chx - 9, cy3 - 7, 2.5, 2.5, P.joya2);
-  elipse(L, chx + 9, cy3 - 7, 2.5, 2.5, P.joya2);
+  elipse(L, chx - 1, cy3 - 12, 1.2, 1.2, P.bla2);
+  for (const s of [-1, 1]) {
+    elipse(L, chx + s * 9, cy3 - 7, 2.5, 2.5, P.joya2);
+    elipse(L, chx + s * 9 - 1, cy3 - 8, 1, 1, P.bla2);
+  }
 
   // === 10. El ESCUDO POR DELANTE, al bloquear ===
   // Va al final del todo, incluso por delante de la cabeza y la corona: al
@@ -365,30 +437,49 @@ function dibujaCara(L, cx, cy, p) {
   } else {
     const alto = p.ojos === 'esfuerzo' ? 4 : p.ojos === 'dolor' ? 3 : 6;
     for (const dx of [-8, 8]) {
+      // El ojo: blanco, iris cafe en dos tonos, pupila y DOS brillos.
+      // OJO CON EL SOMBREADO: probe una sombra de parpado sobre el blanco y
+      // una linea bajo el ojo, y a 46 px de cara se comian el ojo entero --
+      // quedaban dos manchas oscuras con cara de enfado permanente. A este
+      // tamaño el ojo se lee por CONTRASTE (blanco grande, pupila negra), no
+      // por bandas de sombra. Renderizado a x7 para verlo, no a ojo.
       elipse(L, cx + dx, oy, 5, alto + 1, P.ojoB);
       elipse(L, cx + dx + 1, oy + 1, 3.5, alto * 0.75, P.ojo2);
       elipse(L, cx + dx + 1, oy + 1.5, 3, alto * 0.62, P.ojo);
       elipse(L, cx + dx + 1, oy + 1, 1.8, alto * 0.42, P.out);
-      elipse(L, cx + dx - 1, oy - 1.5, 1.5, 1.5, P.ojoB);   // el brillo
+      elipse(L, cx + dx - 1, oy - 1.5, 1.5, 1.5, P.ojoB);   // el brillo grande
+      elipse(L, cx + dx + 2.5, oy + 2, 0.9, 0.9, P.ojoB);   // el chispazo chico
       // Pestañas arriba
       linea(L, cx + dx - 5, oy - alto, cx + dx + 5, oy - alto - 1, 2.5, P.out);
+      // la pestaña que sobresale en el rabillo, como en las referencias
+      const s = Math.sign(dx);
+      curva(L, cx + dx + s * 4, oy - alto, cx + dx + s * 6, oy - alto - 1.5,
+               cx + dx + s * 7.5, oy - alto - 2.5, 2, 1, P.out);
     }
   }
   // Cejas
-  const cejaY = p.ojos === 'esfuerzo' || p.ojos === 'dolor' ? oy - 11 : oy - 12;
+  // CEJAS. Finas y separadas del ojo: con 2.5 px de grosor y pegadas encima
+  // se leian como un ceño de enfado permanente, hasta en la cara de reposo.
+  // Ahora son de 2 px, dos pixeles mas arriba, y en pel2 (no pel1) para que
+  // no compitan en negro con la pupila.
+  const cejaY = p.ojos === 'esfuerzo' || p.ojos === 'dolor' ? oy - 12 : oy - 13.5;
   const cejaIncl = p.ojos === 'esfuerzo' ? 2 : p.ojos === 'dolor' ? -2 : 0;
-  curva(L, cx - 13, cejaY + cejaIncl, cx - 8, cejaY - 3, cx - 3, cejaY - 1 - cejaIncl, 2.5, 2, P.pel1);
-  curva(L, cx + 3, cejaY - 1 - cejaIncl, cx + 8, cejaY - 3, cx + 13, cejaY + cejaIncl, 2, 2.5, P.pel1);
+  curva(L, cx - 12, cejaY + cejaIncl, cx - 7.5, cejaY - 2.5, cx - 3.5, cejaY - 1 - cejaIncl, 2, 1.5, P.pel2);
+  curva(L, cx + 3.5, cejaY - 1 - cejaIncl, cx + 7.5, cejaY - 2.5, cx + 12, cejaY + cejaIncl, 1.5, 2, P.pel2);
   // Nariz
   elipse(L, cx + 1, oy + 8, 1.5, 1.5, P.piel1);
   // Boca
   if (p.boca === 'abierta') {
-    elipse(L, cx + 1, oy + 14, 4, 4.5, P.boca);
-    elipse(L, cx + 1, oy + 13, 3, 2, P.out);
+    elipse(L, cx + 1, oy + 14, 4, 4.5, P.out);
+    elipse(L, cx + 1, oy + 15, 3, 3, P.boca);
+    elipse(L, cx + 1, oy + 16.5, 2, 1.2, P.ves4);   // la lengua, insinuada
   } else if (p.boca === 'apretada') {
     linea(L, cx - 4, oy + 14, cx + 6, oy + 14, 2.5, P.boca);
+    linea(L, cx - 3, oy + 15.5, cx + 5, oy + 15.5, 1.4, P.ves4);  // el labio
   } else {
     curva(L, cx - 4, oy + 13, cx + 1, oy + 16, cx + 6, oy + 13, 2.5, 2.5, P.boca);
+    // el labio de abajo, mas claro: es lo que hace que la sonrisa tenga boca
+    curva(L, cx - 3, oy + 15, cx + 1, oy + 17, cx + 5, oy + 15, 1.6, 1.6, P.ves4);
   }
   // Colorete
   elipse(L, cx - 13, oy + 7, 4, 2.5, P.piel1);
