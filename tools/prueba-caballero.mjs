@@ -177,7 +177,7 @@ console.log('== 7) POSES ==');
   // REAL de poses de cada accion (atk tiene 5, block 3, jump 3...), no contra
   // un 0..3 fijo: ese tope fijo habria dejado pasar un desbordamiento el dia
   // que se añadieron fotogramas al tajo.
-  const CUENTA = { idle: 4, run: 6, jump: 7, roll: 4, atk: 5, block: 4, hurt: 3 };
+  const CUENTA = { idle: 6, run: 8, jump: 7, roll: 4, atk: 5, block: 4, hurt: 3 };
   const K2 = makeCaballero(300);
   let malo = null;
   const vistos = {};

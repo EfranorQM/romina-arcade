@@ -263,8 +263,12 @@ export function pose(K) {
     // El ciclo avanza con la DISTANCIA recorrida, no con el reloj: asi los
     // pies no patinan cuando acelera o frena. Seis fotogramas, y el paso se
     // reescala para que un ciclo siga midiendo lo mismo en el suelo.
-    const paso = Math.abs(K.x * 0.034 * 1.5) % 6;
+    // OCHO fotogramas. El factor se reescala con ellos para que un ciclo de
+    // zancada siga midiendo lo mismo en el suelo (0.034 era para 4).
+    const paso = Math.abs(K.x * 0.034 * 2) % 8;
     return ['run', Math.floor(paso)];
   }
-  return ['idle', Math.floor(K.animT / 0.42) % 4];
+  // SEIS fotogramas de respirar. Se alarga el paso a 0.30 s para que el ciclo
+  // entero siga durando lo mismo (1.7 s): respirar es lento a proposito.
+  return ['idle', Math.floor(K.animT / 0.30) % 6];
 }

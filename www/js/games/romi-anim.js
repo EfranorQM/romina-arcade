@@ -9,64 +9,103 @@
 import { pose, horneaPose } from './romi-pose.js';
 import { EJE } from './romi-art.js';
 
+// --- La tela ---
+// Genera los siete gajos de la falda como una ONDA QUE VIAJA. `fase` es donde
+// esta la onda, `amp` cuanto se mueve la tela y `retardo` cuanto tarda un gajo
+// en seguir al de al lado.
+//
+// El retardo es lo que hace que parezca tela: si los siete gajos se movieran a
+// la vez, la falda seria un cono rigido balanceandose. Con retardo, cuando ella
+// arranca el gajo de delante sale primero y el de atras llega tarde, igual que
+// una falda de verdad.
+function tela(fase, amp, retardo = 0.55) {
+  const g = [];
+  for (let i = 0; i < 7; i++) {
+    // i=0 es el gajo de atras, i=6 el de delante. El de delante va por delante
+    // en la fase (de ahi el signo), y los de atras arrastran.
+    g.push(Math.sin(fase - (6 - i) * retardo) * amp);
+  }
+  return g;
+}
+// El bajo de la falda: la misma onda desfasada un cuarto, porque el borde
+// llega siempre despues que el cuerpo del gajo (es lo que mas cuelga).
+function borde(fase, amp, retardo = 0.55) {
+  return tela(fase - 1.2, amp, retardo);
+}
+
 // Las poses, agrupadas por accion.
 export const POSES = {
-  // QUIETA: respira. El torso sube 2 px y la falda ondea despacio.
+  // QUIETA: respira, y la falda ondea sola. SEIS fotogramas: con cuatro el
+  // ciclo de respiracion se notaba repetirse. La tela se mueve poquito
+  // (amplitud 0.22) pero NUNCA se queda congelada, que es lo que distingue un
+  // personaje vivo de una estatua.
   idle: [
-    pose({}),
-    pose({ torY: -33, cabY: -27, falOnda: 0.5, manD: [21, 43], manI: [-21, 43] }),
-    pose({ torY: -32, cabY: -27, falOnda: 1.0, manD: [21, 42], manI: [-21, 42] }),
-    pose({ torY: -33, cabY: -27, falOnda: 1.5, manD: [21, 43], manI: [-21, 43] }),
+    pose({ falGajos: tela(0.0, 0.22), falBorde: borde(0.0, 0.3) }),
+    pose({ torY: -33, cabY: -27, falOnda: 0.5, manD: [21, 43], manI: [-21, 43],
+           falGajos: tela(1.05, 0.22), falBorde: borde(1.05, 0.3) }),
+    pose({ torY: -32, cabY: -27, falOnda: 1.0, manD: [21, 42], manI: [-21, 42],
+           falGajos: tela(2.1, 0.22), falBorde: borde(2.1, 0.3) }),
+    pose({ torY: -32, cabY: -27, falOnda: 1.5, manD: [21, 42], manI: [-21, 42],
+           falGajos: tela(3.15, 0.22), falBorde: borde(3.15, 0.3) }),
+    pose({ torY: -33, cabY: -27, falOnda: 2.0, manD: [21, 43], manI: [-21, 43],
+           falGajos: tela(4.2, 0.22), falBorde: borde(4.2, 0.3) }),
+    pose({ falOnda: 2.5, falGajos: tela(5.25, 0.22), falBorde: borde(5.25, 0.3) }),
   ],
 
-  // CORRER: cuatro fotogramas. Lo que se mueve es el VESTIDO, no las piernas:
-  // la pierna empuja la tela desde dentro y por debajo del borde asoma la bota.
-  // Antes se pintaban dos tiras de piel que rajaban la falda por el medio y
-  // parecian zancos -- era lo mas feo de toda la animacion.
+  // CORRER: OCHO fotogramas, y ninguno tiene piernas.
   //
-  // El ciclo tambien SUBE Y BAJA (cadY 112-116): un ciclo de carrera sin ese
-  // rebote se lee como si patinara. Los apoyos (1 y 3) van abajo; los vuelos
-  // (2 y 4), arriba.
-  // SEIS fotogramas, no cuatro. Medido: un ciclo de zancada dura 0.53 s, y con
-  // cuatro dibujos eso son 7.5 por segundo -- por debajo de los 12 a los que la
-  // animacion 2D clasica va "a dos", y se notaba a saltos. Con seis van a 11.3.
-  // El ciclo es: contacto -> peso encima -> empuje/vuelo, y otra vez con la
-  // otra pierna.
+  // El ciclo ya no es "pie derecho / pie izquierdo": es el REBOTE del cuerpo
+  // (la cadera sube y baja dos veces por ciclo, que es lo que hace leer la
+  // zancada aunque no se vean los pies) mas la ONDA de la tela recorriendo los
+  // siete gajos. La onda da una vuelta entera en los ocho fotogramas, asi que
+  // el bucle cierra sin salto.
+  //
+  // Con ocho dibujos en los 0.53 s del ciclo van a 15 por segundo: por encima
+  // de los 12 de la animacion clasica. La tela tiene sitio de sobra para
+  // moverse, que es justo lo que faltaba.
   run: [
-    // 1. CONTACTO derecho. El pie de delante toca, la cadera baja.
+    // 1. Abajo del rebote. La tela empieza a lanzarse hacia atras.
     pose({ incl: 0.20, cadY: 116, torY: -33, falVuelo: 18, falOnda: 0, falAncho: 47,
-           piernaD: 22, piernaI: -10,
+           falGajos: tela(0.0, 0.85), falBorde: borde(0.0, 0.9),
            codD: [15, 16], manD: [26, 30], codI: [-16, 18], manI: [-18, 38],
            espAng: 0.9, cabGiro: 0.3 }),
-    // 2. PESO ENCIMA. La cadera en su punto mas bajo, las piernas bajo ella.
-    pose({ incl: 0.23, cadY: 118, torY: -32, falVuelo: 14, falOnda: 0.6, falAncho: 45,
-           piernaD: 14, piernaI: -18,
-           codD: [16, 15], manD: [28, 28], codI: [-15, 19], manI: [-20, 39],
+    // 2. Subiendo.
+    pose({ incl: 0.23, cadY: 113, torY: -35, falVuelo: 23, falOnda: 0.6, falAncho: 49,
+           falGajos: tela(0.79, 0.9), falBorde: borde(0.79, 0.95),
+           codD: [16, 15], manD: [29, 27], codI: [-15, 19], manI: [-21, 39],
            espAng: 0.8, cabGiro: 0.3 }),
-    // 3. EMPUJE y vuelo. Sube, la falda en su maximo hacia atras.
-    pose({ incl: 0.26, cadY: 111, torY: -36, falVuelo: 26, falOnda: 1.2, falAncho: 50,
-           piernaD: 6, piernaI: -22,
+    // 3. Arriba del rebote. La falda en su maximo hacia atras.
+    pose({ incl: 0.26, cadY: 111, torY: -36, falVuelo: 27, falOnda: 1.2, falAncho: 50,
+           falGajos: tela(1.57, 0.95), falBorde: borde(1.57, 1.0),
            codD: [17, 14], manD: [30, 26], codI: [-14, 20], manI: [-22, 40],
            espAng: 0.7, cabGiro: 0.3 }),
-    // 4. CONTACTO izquierdo.
+    // 4. Cayendo. La tela empieza a volver.
+    pose({ incl: 0.23, cadY: 114, torY: -34, falVuelo: 21, falOnda: 1.8, falAncho: 48,
+           falGajos: tela(2.36, 0.9), falBorde: borde(2.36, 0.95),
+           codD: [16, 16], manD: [27, 30], codI: [-15, 18], manI: [-19, 37],
+           espAng: 0.85, cabGiro: 0.3 }),
+    // 5. Abajo del rebote, la otra mitad del ciclo.
     pose({ incl: 0.20, cadY: 116, torY: -33, falVuelo: 18, falOnda: 2.4, falAncho: 47,
-           piernaD: -10, piernaI: 22,
+           falGajos: tela(3.14, 0.85), falBorde: borde(3.14, 0.9),
            codD: [15, 18], manD: [24, 34], codI: [-16, 16], manI: [-16, 34],
            espAng: 0.9, cabGiro: 0.3 }),
-    // 5. PESO ENCIMA.
-    pose({ incl: 0.23, cadY: 118, torY: -32, falVuelo: 14, falOnda: 3.0, falAncho: 45,
-           piernaD: -18, piernaI: 14,
+    // 6. Subiendo.
+    pose({ incl: 0.23, cadY: 113, torY: -35, falVuelo: 23, falOnda: 3.0, falAncho: 49,
+           falGajos: tela(3.93, 0.9), falBorde: borde(3.93, 0.95),
            codD: [14, 19], manD: [22, 36], codI: [-16, 15], manI: [-18, 32],
            espAng: 1.0, cabGiro: 0.3 }),
-    // 6. EMPUJE y vuelo.
-    pose({ incl: 0.26, cadY: 111, torY: -36, falVuelo: 26, falOnda: 3.6, falAncho: 50,
-           piernaD: -22, piernaI: 6,
+    // 7. Arriba del rebote.
+    pose({ incl: 0.26, cadY: 111, torY: -36, falVuelo: 27, falOnda: 3.6, falAncho: 50,
+           falGajos: tela(4.71, 0.95), falBorde: borde(4.71, 1.0),
            codD: [13, 20], manD: [20, 38], codI: [-17, 14], manI: [-24, 30],
            espAng: 1.1, cabGiro: 0.3 }),
+    // 8. Cayendo, y enlaza con el 1.
+    pose({ incl: 0.23, cadY: 114, torY: -34, falVuelo: 21, falOnda: 4.2, falAncho: 48,
+           falGajos: tela(5.50, 0.9), falBorde: borde(5.50, 0.95),
+           codD: [14, 18], manD: [23, 33], codI: [-16, 17], manI: [-18, 36],
+           espAng: 1.0, cabGiro: 0.3 }),
   ],
 
-  // SALTAR: impulso (agachada), aire (piernas recogidas, falda y pelo arriba),
-  // caida (piernas buscando el suelo).
   // SEIS fotogramas, no tres. Era la peor de todas: el vuelo dura 0.52 s y con
   // tres dibujos son 5.8 por segundo, la mitad de lo que pide una accion fluida
   // -- por eso al saltar se veia a tirones. Ahora van a 11.5.
@@ -76,41 +115,47 @@ export const POSES = {
   jump: [
     // 1. IMPULSO. Se agacha, la falda se aplasta contra las piernas.
     pose({ cadY: 122, torY: -28, incl: 0.16, falVuelo: 4, falAlto: 54, falAncho: 50,
-           piernaD: 10, piernaI: -8,
            codD: [14, 12], manD: [24, 24], codI: [-14, 12], manI: [-24, 24],
-           ojos: 'esfuerzo', boca: 'apretada' }),
+           ojos: 'esfuerzo', boca: 'apretada',
+           falGajos: tela(0.0, 0.5), falBorde: borde(0.0, 0.55) }),
     // 2. DESPEGUE. Se estira del todo, la falda todavia arrastra abajo.
     pose({ cadY: 112, torY: -35, incl: 0.02, falVuelo: 16, falAlto: 58, falAncho: 47,
-           falOnda: 0.8, piernaD: 18, piernaI: -12,
+           falOnda: 0.8,
            codD: [17, 8], manD: [28, 14], codI: [-17, 8], manI: [-28, 14],
-           espAng: -0.2, escAng: -0.2, escY: 8, ojos: 'esfuerzo', boca: 'abierta' }),
+           espAng: -0.2, escAng: -0.2, escY: 8, ojos: 'esfuerzo', boca: 'abierta',
+           falGajos: tela(1.1, 0.8), falBorde: borde(1.1, 0.88) }),
     // 3. SUBIENDO. Brazos arriba, la falda y el pelo ya subiendo con ella.
     pose({ cadY: 108, torY: -37, incl: -0.12, falVuelo: 28, falAlto: 50, falAncho: 44,
-           falOnda: 2, piernaD: 16, piernaI: -14,
+           falOnda: 2,
            codD: [18, 4], manD: [30, 6], codI: [-18, 4], manI: [-30, 6],
-           espAng: -0.7, escAng: -0.35, escY: 4, ojos: 'esfuerzo', boca: 'abierta' }),
+           espAng: -0.7, escAng: -0.35, escY: 4, ojos: 'esfuerzo', boca: 'abierta',
+           falGajos: tela(2.0, 1.15), falBorde: borde(2.0, 1.26) }),
     // 4. CUMBRE. El instante en que se para arriba: se recoge y flota.
     pose({ cadY: 110, torY: -36, incl: -0.04, falVuelo: 22, falAlto: 46, falAncho: 42,
-           falOnda: 3, piernaD: 12, piernaI: -10,
+           falOnda: 3,
            codD: [16, 6], manD: [26, 10], codI: [-16, 6], manI: [-26, 10],
-           espAng: -0.3, escAng: -0.25, escY: 6, ojos: 'normal', boca: 'abierta' }),
+           espAng: -0.3, escAng: -0.25, escY: 6, ojos: 'normal', boca: 'abierta',
+           falGajos: tela(2.9, 0.75), falBorde: borde(2.9, 0.83) }),
     // 5. CAYENDO. La falda se le viene arriba por el aire que sube.
     pose({ cadY: 111, torY: -34, incl: 0.04, falVuelo: 20, falAlto: 62, falAncho: 50,
-           falOnda: 3.6, piernaD: 14, piernaI: 10,
+           falOnda: 3.6,
            codD: [15, 12], manD: [26, 22], codI: [-15, 12], manI: [-26, 22],
-           espAng: 0.8 }),
+           espAng: 0.8,
+           falGajos: tela(3.8, 0.95), falBorde: borde(3.8, 1.04) }),
     // 6. BUSCA EL SUELO. Las piernas se adelantan para recibir el golpe.
     pose({ cadY: 113, torY: -32, incl: 0.10, falVuelo: 16, falAlto: 68, falAncho: 52,
-           falOnda: 4, piernaD: 12, piernaI: 18,
+           falOnda: 4,
            codD: [14, 18], manD: [24, 34], codI: [-14, 18], manI: [-24, 34],
-           espAng: 1.4 }),
+           espAng: 1.4,
+           falGajos: tela(4.6, 1.1), falBorde: borde(4.6, 1.21) }),
     // 7. ATERRIZA. Amortigua: la cadera baja de golpe, la falda se aplasta
     // contra el suelo y rebota. Sin esto, caer de un salto entero se veia
     // como aparecer de pie -- la caida no tenia consecuencia.
     pose({ cadY: 126, torY: -26, incl: 0.20, falVuelo: -4, falAlto: 50, falAncho: 54,
-           falOnda: 5, piernaD: 14, piernaI: -12,
+           falOnda: 5,
            codD: [12, 16], manD: [20, 30], codI: [-12, 16], manI: [-20, 30],
-           espAng: 1.5, ojos: 'esfuerzo', boca: 'apretada' }),
+           espAng: 1.5, ojos: 'esfuerzo', boca: 'apretada',
+           falGajos: tela(5.4, 0.55), falBorde: borde(5.4, 0.61) }),
   ],
 
   // RODAR: se agacha, se hace bola con el escudo por delante y se levanta.
@@ -119,16 +164,20 @@ export const POSES = {
   roll: [
     pose({ cadY: 126, torY: -24, incl: 0.5, cabY: -22, falAlto: 48, falAncho: 40, falVuelo: 14,
            codD: [10, 10], manD: [16, 20], codI: [-12, 8], manI: [-22, 16],
-           escX: -26, escY: -2, escAng: -0.5, espAng: 2.2, ojos: 'esfuerzo', boca: 'apretada' }),
+           escX: -26, escY: -2, escAng: -0.5, espAng: 2.2, ojos: 'esfuerzo', boca: 'apretada',
+           falGajos: tela(0.4, 1.0), falBorde: borde(0.4, 1.10) }),
     pose({ cadY: 138, torY: -14, incl: 1.1, cabY: -16, cabGiro: -0.5, falAlto: 34, falAncho: 36,
            falVuelo: 22, falOnda: 2, codD: [6, 6], manD: [10, 14], codI: [-8, 4], manI: [-16, 8],
-           escX: -18, escY: 4, escAng: -1.1, espAng: 2.8, ojos: 'cerrados', boca: 'apretada' }),
+           escX: -18, escY: 4, escAng: -1.1, espAng: 2.8, ojos: 'cerrados', boca: 'apretada',
+           falGajos: tela(1.9, 1.25), falBorde: borde(1.9, 1.38) }),
     pose({ cadY: 140, torY: -12, incl: 1.5, cabY: -12, cabGiro: -0.8, falAlto: 30, falAncho: 38,
            falVuelo: 18, falOnda: 4, codD: [4, 8], manD: [6, 16], codI: [-6, 6], manI: [-12, 12],
-           escX: -12, escY: 8, escAng: -1.5, espAng: 3.2, ojos: 'cerrados', boca: 'apretada' }),
+           escX: -12, escY: 8, escAng: -1.5, espAng: 3.2, ojos: 'cerrados', boca: 'apretada',
+           falGajos: tela(3.4, 1.2), falBorde: borde(3.4, 1.32) }),
     pose({ cadY: 128, torY: -22, incl: 0.7, cabY: -20, cabGiro: -0.3, falAlto: 46, falAncho: 42,
            falVuelo: 12, falOnda: 5.5, codD: [10, 14], manD: [18, 26], codI: [-12, 10], manI: [-24, 20],
-           escX: -24, escY: 2, escAng: -0.7, espAng: 2.0, ojos: 'esfuerzo' }),
+           escX: -24, escY: 2, escAng: -0.7, espAng: 2.0, ojos: 'esfuerzo',
+           falGajos: tela(4.9, 0.9), falBorde: borde(4.9, 0.99) }),
   ],
 
   // TAJO: cinco fotogramas. Antes eran cuatro y solo cambiaba el angulo del
@@ -140,31 +189,35 @@ export const POSES = {
   atk: [
     // 1. CARGA. Se agacha, el hombro atras, la espada arriba y detras.
     pose({ incl: -0.30, cabGiro: 0.45, cadY: 116, torY: -31, falVuelo: -16, falOnda: 0.6,
-           falAncho: 44, piernaD: -10, piernaI: 12,
+           falAncho: 44,
            codD: [2, -14], manD: [-4, -30], espAng: -2.35,
            codI: [-17, 12], manI: [-28, 26],
-           escX: -34, escY: 8, escAng: 0.5, ojos: 'esfuerzo', boca: 'apretada' }),
+           escX: -34, escY: 8, escAng: 0.5, ojos: 'esfuerzo', boca: 'apretada',
+           falGajos: tela(5.6, 0.7), falBorde: borde(5.6, 0.77) }),
     // 2. BARRIDO. El instante del impacto: brazo extendido del todo, la hoja
     // horizontal, y la estela cubriendo TODO el arco que acaba de recorrer.
     pose({ incl: 0.38, cabGiro: 0.55, cadY: 110, torY: -35, falVuelo: 26, falOnda: 2.2,
-           falAncho: 50, piernaD: 22, piernaI: -14,
+           falAncho: 50,
            codD: [24, 2], manD: [44, 4], espAng: -0.15, estela: [-2.15, -0.05],
            codI: [-10, 20], manI: [-14, 38],
-           escX: -26, escY: 18, escAng: -0.35, ojos: 'esfuerzo', boca: 'abierta' }),
+           escX: -26, escY: 18, escAng: -0.35, ojos: 'esfuerzo', boca: 'abierta',
+           falGajos: tela(1.2, 1.2), falBorde: borde(1.2, 1.32) }),
     // 3. PASADA. La espada se pasa de largo por el peso, ella sigue girada.
     pose({ incl: 0.30, cabGiro: 0.5, cadY: 113, torY: -34, falVuelo: 18, falOnda: 3.4,
-           falAncho: 48, piernaD: 14, piernaI: -8,
+           falAncho: 48,
            codD: [22, 14], manD: [38, 24], espAng: 0.85, estela: [-0.05, 0.73],
            codI: [-12, 20], manI: [-18, 40],
-           escX: -30, escY: 16, escAng: -0.1, ojos: 'esfuerzo', boca: 'abierta' }),
+           escX: -30, escY: 16, escAng: -0.1, ojos: 'esfuerzo', boca: 'abierta',
+           falGajos: tela(2.2, 1.0), falBorde: borde(2.2, 1.10) }),
     // 4. FRENA. Le cuesta pararla: la punta baja del todo y el torso vuelve.
     pose({ incl: 0.14, cadY: 114, torY: -33, falVuelo: 8, falOnda: 4.6, falAncho: 47,
-           piernaD: 6, piernaI: -4,
            codD: [17, 22], manD: [28, 40], espAng: 1.45,
-           codI: [-14, 20], manI: [-22, 42], escX: -33, escY: 16, boca: 'apretada' }),
+           codI: [-14, 20], manI: [-22, 42], escX: -33, escY: 16, boca: 'apretada',
+           falGajos: tela(3.1, 0.7), falBorde: borde(3.1, 0.77) }),
     // 5. GUARDIA. Vuelve a la suya, aun con la respiracion alta.
     pose({ incl: 0.04, torY: -33, falVuelo: 2, falOnda: 5.6,
-           codD: [14, 22], manD: [22, 44], espAng: 1.3 }),
+           codD: [14, 22], manD: [22, 44], espAng: 1.3,
+           falGajos: tela(4.0, 0.45), falBorde: borde(4.0, 0.50) }),
   ],
 
   // BLOQUEAR: cuatro fotogramas.
@@ -181,34 +234,37 @@ export const POSES = {
   block: [
     // 1. LEVANTA. El escudo sube cruzando el cuerpo, la cara ya al frente.
     pose({ incl: 0.10, cabGiro: 0.15, cadY: 116, torY: -31, falOnda: 0.4,
-           falAncho: 47, falAlto: 62, piernaD: 6, piernaI: -10,
+           falAncho: 47, falAlto: 62,
            codD: [8, 22], manD: [10, 38], espAng: 2.5,
            codI: [-4, 14], manI: [4, 22],
            escX: 8, escY: 0, escAng: 0.05, escZ: 1,
-           ojos: 'esfuerzo', boca: 'apretada' }),
+           ojos: 'esfuerzo', boca: 'apretada',
+           falGajos: tela(0.2, 0.35), falBorde: borde(0.2, 0.39) }),
     // 2. PLANTADA. Postura estable: peso atras, escudo al frente, mirando.
     pose({ incl: 0.16, cabGiro: 0.25, cadY: 119, torY: -29, cabY: -26, falOnda: 1.2,
-           falAncho: 49, falAlto: 59, piernaD: 10, piernaI: -16,
+           falAncho: 49, falAlto: 59,
            codD: [6, 24], manD: [6, 40], espAng: 2.7,
            codI: [-2, 16], manI: [10, 24],
            escX: 14, escY: 2, escAng: 0, escZ: 1,
-           ojos: 'esfuerzo', boca: 'apretada' }),
+           ojos: 'esfuerzo', boca: 'apretada',
+           falGajos: tela(0.9, 0.28), falBorde: borde(0.9, 0.31) }),
     // 3. IMPACTO. El golpe la empuja: la CADERA cede y el pie de atras patina,
     // pero el escudo y la cara siguen al frente -- aguanta, no se voltea.
     pose({ incl: 0.06, cabGiro: 0.18, cadY: 124, torY: -26, cabY: -23,
            falOnda: 2.6, falAncho: 51, falAlto: 56, falVuelo: -12,
-           piernaD: 4, piernaI: -24,
            codD: [4, 26], manD: [2, 42], espAng: 2.95,
            codI: [0, 18], manI: [16, 26],
            escX: 19, escY: 4, escAng: -0.12, escZ: 1,
-           ojos: 'esfuerzo', boca: 'abierta' }),
+           ojos: 'esfuerzo', boca: 'abierta',
+           falGajos: tela(2.4, 0.85), falBorde: borde(2.4, 0.94) }),
     // 4. SE REHACE. Vuelve a plantarse tras aguantar el golpe.
     pose({ incl: 0.14, cabGiro: 0.22, cadY: 120, torY: -28, cabY: -25,
-           falOnda: 3.8, falAncho: 49, falAlto: 58, piernaD: 8, piernaI: -14,
+           falOnda: 3.8, falAncho: 49, falAlto: 58,
            codD: [6, 24], manD: [6, 40], espAng: 2.75,
            codI: [-2, 16], manI: [11, 24],
            escX: 15, escY: 2, escAng: 0.04, escZ: 1,
-           ojos: 'esfuerzo', boca: 'apretada' }),
+           ojos: 'esfuerzo', boca: 'apretada',
+           falGajos: tela(3.6, 0.4), falBorde: borde(3.6, 0.44) }),
   ],
 
   // DOLOR: tres fotogramas, no uno. Dura 0.28 s y con un solo dibujo el golpe
@@ -220,19 +276,22 @@ export const POSES = {
     pose({ incl: -0.35, cabGiro: -0.6, cabY: -30, torY: -32, falVuelo: -14, falOnda: 3,
            codD: [10, 6], manD: [14, 12], espAng: 2.6,
            codI: [-18, 10], manI: [-30, 18], escX: -38, escY: 4, escAng: 0.8,
-           ojos: 'dolor', boca: 'abierta' }),
+           ojos: 'dolor', boca: 'abierta',
+           falGajos: tela(3.0, 0.9), falBorde: borde(3.0, 0.99) }),
     // 2. ARQUEADA. Lo peor del dolor: se dobla sobre si misma y retrocede.
     pose({ incl: -0.48, cabGiro: -0.7, cabY: -26, torY: -28, cadY: 118,
-           falVuelo: -22, falOnda: 4.4, falAncho: 44, piernaD: -18, piernaI: 10,
+           falVuelo: -22, falOnda: 4.4, falAncho: 44,
            codD: [6, 10], manD: [8, 18], espAng: 2.9,
            codI: [-20, 8], manI: [-34, 14], escX: -42, escY: 8, escAng: 1.0,
-           ojos: 'dolor', boca: 'abierta' }),
+           ojos: 'dolor', boca: 'abierta',
+           falGajos: tela(4.2, 1.15), falBorde: borde(4.2, 1.26) }),
     // 3. SE RECOMPONE. Vuelve a levantar la guardia, aun dolorida.
     pose({ incl: -0.16, cabGiro: -0.3, cabY: -28, torY: -32, cadY: 114,
-           falVuelo: -6, falOnda: 5.4, piernaD: -8, piernaI: 4,
+           falVuelo: -6, falOnda: 5.4,
            codD: [12, 14], manD: [18, 26], espAng: 2.0,
            codI: [-16, 14], manI: [-26, 26], escX: -36, escY: 8, escAng: 0.5,
-           ojos: 'dolor', boca: 'apretada' }),
+           ojos: 'dolor', boca: 'apretada',
+           falGajos: tela(5.3, 0.6), falBorde: borde(5.3, 0.66) }),
   ],
 };
 

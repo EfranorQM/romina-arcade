@@ -24,6 +24,14 @@ export const BASE = {
   falAlto: 64,              // cuanto baja la falda desde la cadera
   falVuelo: 0,              // cuanto se abre hacia atras (al correr o saltar)
   falOnda: 0,               // desfase del borde ondulado
+  // Los SIETE GAJOS de la falda. Es lo que sustituye a las piernas: cada gajo
+  // se mueve por su cuenta y con retardo respecto al vecino, que es lo que
+  // hace que la tela se lea como tela. El indice 0 es el gajo de ATRAS y el 6
+  // el de DELANTE.
+  //   falGajos[i]  -1..1  cuanto se va ese gajo hacia atras
+  //   falBorde[i]  -1..1  cuanto sube (-) o baja (+) el bajo de ese gajo
+  falGajos: null,
+  falBorde: null,
   hombD: 15, hombI: -15,    // los hombros
   // Los brazos: codo y mano, respecto al hombro
   // El codo y la mano, respecto al hombro. Medido en el render: con la mano a
@@ -99,103 +107,133 @@ export function dibujaPose(p) {
     curva(L, x0, y0, (x0 + x1) / 2 + 2, (y0 + y1) / 2, x1, y1, gr, gr * 0.6, P.pel4);
   }
 
-  // === 2. La FALDA, de atras hacia adelante ===
-  // Arranca en la CADERA (17 px, el mismo ancho con el que acaba el cuerpo) y
-  // no en 13: asi no queda escalon entre el talle y la falda. La curva es
-  // cubica en vez de cuadratica -- se abre despacio al salir de la cadera y de
-  // golpe al final, que es como cae una falda de vuelo de verdad.
+  // === 2. La FALDA, por GAJOS ===
+  //
+  // NO HAY PIES. El vestido llega al suelo y es lo UNICO que se mueve: no hay
+  // piernas, ni botas, ni tobillos. Una princesa con falda larga no ensena los
+  // pies al andar, y los que habia (dos botas marrones asomando) se veian como
+  // dos piedras deslizandose. Todo el movimiento lo lleva la tela.
+  //
+  // Para eso la falda deja de ser UN poligono rigido con cuatro numeros y pasa
+  // a ser SIETE GAJOS verticales independientes. Cada gajo tiene su propio
+  // desplazamiento, y se mueven con RETARDO de uno a otro: cuando ella arranca,
+  // el gajo de delante sale primero y el de atras llega tarde. Eso es lo que
+  // hace que la tela parezca tela y no un cono pintado.
+  //
+  // p.falGajos es un array de 7 numeros (-1..1): cuanto se desplaza cada gajo
+  // hacia atras. p.falBorde son 7 numeros mas: cuanto sube o baja el bajo de
+  // cada gajo, que es lo que hace ondear el borde.
   const fy0 = cad[1] - 6, fy1 = cad[1] + p.falAlto;
   const vuelo = p.falVuelo;
   const A0 = 17;
-  // Capa de fuera (la mas oscura), con el borde ondulado
+  const NG = 7;                          // gajos
+  const gj = p.falGajos || new Array(NG).fill(0);
+  const gb = p.falBorde || new Array(NG).fill(0);
+
+  // El bajo de la falda, gajo a gajo. Se calcula primero porque lo usan la
+  // silueta, la cenefa y el forro: asi los tres coinciden SIEMPRE, que era un
+  // fallo latente (se recalculaba la onda tres veces con formulas distintas).
+  const bajo = [];
+  for (let i = 0; i <= NG; i++) {
+    const u = i / NG;                    // 0 = atras del todo, 1 = delante
+    const g = gj[Math.min(NG - 1, i)] || 0;
+    const b = gb[Math.min(NG - 1, i)] || 0;
+    // ancho base + el vuelo general + lo que este gajo se ha ido hacia atras
+    const x = cad[0] - p.falAncho - vuelo + u * (p.falAncho * 2 + vuelo * 1.3);
+    bajo.push([x - g * 9, fy1 + Math.sin(u * 9 + p.falOnda) * 4 + b * 5]);
+  }
+
+  // --- La silueta: de la cadera al bajo, pasando por cada gajo ---
   const falda = [];
-  const NB = 14;
+  const NB = 12;
+  // lado de atras (izquierda), de arriba a abajo
   for (let i = 0; i <= NB; i++) {
     const t = i / NB;
     const y = fy0 + t * p.falAlto;
     const an = A0 + t * t * t * (p.falAncho - A0) + t * 4;
-    falda.push(cad[0] - an - vuelo * t * t, y);
+    falda.push(cad[0] - an - vuelo * t * t - (gj[0] || 0) * 9 * t * t, y);
   }
-  // Borde de abajo, ondulado como los vestidos de las referencias
-  for (let i = 0; i <= 12; i++) {
-    const u = i / 12;
-    const x = cad[0] - p.falAncho - vuelo + u * (p.falAncho * 2 + vuelo * 0.4);
-    const onda = Math.sin(u * 9 + p.falOnda) * 5;
-    falda.push(x, fy1 + onda);
-  }
+  // el bajo, gajo a gajo
+  for (const [bx, by] of bajo) falda.push(bx, by);
+  // lado de delante (derecha), de abajo a arriba
   for (let i = NB; i >= 0; i--) {
     const t = i / NB;
     const y = fy0 + t * p.falAlto;
     const an = A0 + t * t * t * (p.falAncho - A0) + t * 4;
-    falda.push(cad[0] + an + vuelo * 0.3 * t * t, y);
+    falda.push(cad[0] + an + vuelo * 0.3 * t * t - (gj[NG - 1] || 0) * 4 * t * t, y);
   }
   poly(L, falda, P.ves2);
 
-  // La abertura del centro: la enagua clara que asoma
-  const enagua = [];
-  for (let i = 0; i <= 10; i++) {
-    const t = i / 10;
-    enagua.push(cad[0] - (4 + t * t * 26), fy0 + 8 + t * (p.falAlto - 8));
-  }
-  for (let i = 10; i >= 0; i--) {
-    const t = i / 10;
-    enagua.push(cad[0] + (4 + t * t * 26), fy0 + 8 + t * (p.falAlto - 8));
-  }
-  poly(L, enagua, P.fal2);
-  // Pliegues de la enagua
-  for (const d of [-16, 0, 16]) {
-    curva(L, cad[0] + d * 0.3, fy0 + 14, cad[0] + d * 0.7, fy0 + 38, cad[0] + d, fy1 - 4, 2, 3, P.fal1);
-  }
-  // Brillo de la falda, en el lado de la luz
-  for (let i = 0; i < 3; i++) {
-    const t = 0.3 + i * 0.2;
-    curva(L, cad[0] + 12, fy0 + 10, cad[0] + 24 + i * 4, fy0 + 30, cad[0] + 30 + i * 6 + vuelo * 0.2, fy1 - 8, 4, 2, P.ves3);
-  }
-  // BORDADO DE ORO sobre el borde: una cenefa que sigue la onda, justo encima
-  // del forro blanco. Es el detalle que mas "sube" el vestido en las
-  // referencias, y cuesta doce pixeles.
-  for (let i = 0; i <= 28; i++) {
-    const u = i / 28;
-    const x = cad[0] - p.falAncho - vuelo + u * (p.falAncho * 2 + vuelo * 1.3);
-    const onda = Math.sin(u * 9 + p.falOnda) * 5;
-    elipse(L, x, fy1 + onda - 7, 3, 2, P.oro2);
-    // rombos espaciados sobre la cenefa
-    if (i % 4 === 0) {
-      elipse(L, x, fy1 + onda - 7, 2, 2.5, P.oro3);
-    }
-  }
-  // El forro blanco del borde de abajo
-  for (let i = 0; i <= 24; i++) {
-    const u = i / 24;
-    const x = cad[0] - p.falAncho - vuelo + u * (p.falAncho * 2 + vuelo * 1.3);
-    const onda = Math.sin(u * 9 + p.falOnda) * 5;
-    elipse(L, x, fy1 + onda - 1, 4, 3.5, P.bla2);
-    elipse(L, x, fy1 + onda + 2, 4, 2.5, P.bla1);
+  // --- Los PLIEGUES: la linea de sombra entre gajo y gajo ---
+  // Es lo que hace que se vea CUAL gajo se ha movido. Sin esto la falda es una
+  // mancha y da igual cuanto la deformes: no se nota que haya tela dentro.
+  for (let i = 1; i < NG; i++) {
+    const u = i / NG;
+    const [bx, by] = bajo[i];
+    const xTop = cad[0] + (u - 0.5) * 2 * A0 * 0.8;
+    const g = gj[i] || 0;
+    // El pliegue se curva: sale recto de la cadera y se abre al llegar al bajo
+    const col = g > 0.15 ? P.ves1 : g < -0.15 ? P.ves3 : P.ves1;
+    curva(L, xTop, fy0 + 6, (xTop + bx) / 2 - g * 4, fy0 + p.falAlto * 0.55,
+             bx, by - 3, 1.6, 2.6, col);
   }
 
-  // === 3. Las PIERNAS ===
-  // NUNCA se ven desnudas. El vestido es lo que se mueve; la pierna solo
-  // empuja la tela desde dentro y asoma la BOTA por debajo del borde.
-  // Antes se pintaban dos tiras de piel de 13 px que rajaban la falda por el
-  // medio y parecian zancos: era el fallo mas feo de la animacion de correr.
-  for (const [lado, adel] of [[-1, p.piernaI], [1, p.piernaD]]) {
-    if (Math.abs(adel) < 2) continue;
-    const px0 = cad[0] + lado * 7, py0 = cad[1] + 10;
-    // La tela que la pierna empuja: una cuña del MISMO color del vestido que
-    // sale de la cadera hacia donde va el pie. Asi la falda se deforma en vez
-    // de partirse.
-    const pieX = px0 + adel, pieY = py0 + p.falAlto - 14;
-    const ancho = 15 - Math.abs(adel) * 0.12;
-    poly(L, [px0 - ancho, py0, px0 + ancho, py0,
-             pieX + ancho * 0.62, pieY, pieX - ancho * 0.62, pieY],
-         adel > 0 ? P.ves2 : P.ves1);
-    // Solo la BOTA asoma: media melena de piel sobre el empeine y cuero.
-    const bx = pieX, by = pieY + 6;
-    elipse(L, bx, by - 3, 6, 5, P.piel2);           // el tobillo, apenas
-    elipse(L, bx + Math.sign(adel || 1) * 1, by + 2, 8.5, 5, P.mad2);   // la bota
-    elipse(L, bx + Math.sign(adel || 1) * 1, by + 1, 7, 3, P.mad3);
-    elipse(L, bx, by + 4, 8.5, 2.5, P.mad1);        // la suela
+  // --- Brillo del vestido, en el lado de la luz (delante) ---
+  for (let i = 0; i < 3; i++) {
+    const idx = NG - 1 - i;
+    const [bx, by] = bajo[Math.max(0, idx)];
+    curva(L, cad[0] + 11, fy0 + 9,
+             cad[0] + 22 + i * 4, fy0 + p.falAlto * 0.5,
+             bx - 4, by - 8, 4 - i, 2, P.ves3);
   }
+
+  // --- La ENAGUA clara, que asoma por el bajo cuando la falda vuela ---
+  // Solo se ve si hay vuelo: si esta quieta, la tapa la falda de fuera.
+  // OJO CON EL ANCHO. Con 0.72 la enagua llegaba al 72% del bajo y dejaba
+  // 5-13 px de falda a los lados: se veia CASI TODA clara, como si el vestido
+  // hubiera cambiado de color al correr. Medido sobre los anchos reales del
+  // bajo. Con 0.40 asoma por debajo sin comerse el vestido, que es lo que
+  // hace una enagua.
+  if (vuelo > 6) {
+    const en = [];
+    for (let i = 0; i <= NG; i++) {
+      const u = i / NG;
+      en.push(cad[0] + (u - 0.5) * 2 * 8, fy1 - p.falAlto * 0.42);
+    }
+    for (let i = NG; i >= 0; i--) {
+      const [bx, by] = bajo[i];
+      en.push(bx * 0.40 + cad[0] * 0.60, by - 3);
+    }
+    poly(L, en, P.fal2);
+    for (let i = 1; i < NG; i += 2) {
+      const [bx, by] = bajo[i];
+      curva(L, cad[0], fy1 - p.falAlto * 0.36, (cad[0] + bx) / 2 * 0.7 + cad[0] * 0.3,
+               fy1 - p.falAlto * 0.18,
+               bx * 0.40 + cad[0] * 0.60, by - 5, 1.2, 2, P.fal1);
+    }
+  }
+
+  // --- CENEFA de oro y FORRO blanco, sobre el bajo ya calculado ---
+  // Los tres (silueta, cenefa, forro) usan el MISMO array `bajo`, asi que no
+  // pueden desalinearse. Antes cada uno recalculaba la onda por su cuenta.
+  for (let i = 0; i < bajo.length - 1; i++) {
+    const [x0, y0] = bajo[i], [x1, y1] = bajo[i + 1];
+    const N = Math.max(3, Math.round(Math.abs(x1 - x0) / 2));
+    for (let k = 0; k <= N; k++) {
+      const t = k / N;
+      const x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
+      elipse(L, x, y - 7, 3, 2, P.oro2);
+      if ((i * N + k) % 5 === 0) elipse(L, x, y - 7, 2, 2.5, P.oro3);
+      elipse(L, x, y - 1, 4, 3.5, P.bla2);
+      elipse(L, x, y + 2, 4, 2.5, P.bla1);
+    }
+  }
+
+  // === 3. (NO HAY PIERNAS) ===
+  // Aqui se dibujaban dos botas asomando por el bajo. Fuera: el vestido llega
+  // al suelo y todo el movimiento lo llevan los gajos de la falda. Es lo que
+  // hace una princesa con falda larga, y ademas evita el problema de origen --
+  // un pie de 8 px de ancho no tiene celdas para leerse como un pie.
 
   // === 4. El TORSO: corpino con CINTURA ===
   // El talle es lo que faltaba. Antes el corpino era un trapecio de 19 a 15 y
