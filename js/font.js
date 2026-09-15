@@ -1,0 +1,152 @@
+import { supersample } from './core.js';
+
+// Fuente bitmap 5x7 — 59 glifos. Sin archivos de fuente, todo dibujado en codigo.
+export const FONT5x7 = {
+'A':["01110","10001","10001","11111","10001","10001","10001"],
+'B':["11110","10001","10001","11110","10001","10001","11110"],
+'C':["01111","10000","10000","10000","10000","10000","01111"],
+'D':["11110","10001","10001","10001","10001","10001","11110"],
+'E':["11111","10000","10000","11110","10000","10000","11111"],
+'F':["11111","10000","10000","11110","10000","10000","10000"],
+'G':["01110","10001","10000","10111","10001","10001","01111"],
+'H':["10001","10001","10001","11111","10001","10001","10001"],
+'I':["11111","00100","00100","00100","00100","00100","11111"],
+'J':["00111","00010","00010","00010","00010","10010","01100"],
+'K':["10001","10010","10100","11000","10100","10010","10001"],
+'L':["10000","10000","10000","10000","10000","10000","11111"],
+'M':["10001","11011","10101","10101","10001","10001","10001"],
+'N':["10001","11001","10101","10011","10001","10001","10001"],
+'O':["01110","10001","10001","10001","10001","10001","01110"],
+'P':["11110","10001","10001","11110","10000","10000","10000"],
+'Q':["01110","10001","10001","10001","10101","10010","01101"],
+'R':["11110","10001","10001","11110","10100","10010","10001"],
+'S':["01111","10000","10000","01110","00001","00001","11110"],
+'T':["11111","00100","00100","00100","00100","00100","00100"],
+'U':["10001","10001","10001","10001","10001","10001","01110"],
+'V':["10001","10001","10001","10001","10001","01010","00100"],
+'W':["10001","10001","10001","10101","10101","11011","10001"],
+'X':["10001","10001","01010","00100","01010","10001","10001"],
+'Y':["10001","10001","01010","00100","00100","00100","00100"],
+'Z':["11111","00001","00010","00100","01000","10000","11111"],
+// La eñe entro con AHORCADO: es la unica letra del espanol que no estaba, y un
+// juego de palabras sin ella no puede escribir NIÑO ni ARAÑA. La tilde ocupa dos
+// filas y la N se aprieta en las cinco de abajo.
+'Ñ':["01001","10110","10001","11001","10101","10011","10001"],
+'0':["01110","10001","10011","10101","11001","10001","01110"],
+'1':["00100","01100","10100","00100","00100","00100","11111"],
+'2':["01110","10001","00001","00010","00100","01000","11111"],
+'3':["11110","00001","00001","01110","00001","00001","11110"],
+'4':["00010","00110","01010","10010","11111","00010","00010"],
+'5':["11111","10000","11110","00001","00001","10001","01110"],
+'6':["00110","01000","10000","11110","10001","10001","01110"],
+'7':["11111","00001","00010","00100","01000","10000","10000"],
+'8':["01110","10001","10001","01110","10001","10001","01110"],
+'9':["01110","10001","10001","01111","00001","00010","01100"],
+' ':["00000","00000","00000","00000","00000","00000","00000"],
+'.':["00000","00000","00000","00000","00000","01100","01100"],
+',':["00000","00000","00000","00000","01100","01100","01000"],
+'!':["00100","00100","00100","00100","00100","00000","00100"],
+'?':["01110","10001","00001","00010","00100","00000","00100"],
+':':["00000","01100","01100","00000","01100","01100","00000"],
+';':["00000","01100","01100","00000","01100","01100","01000"],
+'-':["00000","00000","00000","11111","00000","00000","00000"],
+'+':["00000","00100","00100","11111","00100","00100","00000"],
+'=':["00000","00000","11111","00000","11111","00000","00000"],
+'/':["00001","00010","00010","00100","01000","01000","10000"],
+'*':["00000","10101","01110","11111","01110","10101","00000"],
+'%':["11000","11001","00010","00100","01000","10011","00011"],
+'(':["00010","00100","01000","01000","01000","00100","00010"],
+')':["01000","00100","00010","00010","00010","00100","01000"],
+'<':["00010","00100","01000","10000","01000","00100","00010"],
+'>':["01000","00100","00010","00001","00010","00100","01000"],
+"'":["00100","00100","00000","00000","00000","00000","00000"],
+'"':["01010","01010","00000","00000","00000","00000","00000"],
+'#':["01010","01010","11111","01010","11111","01010","01010"],
+'_':["00000","00000","00000","00000","00000","00000","11111"],
+'x':["00000","00000","10001","01010","00100","01010","10001"],
+};
+
+const GW = 5, GH = 7, GAP = 1, CELL = GW + GAP;
+const atlases = new Map();   // color -> {canvas, index}
+
+// Hornea la fuente entera en un solo canvas por color. Se llama una vez por color.
+export function bakeFont(color) {
+  if (atlases.has(color)) return atlases.get(color);
+  const keys = Object.keys(FONT5x7);
+  const cv = document.createElement('canvas');
+  cv.width = keys.length * GW; cv.height = GH;
+  const c = cv.getContext('2d');
+  c.fillStyle = color;
+  const index = new Map();
+  for (let k = 0; k < keys.length; k++) {
+    const rows = FONT5x7[keys[k]];
+    index.set(keys[k], k);
+    for (let y = 0; y < GH; y++) {
+      const row = rows[y];
+      for (let x = 0; x < GW; x++) if (row[x] === '1') c.fillRect(k * GW + x, y, 1, 1);
+    }
+  }
+  const a = { canvas: cv, index };
+  atlases.set(color, a);
+  return a;
+}
+
+// Ancho en px virtuales de un texto a una escala dada.
+export function measure(str, scale = 1) {
+  return str.length > 0 ? (str.length * CELL - GAP) * scale : 0;
+}
+
+// Cache de cadenas ya rasterizadas: el HUD repite los mismos textos frame tras
+// frame, y un drawImage por letra costaba ~729 draw calls por frame.
+const strCache = new Map();
+const MAX_CACHE = 160;
+
+function bakeString(str, color, scale) {
+  const a = bakeFont(color);
+  const w = Math.max(1, measure(str, scale)), h = GH * scale;
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const c = cv.getContext('2d');
+  c.imageSmoothingEnabled = false;
+  let px = 0;
+  for (let i = 0; i < str.length; i++) {
+    let gi = a.index.get(str[i]);
+    if (gi === undefined) gi = a.index.get(str[i].toUpperCase());
+    if (gi === undefined) gi = a.index.get('?');
+    if (str[i] !== ' ') {
+      c.drawImage(a.canvas, gi * GW, 0, GW, GH, px, 0, GW * scale, GH * scale);
+    }
+    px += CELL * scale;
+  }
+  return cv;
+}
+
+// Dibuja texto. scale debe ser entero (1,2,3...) o los trazos salen desiguales.
+export function text(g, str, x, y, color = '#ffffff', scale = 1) {
+  str = String(str);
+  if (str.length === 0) return;
+  const ss = supersample();
+  const key = scale + '' + ss + '' + color + '' + str;
+  let cv = strCache.get(key);
+  if (cv === undefined) {
+    if (strCache.size >= MAX_CACHE) strCache.clear();   // purga simple: el HUD se re-hornea solo
+    cv = bakeString(str, color, scale, ss);
+    strCache.set(key, cv);
+  }
+  // La lamina trae SS veces mas pixeles y se dibuja al tamano VIRTUAL, de forma
+  // que el transform base los reparte uno a uno sobre la pantalla.
+  //
+  // El filtrado se APAGA para este blit aunque el juego sea suave: la fuente es
+  // un bitmap de trazo 1px y el bilineal la unta. Es el unico sitio del motor
+  // donde el pixel manda sobre la curva, y por eso el texto se ve nitido sobre
+  // un juego que por lo demas se escala suave.
+  const sm = g.imageSmoothingEnabled;
+  if (sm) g.imageSmoothingEnabled = false;
+  g.drawImage(cv, Math.round(x), Math.round(y), cv.width / ss, cv.height / ss);
+  if (sm) g.imageSmoothingEnabled = true;
+}
+
+// Texto centrado horizontalmente respecto a cx.
+export function textCenter(g, str, cx, y, color = '#ffffff', scale = 1) {
+  text(g, str, Math.round(cx - measure(String(str), scale) / 2), y, color, scale);
+}

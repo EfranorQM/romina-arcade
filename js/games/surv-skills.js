@@ -1,0 +1,201 @@
+// SURVIVAL — las habilidades del roguelike: que hace cada una y como se ven.
+//
+// Se eligen TRAS CADA JEFE (olas 5, 10, 15...), no entre olas normales: asi la
+// recompensa se siente ganada. Salen tres cartas y se elige una.
+//
+// La repeticion se resuelve con NIVELES en vez de descartarse: si vuelve a
+// salir una que ya tienes, aparece subida de nivel con el efecto mejorado. Al
+// llegar a su tope deja de ofrecerse, asi que nunca hay una carta muerta.
+//
+// Nada de "+10% de dano": los cuatro poderes temporales (DOBLE, MEGA, ESCUDO,
+// TURBO) ya cubren "mas fuerte un rato". Cada habilidad de aqui ROMPE una regla
+// que el juego tiene, y todas se enganchan en mecanicas que ya existen.
+//
+// Los nombres van sin acentos ni EÑE a proposito: la fuente es una bitmap de 58
+// glifos (font.js) y lo que no este en ella no se dibuja.
+
+// ---------- Rarezas ----------
+// Los colores no son nuevos: el cian es el del ESCUDO, el violeta el del TURBO
+// y el dorado el de la BOMBA. Asi las cartas parecen parte del juego desde el
+// primer momento.
+export const RARITY = {
+  comun: {
+    id: 'comun', name: 'COMUN', color: '#9fb4c7',
+    weight: 55, frame: 'fina',
+  },
+  rara: {
+    id: 'rara', name: 'RARA', color: '#6bf0ff',
+    weight: 28, frame: 'doble',
+  },
+  epica: {
+    id: 'epica', name: 'EPICA', color: '#b06bff',
+    weight: 13, frame: 'esquinas',
+  },
+  legendaria: {
+    id: 'legendaria', name: 'LEGENDARIA', color: '#ffe14d',
+    weight: 4, frame: 'gruesa',
+  },
+};
+
+// Cuanto mas avanza la partida, mejores rarezas aparecen. `pick` es el numero
+// de eleccion (1 = tras el primer jefe). Tras el primero casi todo es comun;
+// en el quinto ya salen legendarias. Los pesos se reparten moviendo peso de lo
+// comun hacia arriba, no sumando de la nada, para que sigan sumando 100.
+export function rarityWeights(pick) {
+  const k = Math.min(1, (pick - 1) / 4);        // 0 en la 1a eleccion, 1 en la 5a
+  return {
+    comun: 55 - 35 * k,
+    rara: 28 + 6 * k,
+    epica: 13 + 17 * k,
+    legendaria: 4 + 12 * k,
+  };
+}
+
+// ---------- Las habilidades ----------
+// `desc` es una funcion del nivel: la carta enseña lo que hara SI la eliges, no
+// lo que hace ahora. Las lineas de texto van cortas porque la carta mide 170 px
+// y la fuente no parte palabras sola.
+export const SKILLS = {
+  // ----- COMUNES -----
+  perforante: {
+    id: 'perforante', ready: true, name: 'PERFORANTE', rarity: 'comun', max: 3,
+    desc: n => n >= 3
+      ? ['UNA BALA BARRE', 'LA FILA ENTERA']
+      : ['CADA BALA MATA', 'A ' + (n + 1) + ' EN FILA'],
+    // Cuantos enemigos mas puede atravesar una bala antes de apagarse.
+    pierce: n => (n >= 3 ? 99 : n),
+  },
+
+  iman: {
+    id: 'iman', ready: true, name: 'IMAN', rarity: 'comun', max: 3,
+    desc: n => n >= 3
+      ? ['NUNCA PIERDES', 'UN PODER']
+      : ['ATRAPAS ' + ['LA MITAD', 'CASI TODOS'][n - 1], 'DE LOS PODERES'],
+    // Radio en px dentro del cual un poder caido se va hacia Roma.
+    //
+    // Medido en la app: la distancia horizontal entre Roma y un poder que cae
+    // tiene mediana 135 px, el 75% esta bajo 203 y el peor caso ronda 290. Los
+    // primeros numeros que puse (70/150) venian a ojo y el nivel 1 no llegaba
+    // NUNCA: no se notaba al elegirlo. Ahora N1 alcanza mas de la mitad de los
+    // poderes, N2 casi todos y N3 la arena entera.
+    range: n => [150, 240, 999][n - 1],
+  },
+
+  mecha: {
+    id: 'mecha', ready: true, name: 'MECHA CORTA', rarity: 'comun', max: 3,
+    desc: n => ['MAS BOMBAS: UNA', 'CADA ' + [21, 17, 13][n - 1] + ' SEGUNDOS'],
+    cooldown: n => [21, 17, 13][n - 1],
+  },
+
+  // ----- RARAS -----
+  piel: {
+    id: 'piel', ready: true, name: 'SEGUNDA PIEL', rarity: 'rara', max: 3,
+    desc: n => ['AGUANTAS ' + [1, 2, 4][n - 1] + ' GOLPE' + (n > 1 ? 'S' : ''), 'GRATIS POR OLA'],
+    charges: n => (n >= 2 ? 2 : 1),      // escudos por ola
+    hits: n => (n >= 3 ? 2 : 1),         // golpes que aguanta cada uno
+  },
+
+  // MEMORIA (proteger el combo de los golpes) se quito: el combo SOLO
+  // multiplica puntos (ver comboMult en surv-defs.js), asi que protegerlo no
+  // cambiaba nada de como se juega. En su sitio va REFLEJO, que si se nota.
+  reflejo: {
+    id: 'reflejo', ready: true, name: 'REFLEJO', rarity: 'rara', max: 3,
+    desc: n => n >= 3
+      ? ['DISPARAS 3 VECES', 'MAS RAPIDO']
+      : ['DISPARAS ' + ['UN TERCIO', 'EL DOBLE'][n - 1], n === 1 ? 'MAS RAPIDO' : 'DE RAPIDO'],
+    // Multiplica la cadencia. El disparo base tarda 0.25 s entre balas.
+    rate: n => [1.33, 2, 3][n - 1],
+  },
+
+  linea: {
+    id: 'linea', ready: true, name: 'LA LINEA RESISTE', rarity: 'rara', max: 3,
+    // El N3 no dice "y el que cruza muere" porque el que cruza YA moria: al
+    // cruzar, el juego lo mata siempre. Lo que da de verdad es que ese cruce
+    // bloqueado ademas PUNTUA, que si es distinto.
+    desc: n => n >= 3
+      ? ['3 SE TE PUEDEN', 'COLAR Y ENCIMA PAGAN']
+      : ['SE TE PUEDEN COLAR', n + ' SIN PERDER VIDA'],
+    // El N3 sube a tres cruces ademas de puntuar: medido, con dos se quedaba
+    // igual que el N2 y el tope de la habilidad no se notaba al subirlo.
+    blocks: n => [1, 2, 3][n - 1],
+    scores: n => n >= 3,
+  },
+
+  // ----- EPICAS -----
+  ardiente: {
+    id: 'ardiente', ready: true, name: 'COMBO ARDIENTE', rarity: 'epica', max: 2,
+    // Pedia combo 20 y 10, y era casi inalcanzable: el combo caduca a los 3 s
+    // sin matar, y una ola entera trae 7 enemigos en la ola 5 y 13 en la 30.
+    // Llegar a 20 exigia encadenar casi DOS olas sin una sola pausa. Medido y
+    // bajado a 5 y 3, que es un par de enemigos seguidos: ahora se enciende de
+    // verdad y se siente como una racha, que es lo que queria ser.
+    desc: n => n >= 2
+      ? ['3 SEGUIDAS: BALAS', 'TRIPLES Y DOBLES']
+      : ['5 SEGUIDAS: TUS', 'BALAS TRIPLICAN'],
+    at: n => (n >= 2 ? 3 : 5),
+    dbl: n => n >= 2,
+  },
+
+  rebote: {
+    id: 'rebote', ready: true, name: 'REBOTE', rarity: 'epica', max: 2,
+    desc: n => n >= 2
+      ? ['REBOTES QUE PEGAN', 'EL DOBLE DE FUERTE']
+      : ['TUS BALAS VUELVEN', 'Y PILLAN POR DETRAS'],
+    bounces: n => n,
+    stronger: n => n >= 2,
+  },
+
+  // ----- LEGENDARIA -----
+  otra: {
+    id: 'otra', ready: true, name: 'OTRA OPORTUNIDAD', rarity: 'legendaria', max: 1,
+    desc: () => ['LA PRIMERA MUERTE', 'NO CUENTA'],
+    // No aparece en las dos primeras elecciones: de salir pronto, se llevaria
+    // por delante toda la tension de las primeras olas.
+    minPick: 3,
+  },
+};
+
+export const SKILL_IDS = Object.keys(SKILLS);
+
+// ---------- Elegir que tres cartas se ofrecen ----------
+// `have` es {id: nivel}. Devuelve hasta tres cartas {skill, level, rarity}.
+//
+// Se sortea la RAREZA primero y despues una habilidad de esa rareza, en vez de
+// sortear entre todas a la vez: asi la rareza de la carta significa algo y la
+// progresion por ola se nota. Si una rareza se queda sin candidatas (todas al
+// tope), se cae a otra en vez de devolver menos de tres cartas.
+export function offerCards(pick, have, rnd) {
+  const w = rarityWeights(pick);
+  const cards = [];
+  const used = new Set();
+
+  // Candidatas de una rareza: las que no esten al tope y cumplan su ola minima.
+  const poolOf = (rar) => SKILL_IDS.filter(id => {
+    const s = SKILLS[id];
+    // Solo se ofrece lo que de verdad HACE algo. Las que aun no tienen su
+    // efecto enganchado en survival.js estan definidas aqui pero no salen:
+    // una carta que se elige y no cambia nada es peor que no ofrecerla.
+    if (!s.ready) return false;
+    if (s.rarity !== rar) return false;
+    if (used.has(id)) return false;
+    if ((have[id] || 0) >= s.max) return false;
+    if (s.minPick && pick < s.minPick) return false;
+    return true;
+  });
+
+  for (let c = 0; c < 3; c++) {
+    // Rarezas que hoy tienen algo que ofrecer, con su peso.
+    const avail = Object.keys(w).filter(r => poolOf(r).length > 0);
+    if (avail.length === 0) break;              // todo al tope: menos de 3 cartas
+
+    const total = avail.reduce((a, r) => a + w[r], 0);
+    let roll = rnd() * total, rar = avail[avail.length - 1];
+    for (const r of avail) { roll -= w[r]; if (roll <= 0) { rar = r; break; } }
+
+    const pool = poolOf(rar);
+    const id = pool[(rnd() * pool.length) | 0];
+    used.add(id);
+    cards.push({ id, skill: SKILLS[id], level: (have[id] || 0) + 1, rarity: RARITY[rar] });
+  }
+  return cards;
+}
