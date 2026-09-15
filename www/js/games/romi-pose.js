@@ -125,7 +125,19 @@ export function dibujaPose(p) {
   // cada gajo, que es lo que hace ondear el borde.
   const fy0 = cad[1] - 6, fy1 = cad[1] + p.falAlto;
   const vuelo = p.falVuelo;
-  const A0 = 17;
+  // EL ARRANQUE DE LA FALDA. A0 es el medio ancho con el que sale de la
+  // cintura. Estaba en 17 -- el MISMO que aCadera del corpino -- y con la
+  // apertura en t*t*t (que para t pequeña es casi plana) el perfil medido
+  // fila a fila daba esto: y92 talle 25 px, y106 ya 37 px, y de y106 a y116
+  // ONCE FILAS CLAVADAS EN 37. Un tubo del ancho de la cadera metido bajo el
+  // cinturon, y el salto de 25 a 37 en catorce filas se veia como un escalon
+  // justo donde ella es mas estrecha.
+  //
+  // Ahora sale en 13 (pegada al talle, que es 11) y se abre desde el primer
+  // momento: t*t da pendiente ya en t pequeña, y el termino lineal reparte
+  // los primeros pixeles. Asi la cadera se LEE, que es lo que faltaba entre
+  // el torax y la falda.
+  const A0 = 13;
   const NG = 7;                          // gajos
   const gj = p.falGajos || new Array(NG).fill(0);
   const gb = p.falBorde || new Array(NG).fill(0);
@@ -143,6 +155,13 @@ export function dibujaPose(p) {
     bajo.push([x - g * 9, fy1 + Math.sin(u * 9 + p.falOnda) * 4 + b * 5]);
   }
 
+  // El medio ancho de la falda a la altura t (0 = cintura, 1 = el bajo).
+  // La cadera se abre PRONTO (el termino en t, que domina al principio) y la
+  // campana llega despues (el termino en t*t*t). Con la formula anterior
+  // -- t*t*t + t*4 desde A0=17 -- los primeros 20 px de falda salian planos.
+  const anchoFalda = t =>
+    A0 + t * 9 + t * t * 5 + t * t * t * (p.falAncho - A0 - 14);
+
   // --- La silueta: de la cadera al bajo, pasando por cada gajo ---
   const falda = [];
   const NB = 12;
@@ -150,7 +169,7 @@ export function dibujaPose(p) {
   for (let i = 0; i <= NB; i++) {
     const t = i / NB;
     const y = fy0 + t * p.falAlto;
-    const an = A0 + t * t * t * (p.falAncho - A0) + t * 4;
+    const an = anchoFalda(t);
     falda.push(cad[0] - an - vuelo * t * t - (gj[0] || 0) * 9 * t * t, y);
   }
   // el bajo, gajo a gajo
@@ -159,7 +178,7 @@ export function dibujaPose(p) {
   for (let i = NB; i >= 0; i--) {
     const t = i / NB;
     const y = fy0 + t * p.falAlto;
-    const an = A0 + t * t * t * (p.falAncho - A0) + t * 4;
+    const an = anchoFalda(t);
     falda.push(cad[0] + an + vuelo * 0.3 * t * t - (gj[NG - 1] || 0) * 4 * t * t, y);
   }
   poly(L, falda, P.ves2);
@@ -187,29 +206,41 @@ export function dibujaPose(p) {
              bx - 4, by - 8, 4 - i, 2, P.ves3);
   }
 
-  // --- La ENAGUA clara, que asoma por el bajo cuando la falda vuela ---
-  // Solo se ve si hay vuelo: si esta quieta, la tapa la falda de fuera.
-  // OJO CON EL ANCHO. Con 0.72 la enagua llegaba al 72% del bajo y dejaba
-  // 5-13 px de falda a los lados: se veia CASI TODA clara, como si el vestido
-  // hubiera cambiado de color al correr. Medido sobre los anchos reales del
-  // bajo. Con 0.40 asoma por debajo sin comerse el vestido, que es lo que
-  // hace una enagua.
-  if (vuelo > 6) {
-    const en = [];
-    for (let i = 0; i <= NG; i++) {
+  // --- (AQUI IBA LA ENAGUA) ---
+  // Habia una enagua clara (fal2) que asomaba por el bajo en cuanto
+  // falVuelo pasaba de 6. Fuera, y por dos medidas:
+  //
+  // 1. Se veia como una MANCHA, no como una enagua. Renderizada a x2.2 era
+  //    un triangulo rosa palido de 780 celdas en mitad del bajo, con forma
+  //    de montaña: no se leia como tela de debajo, se leia como un agujero
+  //    claro en el vestido.
+  // 2. PARPADEABA. En idle el vuelo es 0, asi que no existia (0 celdas
+  //    medidas); al arrancar a correr aparecia de golpe y al parar
+  //    desaparecia. Un trozo de ropa no aparece y desaparece al andar.
+  //
+  // Lo que hacia falta ahi no era otra prenda, sino que el propio vestido
+  // tuviera hondo: eso lo dan los pliegues de abajo, que SI estan siempre y
+  // se hacen mas hondos cuanto mas vuela la tela.
+  // OJO: el primer intento de estos pliegues salia de un punto casi comun a
+  // media falda, y los siete radiaban desde ahi hasta el bajo: a x2.2 se veia
+  // un ABANICO de varillas en mitad del vestido, mas llamativo que la enagua
+  // que habia quitado. Un pliegue de tela no nace de un punto -- nace ARRIBA,
+  // repartido a lo ancho de la cadera, y BAJA casi vertical siguiendo su
+  // gajo. Asi que ahora arrancan separados (cada uno sobre su gajo), no se
+  // cruzan, y son finos: solo tienen que dar hondo, no dibujarse.
+  {
+    const hondo = Math.min(1, Math.abs(vuelo) / 24);
+    for (let i = 1; i < NG; i++) {
+      const [bx, by] = bajo[i];
       const u = i / NG;
-      en.push(cad[0] + (u - 0.5) * 2 * 8, fy1 - p.falAlto * 0.42);
-    }
-    for (let i = NG; i >= 0; i--) {
-      const [bx, by] = bajo[i];
-      en.push(bx * 0.40 + cad[0] * 0.60, by - 3);
-    }
-    poly(L, en, P.fal2);
-    for (let i = 1; i < NG; i += 2) {
-      const [bx, by] = bajo[i];
-      curva(L, cad[0], fy1 - p.falAlto * 0.36, (cad[0] + bx) / 2 * 0.7 + cad[0] * 0.3,
-               fy1 - p.falAlto * 0.18,
-               bx * 0.40 + cad[0] * 0.60, by - 5, 1.2, 2, P.fal1);
+      // arriba: repartido a lo ancho de la cadera, cada pliegue en su sitio
+      const xTop = cad[0] + (u - 0.5) * 2 * (A0 + 4);
+      // baja siguiendo su gajo, sin cortar a los vecinos
+      const xm = xTop + (bx - xTop) * 0.5;
+      curva(L, xTop, fy0 + p.falAlto * 0.32,
+               xm, fy0 + p.falAlto * 0.66,
+               bx * 0.88 + cad[0] * 0.12, by - 7,
+               0.9 + hondo * 0.5, 1.4 + hondo * 1.1, P.ves1);
     }
   }
 
@@ -246,7 +277,11 @@ export function dibujaPose(p) {
   const yPecho = tor[1] - th * 0.5;                 // arriba del corpino
   const yTalle = tor[1] + th * 0.5 - 1;             // la cintura: lo mas estrecho
   const yCad   = cad[1] - 2;                        // donde engancha la falda
-  const aPecho = 19, aTalle = 11, aCadera = 17;
+  // aCadera tiene que CASAR con A0, el arranque de la falda (13): el vientre
+  // acaba justo donde la tela empieza. Estaba en 17 y sobresalia 4 px por
+  // fuera de la falda a cada lado, lo que ensanchaba la cadera por debajo del
+  // cinturon y remataba el escalon.
+  const aPecho = 19, aTalle = 11, aCadera = 14;
   // El contorno, con el talle metido: un reloj de arena suave. Los vertices
   // van en orden (lado derecho hacia abajo, lado izquierdo hacia arriba).
   const cuerpo = [
