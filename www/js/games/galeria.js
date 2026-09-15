@@ -1,23 +1,23 @@
-// GALERIA - un juego minimo, hecho para PROBAR LAS ACTUALIZACIONES.
+// GALERIA - toca la foto que te piden, antes de que se acabe el tiempo.
 //
-// POR QUE EXISTE. Cuando se publica una version nueva, lo unico que se ve en
-// el telefono es un numero que cambia en el menu. Eso prueba que la descarga
-// funciono, pero no que el codigo nuevo se este EJECUTANDO de verdad. Este
-// juego si: lleva un numero de version bien visible y un color que cambia con
-// cada publicacion, asi que si el aviso dice 1.0.5 y el juego tambien, la
-// actualizacion llego entera.
+// JUEGA CON LAS FOTOS DEL TELEFONO. Las cuarenta mas recientes bajan haciendo
+// scroll y hay que encontrar la que se muestra arriba. Cada partida es
+// distinta porque la galeria cambia, y reconocer una foto vuestra entre
+// cuarenta es mucho mas divertido que buscar una caratula.
 //
-// QUE ES. Las caratulas del arcade pasan haciendo scroll y hay que tocar la
-// que se pide arriba antes de que se acabe el tiempo. Cada acierto acelera.
-// Es un juego de VISTA y de dedo rapido, nada mas -- no pretende ser uno de
-// los juegos buenos del arcade.
+// LAS FOTOS NO SALEN DEL TELEFONO. El puente nativo las lee, las reduce a
+// miniaturas de 192 px y se las pasa a este JavaScript. No hay ni una peticion
+// de red, no se guardan en ningun sitio y viven solo mientras dura la partida.
 //
-// NO USA LAS FOTOS DEL TELEFONO. Leer la galeria del movil necesitaria un
-// permiso real de Android (READ_MEDIA_IMAGES) con su dialogo, un plugin
-// nativo -- o sea recompilar el APK, justo lo que las actualizaciones
-// evitan -- y meteria fotos personales en un juego que se publica en un
-// repositorio publico. Las caratulas del propio arcade ya estan dibujadas por
-// codigo y sirven igual para lo que esto tiene que probar.
+// SIEMPRE SE PUEDE JUGAR. Si ella no da el permiso, si la galeria esta vacia o
+// si no hay puente nativo (probandolo en el navegador), se juega con las
+// caratulas del arcade. El juego nunca se queda en una pantalla de error.
+//
+// Y ADEMAS SIRVE PARA PROBAR LAS ACTUALIZACIONES: lleva la version bien
+// visible en el pie y un color que cambia con cada publicacion. Que el numero
+// del menu cambie prueba que la descarga funciono; que este juego muestre el
+// numero nuevo prueba que el codigo nuevo se esta EJECUTANDO, que no es lo
+// mismo (y ese fue un fallo real que llego al telefono).
 
 import { VW, VH, clamp } from '../core.js';
 import { text, textCenter, measure } from '../font.js';
@@ -26,6 +26,7 @@ import { burst } from '../gfx.js';
 import { cover, CW, CH } from '../covers.js';
 import { GAMES } from '../games.js';
 import { versionActual } from '../update.js';
+import { Fotos } from '../fotos.js';
 
 // El color cambia con la version: es la señal VISUAL de que el codigo nuevo
 // esta corriendo. Un numero se puede quedar cacheado en un sitio y no en otro;
@@ -39,7 +40,9 @@ function colorDeVersion(v) {
 const FILAS = 3;          // cuantas columnas de caratulas bajan a la vez
 const T0 = 6.0;           // segundos que da la primera ronda
 const T_MIN = 2.2;        // por rapido que se vaya, nunca menos que esto
-const BANDA = 62;         // franja de arriba: que hay que tocar
+const BANDA = 92;         // franja de arriba: la foto que hay que buscar
+// Medido en pantalla: con 34x44 la miniatura era una mancha de color y no se
+// reconocia nada. A 56x72 se distingue de que foto se trata, que es el juego.
 const PIE = 44;           // franja de abajo: marcador y version
 
 export default {
@@ -50,22 +53,20 @@ export default {
 
   init(ctx, args) {
     this.ctx = ctx;
-    // Las caratulas de los demas juegos, horneadas una vez.
-    this.covers = GAMES.filter(g => g.meta.id !== 'galeria').map(g => ({
-      img: cover(g.meta), meta: g.meta,
-    }));
-    this.n = this.covers.length;
+    // Se arranca con las CARATULAS: asi el juego es jugable desde el primer
+    // frame, sin esperar a la galeria. Las fotos, si llegan, entran despues.
+    this.usaFotos = false;
+    this.pidiendo = false;
+    this.imgs = GAMES.filter(g => g.meta.id !== 'galeria').map(g => cover(g.meta));
+    this.nombres = GAMES.filter(g => g.meta.id !== 'galeria').map(g => g.meta.title);
+    this.n = this.imgs.length;
 
     this.col = [];
     for (let i = 0; i < FILAS; i++) {
-      this.col.push({
-        x: 0, y: -i * 90, vel: 46 + i * 9,
-        orden: this.baraja(),
-      });
+      this.col.push({ x: 0, y: -i * 90, vel: 46 + i * 9, orden: this.baraja() });
     }
     this.puntos = 0;
     this.racha = 0;
-    this.fallos = 0;
     this.vidas = 3;
     this.t = 0;
     this.tiempo = T0;
@@ -74,15 +75,47 @@ export default {
     this.fin = false;
     this.ver = versionActual();
     this.colorVer = colorDeVersion(this.ver);
-    this.pide = this.nuevoObjetivo();
-    // Sello de la compilacion: lo lee la prueba de punta a punta para
-    // distinguir 'se descargo' de 'se esta ejecutando'.
     this.sello = 'SELLO-B';
+    this.pide = this.nuevoObjetivo();
+
+    // Y ahora, las fotos. Sin await: el juego ya funciona.
+    this.cargaFotos();
+  },
+
+  // Trae las fotos del telefono si se puede. Al acabar, cambia las caratulas
+  // por las fotos sin cortar la partida.
+  async cargaFotos() {
+    if (!Fotos.hayPuente()) return;          // navegador: se queda en caratulas
+    if (!Fotos.hayPermiso()) {
+      // Se pide UNA vez. El dialogo es asincrono, asi que el resultado se
+      // recoge en resume(), cuando la app recupera el foco.
+      this.pidiendo = true;
+      this.msg = 'BUSCANDO TUS FOTOS'; this.msgT = 1.6;
+      Fotos.pedirPermiso();
+      return;
+    }
+    const fotos = await Fotos.recientes(40);
+    if (!fotos.length) return;               // galeria vacia: caratulas
+    this.imgs = fotos;
+    this.nombres = fotos.map((_, i) => 'FOTO ' + (i + 1));
+    this.n = fotos.length;
+    this.usaFotos = true;
+    for (const col of this.col) col.orden = this.baraja();
+    this.pide = this.nuevoObjetivo();
+    this.msg = 'CON TUS FOTOS'; this.msgT = 1.4;
+  },
+
+  // La app vuelve a primer plano: puede que acabe de conceder el permiso.
+  resume() {
+    if (this.pidiendo && Fotos.hayPermiso()) {
+      this.pidiendo = false;
+      this.cargaFotos();
+    }
   },
 
   // Un orden aleatorio de las caratulas, para que cada columna baje distinta.
   baraja() {
-    const a = this.covers.map((_, i) => i);
+    const a = this.imgs.map((_, i) => i);
     for (let i = a.length - 1; i > 0; i--) {
       const j = (Math.random() * (i + 1)) | 0;
       [a[i], a[j]] = [a[j], a[i]];
@@ -117,6 +150,25 @@ export default {
       }
     }
     return out;
+  },
+
+  // Dibuja una carta. Las fotos vienen en cualquier proporcion, asi que se
+  // RECORTAN al centro en vez de deformarse: una foto estirada no se reconoce,
+  // y reconocerla es el juego entero.
+  dibujaCarta(g, img, x, y, w, h, brilla) {
+    x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
+    if (!img || !img.width) {
+      g.fillStyle = '#2a1a58'; g.fillRect(x, y, w, h);
+      return;
+    }
+    const escala = Math.max(w / img.width, h / img.height);
+    const sw = w / escala, sh = h / escala;
+    const sx = (img.width - sw) / 2, sy = (img.height - sh) / 2;
+    g.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+    // marco: el de la buscada, encendido
+    g.strokeStyle = brilla ? this.colorVer : '#3a2a68';
+    g.lineWidth = brilla ? 2 : 1;
+    g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
   },
 
   update(dt, ctx) {
@@ -186,8 +238,7 @@ export default {
     for (const c of this.cartas()) {
       const esObj = c.idx === this.pide;
       g.globalAlpha = esObj ? 1 : 0.62;
-      g.drawImage(this.covers[c.idx].img, Math.round(c.x), Math.round(c.y),
-                  Math.round(c.w), Math.round(c.h));
+      this.dibujaCarta(g, this.imgs[c.idx], c.x, c.y, c.w, c.h, esObj);
       g.globalAlpha = 1;
     }
     g.restore();
@@ -198,17 +249,22 @@ export default {
     g.fillStyle = this.colorVer;
     g.fillRect(0, BANDA - 2, VW, 2);
 
-    const obj = this.covers[this.pide].meta;
-    // 'TOCA' a la izquierda y el nombre debajo: centrados uno sobre otro se
-    // solapaban, porque el titulo va a escala 3 y sube por encima de su linea.
-    text(g, 'TOCA', 10, 8, '#8a7ab8', 2);
-    textCenter(g, obj.title, VW / 2, 24, obj.colors[0], 3);
+    // QUE HAY QUE BUSCAR. Con fotos se ensena LA FOTO en pequeño, porque un
+    // nombre ('FOTO 17') no dice nada: el juego es reconocerla de vista. Con
+    // caratulas se ensena su nombre, que si identifica el juego.
+    text(g, 'BUSCA', 10, 8, '#8a7ab8', 2);
+    if (this.usaFotos) {
+      const mw = 56, mh = 72;
+      this.dibujaCarta(g, this.imgs[this.pide], VW / 2 - mw / 2, 10, mw, mh, true);
+    } else {
+      textCenter(g, this.nombres[this.pide], VW / 2, 38, '#ffe066', 3);
+    }
 
     // La barra de tiempo
     const u = clamp(this.tiempo / Math.max(T_MIN, T0 - this.ronda * 0.22), 0, 1);
-    g.fillStyle = '#2a1a58'; g.fillRect(14, 52, VW - 28, 4);
+    g.fillStyle = '#2a1a58'; g.fillRect(14, BANDA - 10, VW - 28, 4);
     g.fillStyle = u > 0.35 ? this.colorVer : '#ff5c9d';
-    g.fillRect(14, 52, Math.round((VW - 28) * u), 4);
+    g.fillRect(14, BANDA - 10, Math.round((VW - 28) * u), 4);
 
     // Pie: el marcador y la version, sobre fondo propio
     g.fillStyle = '#12082a';
