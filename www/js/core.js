@@ -227,15 +227,41 @@ export const Save = {
 // ---------- Camara / screen shake ----------
 export const cam = {
   x: 0, y: 0, t: 0, mag: 0,
+  // El temblor de siempre: constante y se corta de golpe. Lo usan los seis
+  // juegos anteriores y NO se toca -- cambiarle la curva bajaria a la mitad
+  // la media de FURIA y SURVIVAL, que estan medidos con esta.
   shake(mag, dur) { if (mag > this.mag) { this.mag = mag; this.t = dur; } },
+
+  // EL TEMBLOR DE JEFE, en su propio canal. Decae linealmente en vez de
+  // cortarse: eso es lo que hace que un pisoton se lea como un golpe que
+  // retumba y se apaga, y no como una vibracion que alguien apaga con un
+  // interruptor.
+  //
+  // Va en un canal APARTE y los dos se SUMAN, para que el retumbe largo del
+  // jefe y el pico corto de un aterrizaje puedan sonar a la vez. Con un solo
+  // canal, el pico del aterrizaje no se oiria por encima del retumbe.
+  jm: 0, jt: 0, jd: 0,
+  shakeDecay(mag, dur) {
+    if (mag * dur >= this.jm * this.jt) { this.jm = mag; this.jt = dur; this.jd = dur; }
+  },
   update(dt, rnd) {
+    let k = 0;
     if (this.t > 0) {
       this.t -= dt;
-      const k = this.mag * (this.t > 0 ? 1 : 0);
+      k += this.mag * (this.t > 0 ? 1 : 0);
+      if (this.t <= 0) this.mag = 0;
+    }
+    if (this.jt > 0) {
+      this.jt -= dt;
+      k += this.jm * Math.max(0, this.jt / this.jd);
+      if (this.jt <= 0) this.jm = 0;
+    }
+    // Tope de 8 px: sumar dos canales sin limite destapa el borde del lienzo.
+    if (k > 8) k = 8;
+    if (k > 0) {
       this.x = Math.round((rnd() * 2 - 1) * k);
       this.y = Math.round((rnd() * 2 - 1) * k);
-      if (this.t <= 0) { this.mag = 0; this.x = 0; this.y = 0; }
-    }
+    } else if (this.x || this.y) { this.x = 0; this.y = 0; }
   },
-  reset() { this.x = 0; this.y = 0; this.t = 0; this.mag = 0; },
+  reset() { this.x = 0; this.y = 0; this.t = 0; this.mag = 0; this.jm = 0; this.jt = 0; },
 };

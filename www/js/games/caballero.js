@@ -18,6 +18,9 @@ import * as C from './caba-cuerpo.js';
 import { bakeRomina, drawRomina } from './romi-anim.js';
 import { P as PC } from './romi-art.js';
 import { bakeMundo, drawMundo, P as PM } from './caba-mundo.js';
+import * as OG from './ogro-cuerpo.js';
+import { bakeOgro, drawOgro, poseOgro } from './ogro-anim.js';
+import { P as POG } from './ogro-art.js';
 
 const SUELO = C.SUELO;
 
@@ -59,10 +62,16 @@ export default {
     this.msg = ''; this.msgT = 0;
     this.combo = 0; this.comboT = 0;
 
-    // Muñecos de paja: se parten de un tajo y vuelven solos a los 2 s. Solo
-    // estan para que la espada tenga algo que tocar.
+    // EL OGRO. Los muñecos de paja se quedan como decorado del fondo (ya no
+    // son el objetivo): ahora hay un jefe de verdad.
     this.pajas = [];
-    for (let i = 0; i < 5; i++) this.pajas.push({ x: 500 + i * 160, roto: 0, t: 0 });
+    for (let i = 0; i < 3; i++) this.pajas.push({ x: 180 + i * 130, roto: 0, t: 0 });
+
+    this.O = OG.makeOgro(880);
+    this.SO = bakeOgro();
+    this.grietas = [];        // las marcas que deja el pisoton en el suelo
+    this.fin = 0;             // >0 cuando acaba la pelea (gana o pierde)
+    this.finT = 0;
   },
 
   update(dt, ctx) {
@@ -150,9 +159,131 @@ export default {
     if (this.comboT > 0) this.comboT -= dt;
     for (const p of this.pajas) if (p.roto > 0) { p.roto -= dt; if (p.roto <= 0) p.t = 0; }
 
-    // --- Camara: sigue al caballero con holgura ---
-    const quiere = clamp(K.x - VW / 2, 0, 9999);
-    this.camX += (quiere - this.camX) * Math.min(1, 6 * dt);
+    // ================== EL OGRO ==================
+    const O = this.O;
+    const ondasAntes = O.ondas.length;
+    const stAntes = O.st;
+
+    // EL ORDEN IMPORTA: ella se mueve, luego el ogro, y AL FINAL se arbitra
+    // quien toca a quien. Con ella rodando a 660 px/s un frame de desfase son
+    // 11 px: la diferencia entre esquivar y comer el golpe.
+    OG.stepOgro(O, K, dt);
+    // El cuerpo del ogro es SOLIDO: sin esto ella se mete dentro de la
+    // barriga y todas las distancias dejan de significar nada.
+    OG.empujaCuerpo(O, K);
+
+    // El pisoton acaba de nacer: temblor, polvo y una grieta en el suelo.
+    if (O.ondas.length > ondasAntes) {
+      cam.shakeDecay(7, 0.55); vibrate(28);
+      SFX.aterriza();
+      this.hitstop = 5 / 60;
+      burst(O.x, SUELO, 22, { rnd: Math.random, colors: [PM.sue1, PM.sue2, PM.hueso],
+                              speed: 320, life: 0.7, size: 5, grav: 900 });
+      this.grietas.push({ x: O.x, w: 70, t: 1 });
+      if (this.grietas.length > 6) this.grietas.shift();
+    }
+    // Las grietas se borran despacio: quedan como memoria de la pelea.
+    for (const gr of this.grietas) gr.t -= dt * 0.08;
+    while (this.grietas.length && this.grietas[0].t <= 0) this.grietas.shift();
+
+    // El ogro acaba de quedar ABIERTO: se avisa, porque es CUANDO pegar.
+    if (O.st === OG.ABIERTO && stAntes !== OG.ABIERTO) {
+      this.msg = 'AHORA'; this.msgT = 0.55;
+    }
+    if (O.st === OG.RUGE && stAntes !== OG.RUGE) {
+      cam.shakeDecay(5, 0.7); vibrate(30);
+      this.msg = O.fase >= 3 ? 'FURIA' : 'RUGE'; this.msgT = 1.0;
+      burst(O.x, SUELO - 150, 18, { rnd: Math.random, colors: [POG.ojo, POG.dien],
+                                    speed: 220, life: 0.6, size: 4, grav: -60 });
+    }
+    // Un paso pesado hace temblar el suelo un poquito.
+    if (O.st === OG.ANDA && ((this.t * 4) | 0) !== this._paso) {
+      this._paso = (this.t * 4) | 0;
+      cam.shakeDecay(1.2, 0.08);
+      burst(O.x, SUELO, 3, { rnd: Math.random, colors: [PM.sue2], speed: 60,
+                             life: 0.3, size: 3, grav: 300 });
+    }
+
+    // --- ELLA LE PEGA AL OGRO ---
+    if (C.espadaActiva(K) && O.vivo) {
+      const [px] = C.puntaEspada(K);
+      if (OG.espadaTocaOgro(O, px, K.x)) {
+        const dano = C.TAJOS[K.tajoId][4];
+        if (OG.hiereOgro(O, dano, K.dir)) {
+          this.hitstop = (K.tajoId === 2 ? 8 : 5) / 60;
+          cam.shake(K.tajoId === 2 ? 4 : 3, 0.12);
+          SFX.corta(); vibrate(K.tajoId === 2 ? 22 : 14);
+          burst(O.x + K.dir * -30, SUELO - 120, 14,
+                { rnd: Math.random, colors: [POG.pie3, POG.pie2, '#8b1a2b'],
+                  speed: 260, life: 0.5, size: 4, grav: 620 });
+        }
+      }
+    }
+    // El EMPUJON de escudo no hace daño, pero lo aparta.
+    if (C.escudoActivo(K) && O.vivo && Math.abs(O.x - K.x) < OG.CUERPO_R + 60) {
+      if (O.st !== OG.ATACA) { O.x += K.dir * 26; cam.shake(2.5, 0.1); SFX.clang(); }
+    }
+
+    // --- EL OGRO LE PEGA A ELLA ---
+    // Cuatro ramas, que son las cuatro que devuelve C.herir().
+    if (O.vivo && K.vivo) {
+      let sx = null, dano = 0;
+      if (OG.garroteActivo(O)) {
+        const gp = OG.golpeOgro(O);
+        if (Math.abs(K.x - gp.x) < gp.r + 26) { sx = gp.x; dano = gp.dano; }
+      }
+      const w = OG.ondaGolpea(O, K);
+      if (!sx && w) { sx = w.x; dano = OG.ONDA_DANO; }
+      if (sx !== null) {
+        const r = C.herir(K, sx);
+        if (r === 'parada') {
+          // El PARRY: el premio ya lo pone herir() (K.parada). Aqui se le
+          // devuelve el golpe al ogro: se queda abierto.
+          O.st = OG.ABIERTO; O.t = 0; O.abiertoT = 0.55; O.atk = -1;
+          this.hitstop = 9 / 60; cam.shake(4, 0.14); SFX.clang(); vibrate(26);
+          this.msg = 'PARADA!'; this.msgT = 0.8;
+          burst(K.x + K.dir * 30, SUELO - 90, 14,
+                { rnd: Math.random, colors: [PC.ace4, PC.ace3, PC.oro3],
+                  speed: 300, life: 0.45, size: 4, grav: 200 });
+        } else if (r === 'bloqueado') {
+          this.hitstop = 4 / 60; cam.shake(2.5, 0.1); SFX.clang(); vibrate(14);
+          burst(K.x + K.dir * 26, SUELO - 80, 8,
+                { rnd: Math.random, colors: [PC.ace3, PC.ace2], speed: 200,
+                  life: 0.35, size: 3, grav: 300 });
+        } else if (r === true) {
+          // Le entra de verdad.
+          for (let i = 1; i < dano; i++) if (K.hp > 0) { K.hp--; }
+          if (K.hp < 0) K.hp = 0;
+          if (K.hp <= 0) { K.vivo = false; K.st = C.MUERTO; }
+          this.hitstop = 7 / 60; cam.shake(5, 0.16); SFX.golpe ? SFX.golpe() : SFX.clang();
+          vibrate(34);
+          burst(K.x, SUELO - 90, 12, { rnd: Math.random, colors: [PC.ves2, PC.ves3],
+                                       speed: 240, life: 0.45, size: 4, grav: 500 });
+        }
+      }
+    }
+
+    // --- ¿Se acabo? ---
+    if (this.fin === 0) {
+      if (!O.vivo) { this.fin = 1; this.finT = 0; cam.shakeDecay(6, 0.9); }
+      else if (!K.vivo) { this.fin = 2; this.finT = 0; }
+    } else {
+      this.finT += dt;
+      // A los 3 s se reinicia la pelea, para poder volver a probar.
+      if (this.finT > 3) {
+        this.K = C.makeCaballero(260);
+        this.O = OG.makeOgro(880);
+        this.grietas.length = 0;
+        this.fin = 0; this.finT = 0;
+      }
+    }
+
+    // --- Camara: FIJA. La arena mide 1080 y el lienzo 1200, asi que cabe
+    // entera. Seguir a Romina dejaba media pantalla de fondo vacio al llegar
+    // a la pared derecha (medido: con K.x=1140 el borde de la arena caia en
+    // pantalla x=600), y con un jefe de 232 px la camara movil ademas lo
+    // sacaba de cuadro. Fija, el combate entero se ve siempre.
+    this.camX = 0;
   },
 
   onInput(ev, ctx) {
@@ -195,6 +326,59 @@ export default {
         g.fillStyle = PM.sue4; g.fillRect(x - 12, SUELO - 108, 26, 8);   // la ranura
         g.fillStyle = PM.hier2; g.fillRect(x - 18, SUELO - 118, 38, 4);
       }
+    }
+
+    // LAS GRIETAS que deja el pisoton. Van pintadas SOBRE el suelo ya
+    // horneado, sin rehornear la tira: son un array y se dibujan encima.
+    for (const gr of this.grietas) {
+      const gx = Math.round(gr.x - cx);
+      g.globalAlpha = Math.min(0.85, gr.t);
+      g.fillStyle = PM.sue4;
+      for (let i = -3; i <= 3; i++) {
+        const w = Math.round((1 - Math.abs(i) / 4) * gr.w * 0.22);
+        g.fillRect(gx + i * 11 - (w >> 1), SUELO - 1 + ((i * 7) % 3), w, 3);
+      }
+      g.fillStyle = PM.sue3;
+      g.fillRect(gx - gr.w / 2, SUELO + 2, gr.w, 2);
+      g.globalAlpha = 1;
+    }
+
+    // LAS ONDAS del pisoton. Una cresta de seis rectangulos: a 34 px de alto
+    // son silueta de verdad, no un detalle. Se ven viajar porque a 620 px/s
+    // avanzan 10 px por fotograma.
+    for (const w of this.O.ondas) {
+      if (!w.vivo) continue;
+      const wx = Math.round(w.x - cx);
+      const alturas = [6, 14, 26, 34, 22, 10];
+      for (let i = 0; i < alturas.length; i++) {
+        const h = alturas[i];
+        const bx = wx + (i - 2.5) * 10 * w.dir;
+        g.fillStyle = i === 3 ? POG.pie3 : i < 3 ? POG.pie2 : POG.pie1;
+        g.fillRect(Math.round(bx - 5), SUELO - h, 10, h);
+      }
+      // el polvo que levanta por delante
+      g.fillStyle = PM.sue2;
+      g.fillRect(wx + 26 * w.dir, SUELO - 8, 8, 8);
+    }
+
+    // EL OGRO. Se dibuja antes que ella: ella queda por delante, que es lo
+    // que hace leer quien esta mas cerca de la camara.
+    {
+      const O = this.O;
+      const [nom, fr] = poseOgro(O, OG.ATAQUES);
+      // su sombra
+      const osw = 54, osh = 10;
+      g.globalAlpha = 0.38; g.fillStyle = '#000000';
+      for (let dy = -osh; dy <= osh; dy++) {
+        const u = dy / osh;
+        if (u * u > 1) continue;
+        const ww = osw * Math.sqrt(1 - u * u);
+        g.fillRect(Math.round(O.x - cx - ww), SUELO - 2 + dy, Math.round(ww * 2), 1);
+      }
+      g.globalAlpha = 1;
+      // el destello blanco al recibir, y el rojo de la furia
+      const parpadea = O.invul > 0 && O.st !== OG.RUGE && ((O.invul * 16) | 0) & 1;
+      if (!parpadea) drawOgro(g, this.SO, O.x - cx, SUELO, O.dir, nom, fr);
     }
 
     // Sombra de Romina. Era un fillRect: un rectangulo negro de 5 px que se
@@ -255,12 +439,48 @@ export default {
   },
 
   drawHud(g) {
-    // Franja de arriba con lo que hay que probar
+    // Franja de arriba
     g.globalAlpha = 0.45; g.fillStyle = '#2b1526'; g.fillRect(0, 0, VW, 56); g.globalAlpha = 1;
-    text(g, 'ROMINA - PRUEBA DE MOVIMIENTO', 14, 8, PC.oro3, 3);
-    text(g, 'NO HAY JEFE TODAVIA', 14, 32, PC.ves4, 2);
+
+    // LOS CORAZONES de ella. Cuatro, y se vacian: es lo unico que hacia falta
+    // para que la pelea tenga consecuencia, porque hasta hoy era inmortal
+    // (C.herir no se llamaba desde ningun sitio).
+    const K = this.K;
+    for (let i = 0; i < C.HP0; i++) {
+      const hx = 14 + i * 30, hy = 12;
+      const lleno = i < K.hp;
+      g.fillStyle = lleno ? PC.ves2 : '#3a2030';
+      g.fillRect(hx + 4, hy, 14, 6); g.fillRect(hx, hy + 4, 22, 8);
+      g.fillRect(hx + 3, hy + 12, 16, 4); g.fillRect(hx + 7, hy + 16, 8, 4);
+      if (lleno) { g.fillStyle = PC.ves4; g.fillRect(hx + 4, hy + 2, 5, 5); }
+    }
+
+    // LA BARRA DEL OGRO, con las dos marcas de fase: asi se ve venir el
+    // cambio en vez de que sorprenda.
+    const O = this.O;
+    const bw = 380, bx = VW / 2 - bw / 2, by = 16;
+    g.fillStyle = '#1a1014'; g.fillRect(bx - 3, by - 3, bw + 6, 20);
+    g.fillStyle = '#3a2030'; g.fillRect(bx, by, bw, 14);
+    const fr = Math.max(0, O.hp / OG.HP0);
+    g.fillStyle = O.fase >= 3 ? '#ff4a1e' : O.fase >= 2 ? POG.pie3 : POG.pie2;
+    g.fillRect(bx, by, Math.round(bw * fr), 14);
+    g.fillStyle = POG.pie4; g.fillRect(bx, by, Math.round(bw * fr), 3);
+    for (const u of [OG.FASE2, OG.FASE3]) {
+      g.fillStyle = '#1a1014'; g.fillRect(bx + Math.round(bw * u) - 1, by - 2, 3, 18);
+    }
+    text(g, 'OGRO', bx, by + 20, POG.pie4, 2);
+
     const s = `TAJOS ${this.golpes}  SALTOS ${this.saltos}  RODADAS ${this.rodadas}`;
-    text(g, s, VW - 14 - measure(s, 2), 32, '#c9a9bc', 2);
+    text(g, s, VW - 14 - measure(s, 2), 36, '#c9a9bc', 2);
+
+    // El cartel de fin de pelea.
+    if (this.fin === 1) {
+      textCenter(g, 'OGRO ABATIDO', VW / 2, 150, PC.oro3, 6);
+      textCenter(g, 'otra vez en ' + Math.max(0, Math.ceil(3 - this.finT)), VW / 2, 200, PC.bla2, 3);
+    } else if (this.fin === 2) {
+      textCenter(g, 'TE HA PODIDO', VW / 2, 150, PC.ves3, 6);
+      textCenter(g, 'otra vez en ' + Math.max(0, Math.ceil(3 - this.finT)), VW / 2, 200, PC.bla2, 3);
+    }
     if (this.msgT > 0) textCenter(g, this.msg, VW / 2, 72, PC.oro3, 4);
     // El CONTADOR DE COMBO. Crece con cada golpe encadenado y el tercero sale
     // en oro y mas grande: es lo que hace ver el ritmo del combo mientras se
