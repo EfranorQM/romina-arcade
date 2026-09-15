@@ -109,8 +109,16 @@ for (const f of ['js/update.js', 'sw.js', 'js/main.js', 'js/menu.js', 'js/games/
   const fuera = fs.readFileSync(path.join(raiz, 'www', f));
   if (sha(dentro) === sha(fuera)) iguales++; else distintos.push(f);
 }
-ok(distintos.length === 0, `los ficheros del APK son identicos a www/ (${iguales}/5)` +
-   (distintos.length ? ' -> distintos: ' + distintos.join(', ') : ''));
+// NOTA: es NORMAL que js/update.js difiera si se ha publicado despues de
+// compilar -- publica.mjs sube el numero de version en www/ y el APK se queda
+// con el anterior. Esa diferencia es justo el trabajo que hara el boton de
+// actualizar. Solo es un problema si difieren OTROS ficheros, o si el APK se
+// acaba de compilar.
+const soloVersion = distintos.length === 1 && distintos[0] === 'js/update.js';
+ok(distintos.length === 0 || soloVersion,
+   `los ficheros del APK coinciden con www/ (${iguales}/5)` +
+   (soloVersion ? '  [update.js difiere solo por el numero de version: normal tras publicar]'
+                : distintos.length ? ' -> distintos: ' + distintos.join(', ') : ''));
 
 // --- El puente nativo de fotos ---
 // android/ esta en .gitignore y se regenera, asi que el MainActivity con el

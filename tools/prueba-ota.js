@@ -51,12 +51,10 @@
       const r = await fetch('js/games.js', { cache:'no-store' });
       gamesTieneGaleria = (await r.text()).includes('galeria');
     } catch(e) {}
-    // EL SELLO es lo que distingue de verdad "se descargo" de "se ejecuta":
-    // se lee del juego YA CARGADO en memoria, no de un fichero.
-    try {
-      const g = window.__arcade.GAMES.find(x => x.meta.id === 'galeria');
-      if (g) { g.init({ gameOver(){} }, {}); sello = g.sello; }
-    } catch(e) { sello = 'error: ' + e.message; }
+    // Esta vez la prueba es al reves: GALERIA tiene que haber DESAPARECIDO.
+    // Un juego que se va del menu es un cambio imposible de confundir con
+    // "se quedo el codigo viejo".
+    sello = ids.includes('galeria') ? 'TODAVIA ESTA (mal)' : 'ya no esta (bien)';
     return JSON.stringify({
       fase: '2 TRAS REINICIAR',
       versionActiva: ver,
@@ -65,8 +63,9 @@
       tieneGaleria: ids.includes('galeria'),
       gamesJsServidoEsNuevo: gamesTieneGaleria,
       sello,
-      VEREDICTO: ids.includes('galeria') ? 'FUNCIONA: el juego nuevo se ejecuta'
-                                         : 'FALLA: descargo pero no ejecuta',
+      VEREDICTO: (!ids.includes('galeria') && ids.length === 9)
+        ? 'FUNCIONA: el juego desaparecio, el codigo nuevo se ejecuta'
+        : 'FALLA: sigue ejecutando el codigo viejo',
     }, null, 1);
   }
   return 'fase desconocida: ' + fase;
