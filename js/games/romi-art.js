@@ -48,9 +48,12 @@ export const P = {
   ves2: '#c41c5a',   // vestido: base
   ves3: '#ef4a84',   // vestido: iluminado
   ves4: '#ff8fbc',   // vestido: brillo
-  fal1: '#d94a7e',   // la falda de dentro, mas clara
-  fal2: '#ffa8cc',
-  fal3: '#ffd0e4',
+  // (AQUI ESTABAN fal1/fal2/fal3, los rosas claros de la enagua.) Fuera con
+  // ella: asomaba por el bajo solo al moverse -- 780 celdas de rosa palido que
+  // aparecian al arrancar a correr y desaparecian al parar -- y se leia como
+  // un agujero claro en el vestido, no como una prenda de debajo. El hondo de
+  // la falda lo dan ahora los pliegues en ves1, que estan SIEMPRE. Si algun
+  // dia hace falta un segundo rosa, que se añada midiendo, no por herencia.
 
   bla1: '#d9c8d4',   // el forro blanco del borde
   bla2: '#fff4fa',

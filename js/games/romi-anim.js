@@ -338,37 +338,64 @@ export const POSES = {
   // Un bloqueo se ENCARA a la amenaza: el cuerpo se agacha y se cierra, pero
   // la cara y el escudo van HACIA DELANTE. El retroceso es de la cadera (cadY
   // y un piernaI que planta el pie de atras), nunca del torso ni de la cara.
+  // LOS BRAZOS, MEDIDOS. La version anterior los tenia cruzados los dos
+  // hacia el mismo lado. Los hombros estan en -15 y +15 del eje (x=64), asi
+  // que manI:[10,24] ponia la mano izquierda en x=59 -- pasada el eje, en
+  // mitad del pecho -- y manD:[6,40] dejaba la derecha en x=85 colgando al
+  // aire. Renderizado a x2.2 se veia un amasijo de piel entre la barbilla y
+  // el escudo: parecia que se abrazaba a si misma, no que se parapetaba.
+  //
+  // Ahora cada brazo hace UNA cosa y se nota cual:
+  //   IZQUIERDO  SOSTIENE el escudo, y eso hay que medirlo: el escudo se
+  //              dibuja centrado en (escX,escY) respecto al TORSO, y la mano
+  //              en (hombI+manI) respecto al mismo torso, con hombI=-15. Si
+  //              no se hace la cuenta quedan separados -- en la version
+  //              anterior la mano caia a 31-37 px del centro del escudo, o
+  //              sea FUERA de el (mide 17 de medio ancho), y el escudo se
+  //              veia flotando solo delante del cuerpo. Ahora manI sale de
+  //              escX + 15, asi que el puño cae siempre en el centro del
+  //              escudo, tapado por el (escZ = 1), como se agarra de verdad.
+  //   DERECHO    recoge la espada al costado, con la punta al SUELO. El
+  //              angulo tambien hay que medirlo: la hoja mide 66 px desde el
+  //              puño, asi que con espAng de 2.5-2.95 (lo que habia) la punta
+  //              caia en x=37..45 -- pasado el eje del cuerpo (64), o sea la
+  //              espada cruzaba la falda entera por delante y era lo primero
+  //              que se veia del fotograma. Con 1.80-1.88 la punta cae en
+  //              x=80..84, fuera de la silueta y bajando al suelo: el arma
+  //              queda apartada, que es lo que se hace al cubrirse.
   block: [
-    // 1. LEVANTA. El escudo sube cruzando el cuerpo, la cara ya al frente.
+    // 1. LEVANTA. El escudo sube al frente, la cara ya encarada.
     pose({ incl: 0.10, cabGiro: 0.15, cadY: 116, torY: -31, falOnda: 0.4,
            falAncho: 47, falAlto: 62,
-           codD: [8, 22], manD: [10, 38], espAng: 2.5,
-           codI: [-4, 14], manI: [4, 22],
+           codD: [13, 20], manD: [19, 36], espAng: 1.88,
+           codI: [-4, 14], manI: [21, 8],
            escX: 8, escY: 0, escAng: 0.05, escZ: 1,
            ojos: 'esfuerzo', boca: 'apretada',
            falGajos: tela(0.2, 0.35), falBorde: borde(0.2, 0.39) }),
     // 2. PLANTADA. Postura estable: peso atras, escudo al frente, mirando.
     pose({ incl: 0.16, cabGiro: 0.25, cadY: 119, torY: -29, cabY: -26, falOnda: 1.2,
            falAncho: 49, falAlto: 59,
-           codD: [6, 24], manD: [6, 40], espAng: 2.7,
-           codI: [-2, 16], manI: [10, 24],
+           codD: [14, 22], manD: [21, 38], espAng: 1.85,
+           codI: [-2, 16], manI: [27, 10],
            escX: 14, escY: 2, escAng: 0, escZ: 1,
            ojos: 'esfuerzo', boca: 'apretada',
            falGajos: tela(0.9, 0.28), falBorde: borde(0.9, 0.31) }),
     // 3. IMPACTO. El golpe la empuja: la CADERA cede y el pie de atras patina,
     // pero el escudo y la cara siguen al frente -- aguanta, no se voltea.
+    // El codo izquierdo se cierra todavia mas contra el costado: es lo que
+    // hace de puntal cuando el golpe llega.
     pose({ incl: 0.06, cabGiro: 0.18, cadY: 124, torY: -26, cabY: -23,
            falOnda: 2.6, falAncho: 51, falAlto: 56, falVuelo: -12,
-           codD: [4, 26], manD: [2, 42], espAng: 2.95,
-           codI: [0, 18], manI: [16, 26],
+           codD: [15, 24], manD: [23, 40], espAng: 1.80,
+           codI: [0, 18], manI: [32, 12],
            escX: 19, escY: 4, escAng: -0.12, escZ: 1,
            ojos: 'esfuerzo', boca: 'abierta',
            falGajos: tela(2.4, 0.85), falBorde: borde(2.4, 0.94) }),
     // 4. SE REHACE. Vuelve a plantarse tras aguantar el golpe.
     pose({ incl: 0.14, cabGiro: 0.22, cadY: 120, torY: -28, cabY: -25,
            falOnda: 3.8, falAncho: 49, falAlto: 58,
-           codD: [6, 24], manD: [6, 40], espAng: 2.75,
-           codI: [-2, 16], manI: [11, 24],
+           codD: [14, 22], manD: [21, 38], espAng: 1.86,
+           codI: [-2, 16], manI: [28, 10],
            escX: 15, escY: 2, escAng: 0.04, escZ: 1,
            ojos: 'esfuerzo', boca: 'apretada',
            falGajos: tela(3.6, 0.4), falBorde: borde(3.6, 0.44) }),
