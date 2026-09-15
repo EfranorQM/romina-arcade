@@ -208,11 +208,23 @@ export function herir(K, sx) {
 // Que pose y que fotograma toca dibujar. Devuelve [pose, frame].
 export function pose(K) {
   if (K.st === DOLOR || K.st === MUERTO) return ['hurt', 0];
-  if (K.st === BLOQUEA) return ['block', K.bloqHit > 0 ? 1 : 0];
+  // BLOQUEAR: 0 levantando, 1 plantada, 2 el impacto. El 0 dura lo que tarda
+  // el escudo en subir (BLOQ_SUBE), que es justo cuando todavia no para.
+  if (K.st === BLOQUEA) {
+    if (K.bloqHit > 0) return ['block', 2];
+    return ['block', K.bloqT < BLOQ_SUBE ? 0 : 1];
+  }
   if (K.st === RUEDA) return ['roll', Math.min(3, Math.floor(K.rollT / ROLL_T * 4))];
   if (K.st === TAJO) {
-    const u = K.tajoT / TAJO_T;
-    return ['atk', u < 0.27 ? 0 : u < 0.50 ? 1 : u < 0.78 ? 2 : 3];
+    // Cinco fotogramas. El 1 es el BARRIDO, y tiene que caer EXACTAMENTE en la
+    // ventana en que la espada hace daño (TAJO_A0..TAJO_A1): si el dibujo del
+    // golpe y el golpe de verdad no coinciden, el tajo se siente desconectado.
+    const t = K.tajoT;
+    if (t < TAJO_A0) return ['atk', 0];
+    if (t < TAJO_A1) return ['atk', 1];
+    if (t < TAJO_A1 + 0.06) return ['atk', 2];
+    if (t < TAJO_T - 0.04) return ['atk', 3];
+    return ['atk', 4];
   }
   if (!K.enSuelo) return ['jump', K.vy < -80 ? 0 : K.vy > 80 ? 2 : 1];
   if (K.st === CORRE) {

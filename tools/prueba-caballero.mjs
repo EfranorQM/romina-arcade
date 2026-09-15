@@ -173,17 +173,30 @@ console.log('== 7) POSES ==');
   console.log('poses vistas: ' + [...vistas].join(', '));
   ok(vistas.has('idle') && vistas.has('run') && vistas.has('jump') && vistas.has('roll') && vistas.has('atk'),
      'las cinco poses principales se alcanzan jugando');
-  // Los fotogramas nunca se salen del array
+  // Los fotogramas nunca se salen del array. Se comprueba contra el numero
+  // REAL de poses de cada accion (atk tiene 5, block 3, jump 3...), no contra
+  // un 0..3 fijo: ese tope fijo habria dejado pasar un desbordamiento el dia
+  // que se añadieron fotogramas al tajo.
+  const CUENTA = { idle: 4, run: 4, jump: 3, roll: 4, atk: 5, block: 3, hurt: 1 };
   const K2 = makeCaballero(300);
   let malo = null;
-  for (let i = 0; i < 2000; i++) {
-    const inp = { dx: Math.sin(i / 17), salta: i % 53 === 0, golpea: i % 29 === 0, rueda: i % 71 === 0, saltaAbajo: i % 53 < 8 };
+  const vistos = {};
+  for (let i = 0; i < 4000; i++) {
+    const inp = { dx: Math.sin(i / 17), salta: i % 53 === 0, golpea: i % 29 === 0,
+                  rueda: i % 71 === 0, saltaAbajo: i % 53 < 8, bloquea: i % 97 < 30 };
     stepCaballero(K2, inp, DT);
     const [p, f] = pose(K2);
-    if (!(f >= 0 && f <= 3)) malo = [p, f];
+    if (!(p in CUENTA)) malo = ['pose desconocida', p];
+    else if (!(f >= 0 && f < CUENTA[p])) malo = [p, f];
+    (vistos[p] = vistos[p] || new Set()).add(f);
     if (!isFinite(K2.x) || !isFinite(K2.y)) malo = ['NaN', K2.x];
   }
-  ok(!malo, 'tras 2000 frames aporreando los botones, ningun fotograma fuera de rango ni NaN' + (malo ? ' -> ' + malo : ''));
+  ok(!malo, 'tras 4000 frames aporreando los botones, ningun fotograma fuera de rango ni NaN' + (malo ? ' -> ' + malo : ''));
+  // Todos los fotogramas del tajo se alcanzan de verdad jugando: si uno no
+  // sale nunca, es un dibujo que nadie va a ver.
+  const fAtk = vistos.atk ? vistos.atk.size : 0;
+  console.log(`fotogramas del tajo alcanzados: ${fAtk} de ${CUENTA.atk}`);
+  ok(fAtk === CUENTA.atk, 'los cinco fotogramas del tajo se alcanzan jugando');
 }
 
 console.log(fallos ? `\n${fallos} FALLOS` : '\nTODO OK');

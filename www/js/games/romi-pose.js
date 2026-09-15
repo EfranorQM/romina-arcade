@@ -10,6 +10,7 @@
 // celdas. Y cada fotograma sigue siendo un dibujo ENTERO distinto.
 
 import { W, H, P, makeLienzo, elipse, poly, linea, curva, contorno, aCanvas } from './romi-art.js';
+import { dibujaEspada, dibujaEscudo, ESP_LARGO } from './romi-armas.js';
 
 // La pose de reposo. Todo en celdas del lienzo de 128x180, con los pies en
 // y=176 y el eje del cuerpo en x=64.
@@ -32,8 +33,10 @@ export const BASE = {
   piernaD: 0, piernaI: 0,   // cuanto adelanta cada pie (0 = juntos bajo la falda)
   esp: 1,                   // 1 = espada visible, 0 = escondida
   espAng: 1.2,              // angulo de la espada
+  estela: null,             // [angDesde, angHasta] : el barrido de la hoja
   escAng: 0,                // angulo del escudo
   escX: -34, escY: 16,      // el escudo, en el antebrazo izquierdo
+  escZ: 0,                  // 1 = el escudo va DELANTE del cuerpo (bloquear)
   ojos: 'normal',           // normal | cerrados | esfuerzo | dolor
   boca: 'sonrisa',          // sonrisa | abierta | apretada
 };
@@ -75,15 +78,20 @@ export function dibujaPose(p) {
   ]) curva(L, cab[0] + dx, cab[1] + dy, cab[0] + cx, cab[1] + cy, cab[0] + ex, cab[1] + ey, g, g * 0.5, P.pel1);
 
   // === 2. La FALDA, de atras hacia adelante ===
-  const fy0 = cad[1] - 4, fy1 = cad[1] + p.falAlto;
+  // Arranca en la CADERA (17 px, el mismo ancho con el que acaba el cuerpo) y
+  // no en 13: asi no queda escalon entre el talle y la falda. La curva es
+  // cubica en vez de cuadratica -- se abre despacio al salir de la cadera y de
+  // golpe al final, que es como cae una falda de vuelo de verdad.
+  const fy0 = cad[1] - 6, fy1 = cad[1] + p.falAlto;
   const vuelo = p.falVuelo;
+  const A0 = 17;
   // Capa de fuera (la mas oscura), con el borde ondulado
   const falda = [];
   const NB = 14;
   for (let i = 0; i <= NB; i++) {
     const t = i / NB;
     const y = fy0 + t * p.falAlto;
-    const an = 13 + t * t * (p.falAncho - 13);
+    const an = A0 + t * t * t * (p.falAncho - A0) + t * 4;
     falda.push(cad[0] - an - vuelo * t * t, y);
   }
   // Borde de abajo, ondulado como los vestidos de las referencias
@@ -96,7 +104,7 @@ export function dibujaPose(p) {
   for (let i = NB; i >= 0; i--) {
     const t = i / NB;
     const y = fy0 + t * p.falAlto;
-    const an = 13 + t * t * (p.falAncho - 13);
+    const an = A0 + t * t * t * (p.falAncho - A0) + t * 4;
     falda.push(cad[0] + an + vuelo * 0.3 * t * t, y);
   }
   poly(L, falda, P.ves2);
@@ -130,37 +138,90 @@ export function dibujaPose(p) {
     elipse(L, x, fy1 + onda + 2, 4, 2.5, P.bla1);
   }
 
-  // === 3. Las PIERNAS, si asoman (al correr o saltar) ===
+  // === 3. Las PIERNAS ===
+  // NUNCA se ven desnudas. El vestido es lo que se mueve; la pierna solo
+  // empuja la tela desde dentro y asoma la BOTA por debajo del borde.
+  // Antes se pintaban dos tiras de piel de 13 px que rajaban la falda por el
+  // medio y parecian zancos: era el fallo mas feo de la animacion de correr.
   for (const [lado, adel] of [[-1, p.piernaI], [1, p.piernaD]]) {
     if (Math.abs(adel) < 2) continue;
-    const px0 = cad[0] + lado * 9, py0 = cad[1] + 12;
-    const pie = [px0 + adel, py0 + p.falAlto - 10];
-    linea(L, px0, py0, pie[0], pie[1], 13, P.piel2);
-    elipse(L, pie[0], pie[1] + 3, 8, 5, P.bla2);   // el zapatito
+    const px0 = cad[0] + lado * 7, py0 = cad[1] + 10;
+    // La tela que la pierna empuja: una cuña del MISMO color del vestido que
+    // sale de la cadera hacia donde va el pie. Asi la falda se deforma en vez
+    // de partirse.
+    const pieX = px0 + adel, pieY = py0 + p.falAlto - 14;
+    const ancho = 15 - Math.abs(adel) * 0.12;
+    poly(L, [px0 - ancho, py0, px0 + ancho, py0,
+             pieX + ancho * 0.62, pieY, pieX - ancho * 0.62, pieY],
+         adel > 0 ? P.ves2 : P.ves1);
+    // Solo la BOTA asoma: media melena de piel sobre el empeine y cuero.
+    const bx = pieX, by = pieY + 6;
+    elipse(L, bx, by - 3, 6, 5, P.piel2);           // el tobillo, apenas
+    elipse(L, bx + Math.sign(adel || 1) * 1, by + 2, 8.5, 5, P.mad2);   // la bota
+    elipse(L, bx + Math.sign(adel || 1) * 1, by + 1, 7, 3, P.mad3);
+    elipse(L, bx, by + 4, 8.5, 2.5, P.mad1);        // la suela
   }
 
-  // === 4. El TORSO: corpino ajustado ===
-  const tw = 19, th = 34;
+  // === 4. El TORSO: corpino con CINTURA ===
+  // El talle es lo que faltaba. Antes el corpino era un trapecio de 19 a 15 y
+  // la falda arrancaba en 13, con 13 px de nada en medio: se leia como un torax
+  // posado encima de una cadera, sin union. Ahora el contorno del cuerpo pasa
+  // por CUATRO anchos -- pecho 19, talle 11, cadera 17 -- y el vientre se
+  // dibuja hasta enganchar con la falda, sin hueco.
+  const th = 34;
+  const sx = Math.sin(p.incl) * 8;                  // desplazamiento por inclinarse
+  const yPecho = tor[1] - th * 0.5;                 // arriba del corpino
+  const yTalle = tor[1] + th * 0.5 - 1;             // la cintura: lo mas estrecho
+  const yCad   = cad[1] - 2;                        // donde engancha la falda
+  const aPecho = 19, aTalle = 11, aCadera = 17;
+  // El contorno, con el talle metido: un reloj de arena suave. Los vertices
+  // van en orden (lado derecho hacia abajo, lado izquierdo hacia arriba).
   const cuerpo = [
-    tor[0] - tw + Math.sin(p.incl) * 8, tor[1] - th * 0.5,
-    tor[0] + tw + Math.sin(p.incl) * 8, tor[1] - th * 0.5,
-    tor[0] + 15, tor[1] + th * 0.5,
-    tor[0] - 15, tor[1] + th * 0.5,
+    tor[0] - aPecho + sx, yPecho,
+    tor[0] + aPecho + sx, yPecho,
+    tor[0] + (aPecho - 3) + sx * 0.7, yPecho + th * 0.34,
+    tor[0] + aTalle + sx * 0.3, yTalle,
+    cad[0] + aCadera, yCad,
+    cad[0] - aCadera, yCad,
+    tor[0] - aTalle + sx * 0.3, yTalle,
+    tor[0] - (aPecho - 3) + sx * 0.7, yPecho + th * 0.34,
   ];
   poly(L, cuerpo, P.ves2);
-  // Sombra del corpino a la izquierda y brillo a la derecha
-  poly(L, [tor[0] - tw + Math.sin(p.incl) * 8, tor[1] - th * 0.5,
-           tor[0] - tw + 7 + Math.sin(p.incl) * 8, tor[1] - th * 0.5,
-           tor[0] - 9, tor[1] + th * 0.5, tor[0] - 15, tor[1] + th * 0.5], P.ves1);
-  poly(L, [tor[0] + 7 + Math.sin(p.incl) * 8, tor[1] - th * 0.5,
-           tor[0] + tw + Math.sin(p.incl) * 8, tor[1] - th * 0.5,
-           tor[0] + 15, tor[1] + th * 0.5, tor[0] + 9, tor[1] + th * 0.5], P.ves3);
+  // Sombra a la izquierda y brillo a la derecha, siguiendo la MISMA curva:
+  // es lo que hace que se lea como un volumen y no como una plancha.
+  poly(L, [tor[0] - aPecho + sx, yPecho,
+           tor[0] - aPecho + 7 + sx, yPecho,
+           tor[0] - aTalle + 4 + sx * 0.3, yTalle,
+           cad[0] - aCadera + 5, yCad,
+           cad[0] - aCadera, yCad,
+           tor[0] - aTalle + sx * 0.3, yTalle,
+           tor[0] - (aPecho - 3) + sx * 0.7, yPecho + th * 0.34], P.ves1);
+  poly(L, [tor[0] + aPecho - 8 + sx, yPecho,
+           tor[0] + aPecho + sx, yPecho,
+           tor[0] + (aPecho - 3) + sx * 0.7, yPecho + th * 0.34,
+           tor[0] + aTalle + sx * 0.3, yTalle,
+           cad[0] + aCadera, yCad,
+           cad[0] + aCadera - 6, yCad,
+           tor[0] + aTalle - 5 + sx * 0.3, yTalle], P.ves3);
+  // Las dos costuras del corpino, que marcan el talle aunque la silueta sea
+  // pequeña en pantalla. En los vestidos de las referencias son lo que da la
+  // sensacion de cuerpo ajustado.
+  for (const s of [-1, 1]) {
+    curva(L, tor[0] + s * 12 + sx, yPecho + 3,
+             tor[0] + s * 7.5 + sx * 0.4, tor[1] + 6,
+             tor[0] + s * 9, yTalle - 1, 2, 2, P.ves1);
+  }
   // El escote y el cuello
-  elipse(L, tor[0] + Math.sin(p.incl) * 8, tor[1] - th * 0.5 + 1, 11, 5, P.piel2);
-  linea(L, cab[0], cab[1] + 12, tor[0] + Math.sin(p.incl) * 6, tor[1] - th * 0.5 + 2, 11, P.piel2);
-  // Cinturon de oro en la cintura
-  for (let i = -16; i <= 16; i++) elipse(L, tor[0] + i * 0.95, tor[1] + th * 0.5 - 1, 2, 3, P.oro2);
-  elipse(L, tor[0], tor[1] + th * 0.5 - 1, 5, 4, P.oro3);
+  elipse(L, tor[0] + sx, yPecho + 1, 11, 5, P.piel2);
+  linea(L, cab[0], cab[1] + 12, tor[0] + sx * 0.75, yPecho + 2, 11, P.piel2);
+  // Cinturon de oro EN EL TALLE (antes iba recto y ancho, lo que borraba la
+  // cintura justo donde hacia falta verla). Ahora es estrecho y se cine.
+  for (let i = -aTalle; i <= aTalle; i++) {
+    const u = i / aTalle;
+    elipse(L, tor[0] + i * 1.0 + sx * 0.3, yTalle + Math.abs(u) * 1.5, 1.6, 3, P.oro2);
+  }
+  elipse(L, tor[0] + sx * 0.3, yTalle, 5, 4.5, P.oro3);
+  elipse(L, tor[0] + sx * 0.3, yTalle, 2.5, 2.5, P.joya);
   // La joya del pecho
   elipse(L, tor[0] + Math.sin(p.incl) * 7, tor[1] - 6, 5, 5, P.oro2);
   elipse(L, tor[0] + Math.sin(p.incl) * 7, tor[1] - 6, 3, 3, P.joya2);
@@ -182,46 +243,72 @@ export function dibujaPose(p) {
     elipse(L, mx, my, 6, 6, P.piel3);       // la mano
   }
 
-  // === 6. El ESCUDO, en la mano izquierda ===
-  if (p.esc !== 0) {
-    const ex = tor[0] + p.escX, ey = tor[1] + p.escY;
-    const a = p.escAng;
-    const co = Math.cos(a), si = Math.sin(a);
-    const R = (dx, dy) => [ex + dx * co - dy * si, ey + dx * si + dy * co];
-    // Forma de escudo: cuadrado arriba, punta abajo
-    const e = [];
-    for (const [dx, dy] of [[-15, -18], [15, -18], [15, 6], [0, 22], [-15, 6]]) e.push(...R(dx, dy));
-    poly(L, e, P.ace2);
-    // Bisel de arriba y borde de oro
-    const b = [];
-    for (const [dx, dy] of [[-15, -18], [15, -18], [15, -13], [-15, -13]]) b.push(...R(dx, dy));
-    poly(L, b, P.ace3);
-    for (const [dx, dy] of [[-15, -18], [15, -18], [15, 6], [0, 22], [-15, 6]]) {
-      const [qx, qy] = R(dx, dy);
-      elipse(L, qx, qy, 2.5, 2.5, P.oro2);
-    }
-    // El emblema: un corazon de oro (es Romina, no un blason cualquiera)
-    const [hx2, hy2] = R(0, -2);
-    elipse(L, hx2 - 4, hy2 - 3, 4.5, 4.5, P.oro3);
-    elipse(L, hx2 + 4, hy2 - 3, 4.5, 4.5, P.oro3);
-    poly(L, [hx2 - 8, hy2 - 2, hx2 + 8, hy2 - 2, hx2, hy2 + 10], P.oro3);
+  // === 6. El ESCUDO, en el antebrazo izquierdo ===
+  // Ya no se dibuja aqui: es una pieza con estructura propia (tablones, cruz,
+  // remache) en romi-armas.js, que se rota entera.
+  // Si escZ es 0 va detras del brazo; al BLOQUEAR va delante de todo, que es
+  // justo lo que hace legible el gesto: se parapeta.
+  if (p.esc !== 0 && !p.escZ) {
+    dibujaEscudo(L, tor[0] + p.escX, tor[1] + p.escY, p.escAng);
   }
 
   // === 7. La ESPADA, en la mano derecha ===
   if (p.esp !== 0) {
     const hx = tor[0] + p.hombD + Math.sin(p.incl) * 8, hy = tor[1] - th * 0.18;
     const mx = hx + p.manD[0], my = hy + p.manD[1];
-    const a = p.espAng;
-    const lx = mx + Math.cos(a) * 62, ly = my + Math.sin(a) * 62;
-    const gx = mx + Math.cos(a) * 8, gy = my + Math.sin(a) * 8;
-    // Guarda de oro, perpendicular a la hoja
-    linea(L, gx - Math.sin(a) * 9, gy + Math.cos(a) * 9, gx + Math.sin(a) * 9, gy - Math.cos(a) * 9, 5, P.oro2);
-    // La hoja: cuerpo y filo
-    linea(L, gx, gy, lx, ly, 8, P.ace2);
-    linea(L, gx - Math.sin(a) * 2, gy + Math.cos(a) * 2, lx - Math.sin(a) * 2, ly + Math.cos(a) * 2, 3, P.ace4);
-    // El pomo
-    elipse(L, mx - Math.cos(a) * 5, my - Math.sin(a) * 5, 4, 4, P.oro3);
+    // La ESTELA del barrido, ANTES de la hoja para que la hoja quede encima.
+    // Es lo que faltaba en el tajo: sin ella la espada solo aparecia en otro
+    // sitio y el golpe no se leia como un golpe.
+    if (p.estela) {
+      const [a0, a1] = p.estela;
+      // El barrido gira alrededor del HOMBRO, no de la mano. Medido: entre el
+      // fotograma de carga y el de impacto la mano salta 53 px, asi que un
+      // arco trazado desde la mano actual con el angulo anterior sale de un
+      // sitio donde la espada no estuvo nunca -- y se veia como una cinta
+      // flotando separada del filo. Desde el hombro, el arco pasa por donde
+      // la hoja pasó de verdad.
+      const ex = hx, ey = hy;
+      const RM = Math.hypot(mx - hx, my - hy);   // cuanto saca el brazo
+      // El barrido es una CINTA RELLENA, no un manojo de rayos: se traza el
+      // borde de fuera en un sentido y el de dentro en el otro, y se rellena.
+      // (Con lineas radiales sueltas salia un abanico de varillas, como un
+      // abanico de verdad, que era peor que no tener estela.)
+      //
+      // Tres cintas concentricas, de la mas ancha y apagada a la mas fina y
+      // blanca justo en el filo: asi se lee de donde viene y hacia donde va.
+      // Los radios van desde el HOMBRO: la punta esta a RM+ESP_LARGO.
+      // La estela es FINA: tres cintas de 5, 3 y 2 px de grosor pegadas al
+      // borde que recorrio la punta. Una cinta gruesa y opaca (el primer
+      // intento) tapaba media pantalla y se leia como una mancha, no como un
+      // filo pasando: en pixel art la estela se SUGIERE.
+      const RF = RM + ESP_LARGO;
+      const CAPAS = [
+        [0.00, 1.00, 5.0, 10, P.ace2],   // todo el arco, fina y apagada
+        [0.40, 1.00, 3.5,  5, P.ace3],   // el tramo reciente
+        [0.72, 1.00, 2.0,  0, P.ace4],   // justo tras el filo, blanca
+      ];
+      for (const [u0, u1, gr, sep, col] of CAPAS) {
+        const N = 20;
+        const cinta = [];
+        for (let i = 0; i <= N; i++) {            // borde exterior
+          const u = u0 + (u1 - u0) * (i / N);
+          const a = a0 + (a1 - a0) * u;
+          const r = RF - sep;
+          cinta.push(ex + Math.cos(a) * r, ey + Math.sin(a) * r);
+        }
+        for (let i = N; i >= 0; i--) {            // borde interior, de vuelta
+          const u = u0 + (u1 - u0) * (i / N);
+          const a = a0 + (a1 - a0) * u;
+          // se afila hacia atras: mas fina cuanto mas vieja
+          const r = RF - sep - gr * (0.35 + 0.65 * (i / N));
+          cinta.push(ex + Math.cos(a) * r, ey + Math.sin(a) * r);
+        }
+        poly(L, cinta, col);
+      }
+    }
+    dibujaEspada(L, mx, my, p.espAng);
   }
+
 
   // === 8. La CABEZA ===
   const chx = cab[0] + p.cabGiro * 4;
@@ -255,6 +342,14 @@ export function dibujaPose(p) {
   elipse(L, chx, cy3 - 11, 3.5, 3.5, P.joya);
   elipse(L, chx - 9, cy3 - 7, 2.5, 2.5, P.joya2);
   elipse(L, chx + 9, cy3 - 7, 2.5, 2.5, P.joya2);
+
+  // === 10. El ESCUDO POR DELANTE, al bloquear ===
+  // Va al final del todo, incluso por delante de la cabeza y la corona: al
+  // parapetarse ella mete la cabeza DETRAS del escudo, y si el escudo se
+  // dibuja antes, la cara le queda encima y no se lee el bloqueo.
+  if (p.esc !== 0 && p.escZ) {
+    dibujaEscudo(L, tor[0] + p.escX, tor[1] + p.escY, p.escAng);
+  }
 
   contorno(L, P.out, false);
   return L;

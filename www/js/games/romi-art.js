@@ -17,7 +17,13 @@
 // una pose son veinte numeros: asi dibujar un fotograma nuevo es mover esos
 // numeros, no teclear 23.000 celdas.
 
-export const W = 128, H = 180;   // el lienzo de un fotograma
+// El lienzo de un fotograma. ES MAS ANCHO QUE ELLA A PROPOSITO: Romina ocupa
+// 128 px, pero con la espada extendida hacia delante la punta llega a x=188, y
+// en un lienzo de 128 se recortaban 46 px de hoja -- el tajo extendido NUNCA se
+// habia visto entero, y por eso los fotogramas de ataque acababan siempre con
+// la espada en angulos altos, que era lo unico que cabia. Medido, no a ojo.
+export const W = 192, H = 180;   // el lienzo de un fotograma
+export const EJE = 64;           // donde cae el eje del cuerpo dentro del lienzo
 
 // ---------- Paleta ----------
 // Rosa y oro sobre piel clara, como las referencias. El contorno NO es negro
@@ -59,6 +65,11 @@ export const P = {
   ace2: '#8a97b8',
   ace3: '#d4dcf0',
   ace4: '#ffffff',
+
+  // Madera del escudo: sus referencias tienen TABLONES, no una chapa lisa.
+  mad1: '#6b4326',   // madera en sombra (las juntas entre tablones)
+  mad2: '#96613a',   // madera base
+  mad3: '#b8794a',   // madera iluminada
 
   ojo:  '#6b3a1e',   // el iris: cafe
   ojo2: '#a4653a',   // el borde claro del iris, que le da profundidad

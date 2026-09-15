@@ -7,6 +7,7 @@
 // torso inclinado; en el 4 es al reves. Eso es animar de verdad.
 
 import { pose, horneaPose } from './romi-pose.js';
+import { EJE } from './romi-art.js';
 
 // Las poses, agrupadas por accion.
 export const POSES = {
@@ -18,29 +19,54 @@ export const POSES = {
     pose({ torY: -33, cabY: -27, falOnda: 1.5, manD: [21, 43], manI: [-21, 43] }),
   ],
 
-  // CORRER: cuatro fotogramas. La falda vuela hacia atras, el torso se
-  // inclina hacia delante y las piernas alternan. El pelo tambien se va atras.
+  // CORRER: cuatro fotogramas. Lo que se mueve es el VESTIDO, no las piernas:
+  // la pierna empuja la tela desde dentro y por debajo del borde asoma la bota.
+  // Antes se pintaban dos tiras de piel que rajaban la falda por el medio y
+  // parecian zancos -- era lo mas feo de toda la animacion.
+  //
+  // El ciclo tambien SUBE Y BAJA (cadY 112-116): un ciclo de carrera sin ese
+  // rebote se lee como si patinara. Los apoyos (1 y 3) van abajo; los vuelos
+  // (2 y 4), arriba.
   run: [
-    pose({ incl: 0.18, torY: -33, falVuelo: 16, falOnda: 0, piernaD: 20, piernaI: -8,
-           codD: [15, 16], manD: [26, 30], codI: [-16, 18], manI: [-18, 38], espAng: 0.9, cabGiro: 0.3 }),
-    pose({ incl: 0.22, torY: -36, falVuelo: 22, falOnda: 1.2, piernaD: 6, piernaI: -18,
-           codD: [17, 14], manD: [30, 26], codI: [-14, 20], manI: [-22, 40], espAng: 0.7, cabGiro: 0.3 }),
-    pose({ incl: 0.18, torY: -33, falVuelo: 16, falOnda: 2.4, piernaD: -8, piernaI: 20,
-           codD: [15, 18], manD: [24, 34], codI: [-16, 16], manI: [-16, 34], espAng: 0.9, cabGiro: 0.3 }),
-    pose({ incl: 0.22, torY: -36, falVuelo: 22, falOnda: 3.6, piernaD: -18, piernaI: 6,
-           codD: [13, 20], manD: [20, 38], codI: [-17, 14], manI: [-24, 30], espAng: 1.1, cabGiro: 0.3 }),
+    // 1. Apoyo derecho. Abajo del rebote, la falda a media ondear.
+    pose({ incl: 0.20, cadY: 116, torY: -33, falVuelo: 18, falOnda: 0, falAncho: 47,
+           piernaD: 22, piernaI: -10,
+           codD: [15, 16], manD: [26, 30], codI: [-16, 18], manI: [-18, 38],
+           espAng: 0.9, cabGiro: 0.3 }),
+    // 2. Vuelo. Arriba del rebote, la falda en su maximo hacia atras.
+    pose({ incl: 0.26, cadY: 111, torY: -36, falVuelo: 26, falOnda: 1.2, falAncho: 50,
+           piernaD: 8, piernaI: -22,
+           codD: [17, 14], manD: [30, 26], codI: [-14, 20], manI: [-22, 40],
+           espAng: 0.7, cabGiro: 0.3 }),
+    // 3. Apoyo izquierdo.
+    pose({ incl: 0.20, cadY: 116, torY: -33, falVuelo: 18, falOnda: 2.4, falAncho: 47,
+           piernaD: -10, piernaI: 22,
+           codD: [15, 18], manD: [24, 34], codI: [-16, 16], manI: [-16, 34],
+           espAng: 0.9, cabGiro: 0.3 }),
+    // 4. Vuelo.
+    pose({ incl: 0.26, cadY: 111, torY: -36, falVuelo: 26, falOnda: 3.6, falAncho: 50,
+           piernaD: -22, piernaI: 8,
+           codD: [13, 20], manD: [20, 38], codI: [-17, 14], manI: [-24, 30],
+           espAng: 1.1, cabGiro: 0.3 }),
   ],
 
   // SALTAR: impulso (agachada), aire (piernas recogidas, falda y pelo arriba),
   // caida (piernas buscando el suelo).
   jump: [
-    pose({ cadY: 118, torY: -30, incl: 0.12, falVuelo: 6, falAlto: 58, piernaD: 8, piernaI: -6,
-           codD: [14, 12], manD: [24, 24], codI: [-14, 12], manI: [-24, 24] }),
-    pose({ cadY: 110, torY: -36, incl: -0.10, falVuelo: 26, falAlto: 52, falOnda: 2,
-           piernaD: 14, piernaI: -12, codD: [18, 6], manD: [30, 10], codI: [-18, 6], manI: [-30, 10],
-           espAng: -0.5, escAng: -0.3, ojos: 'esfuerzo' }),
-    pose({ cadY: 114, torY: -33, incl: 0.06, falVuelo: 14, falAlto: 66, falOnda: 4,
-           piernaD: 10, piernaI: 16, codD: [14, 18], manD: [24, 34], codI: [-14, 18], manI: [-24, 34],
+    // 1. IMPULSO: se agacha y junta, la falda se aplasta contra las piernas.
+    pose({ cadY: 122, torY: -28, incl: 0.16, falVuelo: 4, falAlto: 54, falAncho: 50,
+           piernaD: 10, piernaI: -8,
+           codD: [14, 12], manD: [24, 24], codI: [-14, 12], manI: [-24, 24],
+           ojos: 'esfuerzo', boca: 'apretada' }),
+    // 2. AIRE: estirada, brazos arriba, la falda y el pelo subiendo.
+    pose({ cadY: 108, torY: -37, incl: -0.12, falVuelo: 28, falAlto: 50, falAncho: 44,
+           falOnda: 2, piernaD: 16, piernaI: -14,
+           codD: [18, 4], manD: [30, 6], codI: [-18, 4], manI: [-30, 6],
+           espAng: -0.7, escAng: -0.35, escY: 4, ojos: 'esfuerzo', boca: 'abierta' }),
+    // 3. CAIDA: busca el suelo, la falda se le viene arriba por el aire.
+    pose({ cadY: 113, torY: -32, incl: 0.10, falVuelo: 16, falAlto: 68, falAncho: 52,
+           falOnda: 4, piernaD: 12, piernaI: 18,
+           codD: [14, 18], manD: [24, 34], codI: [-14, 18], manI: [-24, 34],
            espAng: 1.4 }),
   ],
 
@@ -62,33 +88,70 @@ export const POSES = {
            escX: -24, escY: 2, escAng: -0.7, espAng: 2.0, ojos: 'esfuerzo' }),
   ],
 
-  // TAJO: arranque (espada atras y arriba), activo (brazo extendido, la falda
-  // acompaña el giro), y dos de recuperacion.
+  // TAJO: cinco fotogramas. Antes eran cuatro y solo cambiaba el angulo del
+  // brazo: por eso se veia floja. Un espadazo se lee por TRES cosas, y ahora
+  // estan las tres -- la CARGA (se echa atras, se agacha, amenaza), el
+  // BARRIDO con estela de arriba abajo, y el PESO despues (se pasa de largo,
+  // le cuesta frenar la espada). El cuerpo entero gira: la inclinacion va de
+  // -0.30 a +0.38, la falda de -16 a +26, y la cabeza sigue al filo.
   atk: [
-    pose({ incl: -0.14, cabGiro: 0.3, falVuelo: -10, falOnda: 0.6,
-           codD: [6, -12], manD: [4, -26], espAng: -1.9, codI: [-16, 14], manI: [-26, 30],
-           escX: -32, escY: 10, escAng: 0.3, ojos: 'esfuerzo', boca: 'apretada' }),
-    pose({ incl: 0.30, cabGiro: 0.5, falVuelo: 20, falOnda: 2.2, torY: -33,
-           codD: [22, 6], manD: [40, 8], espAng: 0.05, codI: [-12, 18], manI: [-18, 36],
-           escX: -28, escY: 16, escAng: -0.2, ojos: 'esfuerzo', boca: 'abierta' }),
-    pose({ incl: 0.22, cabGiro: 0.4, falVuelo: 12, falOnda: 3.4, torY: -34,
-           codD: [20, 16], manD: [32, 28], espAng: 0.7, codI: [-13, 20], manI: [-20, 40],
-           escX: -32, escY: 14, escAng: 0, boca: 'apretada' }),
-    pose({ incl: 0.08, falVuelo: 4, falOnda: 4.6, codD: [15, 20], manD: [24, 40], espAng: 1.1 }),
+    // 1. CARGA. Se agacha, el hombro atras, la espada arriba y detras.
+    pose({ incl: -0.30, cabGiro: 0.45, cadY: 116, torY: -31, falVuelo: -16, falOnda: 0.6,
+           falAncho: 44, piernaD: -10, piernaI: 12,
+           codD: [2, -14], manD: [-4, -30], espAng: -2.35,
+           codI: [-17, 12], manI: [-28, 26],
+           escX: -34, escY: 8, escAng: 0.5, ojos: 'esfuerzo', boca: 'apretada' }),
+    // 2. BARRIDO. El instante del impacto: brazo extendido del todo, la hoja
+    // horizontal, y la estela cubriendo TODO el arco que acaba de recorrer.
+    pose({ incl: 0.38, cabGiro: 0.55, cadY: 110, torY: -35, falVuelo: 26, falOnda: 2.2,
+           falAncho: 50, piernaD: 22, piernaI: -14,
+           codD: [24, 2], manD: [44, 4], espAng: -0.15, estela: [-2.15, -0.05],
+           codI: [-10, 20], manI: [-14, 38],
+           escX: -26, escY: 18, escAng: -0.35, ojos: 'esfuerzo', boca: 'abierta' }),
+    // 3. PASADA. La espada se pasa de largo por el peso, ella sigue girada.
+    pose({ incl: 0.30, cabGiro: 0.5, cadY: 113, torY: -34, falVuelo: 18, falOnda: 3.4,
+           falAncho: 48, piernaD: 14, piernaI: -8,
+           codD: [22, 14], manD: [38, 24], espAng: 0.85, estela: [-0.05, 0.73],
+           codI: [-12, 20], manI: [-18, 40],
+           escX: -30, escY: 16, escAng: -0.1, ojos: 'esfuerzo', boca: 'abierta' }),
+    // 4. FRENA. Le cuesta pararla: la punta baja del todo y el torso vuelve.
+    pose({ incl: 0.14, cadY: 114, torY: -33, falVuelo: 8, falOnda: 4.6, falAncho: 47,
+           piernaD: 6, piernaI: -4,
+           codD: [17, 22], manD: [28, 40], espAng: 1.45,
+           codI: [-14, 20], manI: [-22, 42], escX: -33, escY: 16, boca: 'apretada' }),
+    // 5. GUARDIA. Vuelve a la suya, aun con la respiracion alta.
+    pose({ incl: 0.04, torY: -33, falVuelo: 2, falOnda: 5.6,
+           codD: [14, 22], manD: [22, 44], espAng: 1.3 }),
   ],
 
-  // BLOQUEAR con el escudo: se planta de lado, el escudo por delante y la
-  // espada recogida. Es el verbo propio de ella.
+  // BLOQUEAR: tres fotogramas. Antes eran dos casi identicos y el escudo se
+  // veia de canto detras del brazo -- no se leia que estuviera bloqueando.
+  // Ahora el escudo va POR DELANTE de todo (escZ), de frente (no de canto), y
+  // el cuerpo se agazapa detras: hombro bajo, cabeza metida, rodilla flexionada.
   block: [
-    pose({ incl: -0.10, cabGiro: -0.2, torY: -33, falOnda: 0.4, falAncho: 44,
-           codD: [10, 20], manD: [14, 36], espAng: 2.4,
-           codI: [-6, 4], manI: [-12, 10], escX: -20, escY: -14, escAng: 0.1,
+    // 1. LEVANTA el escudo, todavia subiendo.
+    pose({ incl: -0.16, cabGiro: -0.25, cadY: 116, torY: -31, falOnda: 0.4,
+           falAncho: 47, falAlto: 62,
+           codD: [8, 22], manD: [10, 38], espAng: 2.5,
+           codI: [-8, 8], manI: [-14, 16],
+           escX: -14, escY: 2, escAng: 0.05, escZ: 1,
            ojos: 'esfuerzo', boca: 'apretada' }),
-    // El instante del impacto: retrocede un poco y el escudo tiembla
-    pose({ incl: -0.18, cabGiro: -0.3, torY: -31, falOnda: 1.4, falAncho: 45, falVuelo: -8,
-           codD: [9, 22], manD: [12, 38], espAng: 2.6,
-           codI: [-4, 6], manI: [-9, 12], escX: -16, escY: -12, escAng: 0.25,
+    // 2. PLANTADA. Agazapada del todo tras el escudo: es la postura estable.
+    pose({ incl: -0.26, cabGiro: -0.4, cadY: 120, torY: -28, cabY: -25, falOnda: 1.2,
+           falAncho: 49, falAlto: 58, piernaD: -12, piernaI: 8,
+           codD: [6, 24], manD: [6, 40], espAng: 2.7,
+           codI: [-6, 10], manI: [-10, 18],
+           escX: -10, escY: 4, escAng: 0, escZ: 1,
            ojos: 'esfuerzo', boca: 'apretada' }),
+    // 3. IMPACTO. Le entra el golpe: la empuja hacia atras, el escudo tiembla
+    // y se le escapa medio paso. Esto es lo que se ve al parar de verdad.
+    pose({ incl: -0.42, cabGiro: -0.55, cadY: 122, torY: -26, cabY: -23,
+           falOnda: 2.6, falAncho: 50, falAlto: 56, falVuelo: -14,
+           piernaD: -20, piernaI: 12,
+           codD: [4, 26], manD: [2, 42], espAng: 2.95,
+           codI: [-2, 14], manI: [-4, 24],
+           escX: -5, escY: 7, escAng: -0.20, escZ: 1,
+           ojos: 'esfuerzo', boca: 'abierta' }),
   ],
 
   // DOLOR: la cabeza atras, el cuerpo arqueado, el escudo y la espada caidos.
@@ -125,6 +188,11 @@ export function drawRomina(g, S, x, y, dir, pose_, frame) {
   const set = dir >= 0 ? S.der : S.izq;
   const arr = set[pose_] || set.idle;
   const cv = arr[Math.min(frame, arr.length - 1)];
-  // El lienzo de la pose tiene los pies en y=176 de 180: se ancla ahi.
-  g.drawImage(cv, Math.round(x - cv.width / 2), Math.round(y - 176));
+  // El lienzo es MAS ANCHO que ella (192 para un cuerpo de 128) porque la
+  // espada extendida se salia. Asi que NO se centra por el ancho del lienzo:
+  // se ancla al EJE del cuerpo, que esta en x=64. Al mirar a la izquierda el
+  // lienzo va espejado, asi que el eje cae en W-EJE.
+  const eje = dir >= 0 ? EJE : cv.width - EJE;
+  // Los pies estan en y=176 de 180.
+  g.drawImage(cv, Math.round(x - eje), Math.round(y - 176));
 }
