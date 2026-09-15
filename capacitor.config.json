@@ -1,6 +1,6 @@
 {
   "appId": "com.romina.juegos",
-  "appName": "Juegos Romina",
+  "appName": "RomiQuest",
   "webDir": "www",
   "android": {
     "backgroundColor": "#000000",

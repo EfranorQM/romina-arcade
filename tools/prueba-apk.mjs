@@ -18,7 +18,7 @@ import { execSync } from 'child_process';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const raiz = path.join(here, '..');
-const apk = process.argv[2] || path.join(raiz, 'RominaArcade.apk');
+const apk = process.argv[2] || path.join(raiz, 'RomiQuest.apk');
 
 let fallos = 0;
 const ok = (c, m) => { console.log((c ? '   ok  ' : '   MAL ') + m); if (!c) fallos++; };
@@ -64,8 +64,20 @@ if (!aapt) {
      'tiene permiso de INTERNET (lo necesita el boton de actualizar)');
 }
 
+// --- El nombre y el icono ---
+console.log('\n== 2) NOMBRE E ICONO ==');
+if (aapt) {
+  const badging = execSync(`"${aapt}" dump badging "${apk}"`, { encoding: 'utf8' });
+  const label = (badging.match(/application-label:'([^']+)'/) || [])[1];
+  const icon = (badging.match(/application-icon-\d+:'([^']+)'/) || [])[1];
+  console.log(`   nombre: ${label}`);
+  console.log(`   icono:  ${icon}`);
+  ok(label === 'RomiQuest', 'la app se llama RomiQuest');
+  ok(!!icon && icon.includes('ic_launcher'), 'declara un icono de lanzador');
+}
+
 // --- El contenido web ---
-console.log('\n== 2) EL JUEGO DENTRO DEL APK ==');
+console.log('\n== 3) EL JUEGO DENTRO DEL APK ==');
 const { execFileSync } = await import('child_process');
 const lista = execSync(`powershell -NoProfile -Command "Add-Type -A System.IO.Compression.FileSystem; [IO.Compression.ZipFile]::OpenRead('${apk.replace(/\\/g, '/')}').Entries | ForEach-Object { $_.FullName }"`, { encoding: 'utf8' })
   .split('\n').map(s => s.trim()).filter(Boolean);
@@ -77,7 +89,7 @@ ok(web.includes('assets/public/js/update.js'), 'lleva el modulo de actualizacion
 ok(web.includes('assets/public/index.html'), 'lleva el index.html');
 
 // --- Que lo de dentro sea lo mismo que lo de www/ ---
-console.log('\n== 3) COINCIDE CON www/ ==');
+console.log('\n== 4) COINCIDE CON www/ ==');
 const crypto = await import('crypto');
 const sha = b => crypto.createHash('sha256').update(b).digest('hex');
 const leeDelApk = (n) => {
@@ -95,7 +107,7 @@ ok(distintos.length === 0, `los ficheros del APK son identicos a www/ (${iguales
    (distintos.length ? ' -> distintos: ' + distintos.join(', ') : ''));
 
 // --- La version ---
-console.log('\n== 4) VERSION ==');
+console.log('\n== 5) VERSION ==');
 const upd = leeDelApk('assets/public/js/update.js').toString('utf8');
 const ver = (upd.match(/VERSION_APK = '([\d.]+)'/) || [])[1];
 const origen = (upd.match(/ORIGEN = '([^']+)'/) || [])[1];

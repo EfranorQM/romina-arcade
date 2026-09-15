@@ -2,7 +2,7 @@
   "name": "romina-arcade",
   "version": "1.0.0",
   "private": true,
-  "description": "ROMINA'S ARCADE - 5 juegos de accion retro, 100% offline",
+  "description": "RomiQuest - arcade de 9 juegos de accion retro, 100% offline",
   "scripts": {
     "serve": "node serve.js",
     "cap:add": "npx cap add android",
