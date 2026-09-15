@@ -45,7 +45,7 @@ const LS = {
 
 // La version que trae el APK de fabrica. La reescribe tools/publica.mjs en
 // cada publicacion, para que el numero que se ve en el menu sea el de verdad.
-export const VERSION_APK = '1.0.1';
+export const VERSION_APK = '1.0.2';
 
 // Que version se esta usando ahora mismo.
 export function versionActual() {
@@ -118,7 +118,12 @@ export async function buscaActualizacion() {
   try {
     // 1. El manifiesto: que version hay y que ficheros la componen.
     const man = await pideJSON(ORIGEN + '/version.json?t=' + Date.now());
-    if (!man || !man.version || !Array.isArray(man.archivos)) {
+    // Se distingue "no llego nada" de "llego algo que no vale": con un solo
+    // mensaje, quedarse sin cobertura decia RESPUESTA RARA y desconcertaba.
+    if (man === null) {
+      return fallo(navigator.onLine === false ? 'SIN INTERNET' : 'NO SE PUDO CONECTAR');
+    }
+    if (!man.version || !Array.isArray(man.archivos)) {
       return fallo('RESPUESTA RARA');
     }
     Update.disponible = man.version;
@@ -184,7 +189,9 @@ export function esMasNueva(a, b) {
 async function pideJSON(url) {
   const res = await conTimeout(fetch(url, { cache: 'no-store' }));
   if (!res || !res.ok) return null;
-  return res.json();
+  // Si el cuerpo no es JSON valido (una pagina de error del proveedor, por
+  // ejemplo), tambien cuenta como "no llego nada".
+  try { return await res.json(); } catch { return null; }
 }
 
 // fetch con tope de tiempo: en cobertura mala, colgarse es peor que fallar.
