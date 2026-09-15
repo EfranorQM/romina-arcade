@@ -44,7 +44,7 @@ console.log('== 1) ANDAR ==');
   const xf = K3.x;
   corre(K3, 0.5);
   console.log(`tras soltar, patina ${fmt(K3.x - xf)} px`);
-  ok(K3.x - xf < 12, 'al soltar frena en menos de 12 px (no patina)');
+  ok(K3.x - xf < 24, 'al soltar frena en menos de 24 px (no patina)');
 }
 
 console.log('== 2) SALTAR ==');
@@ -58,7 +58,9 @@ console.log('== 2) SALTAR ==');
   }
   const alto = SUELO - apex;
   console.log(`salto completo: ${fmt(alto)} px de alto, ${fmt(t)} s en el aire`);
-  ok(alto >= 50 && alto <= 66, 'el salto completo sube entre 50 y 66 px (1.7-2.2 caballeros)');
+  // Los umbrales van en la escala del juego: Romina mide 180 px, asi que un
+  // salto util son 100-132 (0.6-0.7 de su altura).
+  ok(alto >= 100 && alto <= 132, 'el salto completo sube entre 100 y 132 px (0.6-0.7 de su altura)');
   ok(t >= 0.45 && t <= 0.62, 'el vuelo dura entre 0.45 y 0.62 s');
 
   // Cortado: se suelta el boton enseguida
@@ -72,7 +74,7 @@ console.log('== 2) SALTAR ==');
   const alto2 = SUELO - apex2;
   console.log(`salto cortado: ${fmt(alto2)} px de alto, ${fmt(t2)} s`);
   ok(alto2 < alto * 0.75, 'soltar pronto deja el salto por debajo del 75% del completo');
-  ok(alto2 > 14, 'pero sube algo util (mas de 14 px)');
+  ok(alto2 > 30, 'pero sube algo util (mas de 30 px)');
 }
 
 console.log('== 3) COYOTE Y BUFFER ==');
@@ -102,7 +104,7 @@ console.log('== 4) RODAR ==');
   while (K.st === C.RUEDA) { stepCaballero(K, nada, DT); if (invulnerable(K)) inv += DT; n++; }
   const d = K.x - x0;
   console.log(`rodada: ${fmt(d)} px en ${fmt(n * DT)} s, invulnerable ${fmt(inv * 1000)} ms`);
-  ok(d >= 75 && d <= 115, 'la rodada avanza entre 75 y 115 px');
+  ok(d >= 150 && d <= 230, 'la rodada avanza entre 150 y 230 px (algo mas de un cuerpo)');
   ok(inv > 0.15 && inv < ROLL_T, 'es invulnerable en el medio, pero NO toda la rodada');
   // El enfriamiento impide encadenarlas
   const K2 = makeCaballero(200);
@@ -111,7 +113,7 @@ console.log('== 4) RODAR ==');
   const x1 = K2.x;
   stepCaballero(K2, { ...nada, rueda: true }, DT);
   corre(K2, 0.1);
-  ok(Math.abs(K2.x - x1) < 20, 'no se puede encadenar una rodada con otra');
+  ok(Math.abs(K2.x - x1) < 40, 'no se puede encadenar una rodada con otra');
 }
 
 console.log('== 5) TAJO ==');

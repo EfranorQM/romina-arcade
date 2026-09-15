@@ -470,7 +470,7 @@ const masa = () => make(d => {
   frame(d, '#ff4d63');
 });
 
-// ---------- EL CABALLERO: la silueta contra el incendio ----------
+// ---------- ROMINA: la princesa contra el incendio ----------
 // Lo que hay que leer es MEDIEVAL y DE LADO: un caballero de perfil con la
 // espada en alto recortado contra un cielo que arde, y la muralla detras.
 const caballero = () => make(d => {
@@ -489,27 +489,53 @@ const caballero = () => make(d => {
   // Lanzas clavadas
   d.fillStyle = '#5a4a33';
   for (const [x, h] of [[12, 16], [22, 11], [80, 14], [90, 10]]) d.fillRect(x, 96 - h, 2, h);
-  // El caballero, de perfil, espada en alto
-  const cx = 46, base = 100;
+  // Romina de frente: corona, vestido rosa, escudo y espada en alto
+  const cx = 48, base = 104;
+  // El vestido: un trapecio con el borde blanco
+  d.fillStyle = '#c41c5a';
+  d.beginPath(); d.moveTo(cx - 8, base - 34); d.lineTo(cx + 8, base - 34);
+  d.lineTo(cx + 21, base); d.lineTo(cx - 21, base); d.closePath(); d.fill();
+  d.fillStyle = '#ffa8cc';
+  d.beginPath(); d.moveTo(cx - 3, base - 30); d.lineTo(cx + 3, base - 30);
+  d.lineTo(cx + 11, base); d.lineTo(cx - 11, base); d.closePath(); d.fill();
+  d.fillStyle = '#fff4fa'; d.fillRect(cx - 21, base - 4, 42, 5);
+  // Corpiño y hombros
+  d.fillStyle = '#c41c5a'; d.fillRect(cx - 8, base - 46, 16, 14);
+  d.fillStyle = '#ef4a84'; d.fillRect(cx - 11, base - 45, 5, 6); d.fillRect(cx + 6, base - 45, 5, 6);
+  d.fillStyle = '#d9a52a'; d.fillRect(cx - 8, base - 34, 16, 3);
+  // Brazos y cara
+  d.fillStyle = '#f0b48a'; d.fillRect(cx - 13, base - 40, 4, 12); d.fillRect(cx + 9, base - 40, 4, 12);
+  d.fillStyle = '#f0b48a'; d.beginPath(); d.arc(cx, base - 53, 9, 0, 7); d.fill();
+  // Pelo negro a media melena
+  d.fillStyle = '#251f33';
+  d.beginPath(); d.arc(cx, base - 55, 10, Math.PI, 0); d.fill();
+  d.fillRect(cx - 10, base - 55, 4, 14); d.fillRect(cx + 6, base - 55, 4, 14);
+  // Ojos
+  d.fillStyle = '#ffffff'; d.fillRect(cx - 5, base - 55, 3, 3); d.fillRect(cx + 2, base - 55, 3, 3);
+  d.fillStyle = '#6b3a1e'; d.fillRect(cx - 4, base - 54, 2, 2); d.fillRect(cx + 3, base - 54, 2, 2);
+  // Corona
+  d.fillStyle = '#ffe066';
+  d.beginPath(); d.moveTo(cx - 9, base - 62); d.lineTo(cx + 9, base - 62);
+  d.lineTo(cx + 7, base - 70); d.lineTo(cx + 3, base - 65); d.lineTo(cx, base - 72);
+  d.lineTo(cx - 3, base - 65); d.lineTo(cx - 7, base - 70); d.closePath(); d.fill();
+  d.fillStyle = '#ff3860'; d.fillRect(cx - 2, base - 73, 4, 4);
+  // El escudo a la izquierda, con su corazon
+  d.fillStyle = '#8a97b8';
+  d.beginPath(); d.moveTo(cx - 28, base - 44); d.lineTo(cx - 13, base - 44);
+  d.lineTo(cx - 13, base - 30); d.lineTo(cx - 20, base - 23); d.lineTo(cx - 28, base - 30); d.closePath(); d.fill();
+  d.fillStyle = '#ffe066';
+  d.beginPath(); d.arc(cx - 23, base - 38, 3, 0, 7); d.arc(cx - 18, base - 38, 3, 0, 7); d.fill();
+  d.beginPath(); d.moveTo(cx - 26, base - 37); d.lineTo(cx - 15, base - 37); d.lineTo(cx - 20, base - 29); d.closePath(); d.fill();
+  // La espada a la derecha, en alto
   d.fillStyle = '#9c1b3c';                                    // capa
   d.beginPath(); d.moveTo(cx - 4, base - 30); d.lineTo(cx - 13, base - 6);
   d.lineTo(cx - 4, base - 10); d.closePath(); d.fill();
-  d.fillStyle = '#8996a8'; d.fillRect(cx - 5, base - 30, 11, 18);   // torso
-  d.fillStyle = '#ced7e4'; d.fillRect(cx - 5, base - 30, 3, 18);
-  d.fillStyle = '#8996a8'; d.fillRect(cx - 5, base - 12, 4, 12); d.fillRect(cx + 1, base - 12, 4, 12);
-  d.fillStyle = '#4a3728'; d.fillRect(cx - 6, base - 3, 6, 3); d.fillRect(cx + 1, base - 3, 6, 3);
-  d.fillStyle = '#ced7e4'; d.fillRect(cx - 5, base - 38, 11, 9);    // yelmo
-  d.fillStyle = '#14121a'; d.fillRect(cx - 3, base - 35, 7, 2);
-  d.fillStyle = '#ffd24a'; d.fillRect(cx + 1, base - 35, 3, 2);
-  d.fillStyle = '#9c1b3c'; d.fillRect(cx - 3, base - 42, 6, 5);     // penacho
-  // El brazo y la espada en alto, en diagonal
-  d.fillStyle = '#8996a8'; d.fillRect(cx + 4, base - 30, 5, 4);
-  d.strokeStyle = '#b9c4d2'; d.lineWidth = 4; d.lineCap = 'butt';
-  d.beginPath(); d.moveTo(cx + 8, base - 28); d.lineTo(cx + 26, base - 54); d.stroke();
-  d.strokeStyle = '#ffffff'; d.lineWidth = 1.5;
-  d.beginPath(); d.moveTo(cx + 9, base - 29); d.lineTo(cx + 26, base - 54); d.stroke();
-  d.fillStyle = '#c9a227'; d.fillRect(cx + 5, base - 30, 8, 3);     // guarda
-  frame(d, '#c8d0dc');
+  d.strokeStyle = '#8a97b8'; d.lineWidth = 5; d.lineCap = 'butt';
+  d.beginPath(); d.moveTo(cx + 14, base - 40); d.lineTo(cx + 30, base - 68); d.stroke();
+  d.strokeStyle = '#ffffff'; d.lineWidth = 2;
+  d.beginPath(); d.moveTo(cx + 15, base - 41); d.lineTo(cx + 30, base - 68); d.stroke();
+  d.fillStyle = '#d9a52a'; d.fillRect(cx + 10, base - 42, 9, 4);    // guarda
+  frame(d, '#ef4a84');
 });
 
 const BUILDERS = { skyline, neonfist, lastwave, symbiote, furia, survival, ahorcado, masa, caballero };

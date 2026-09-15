@@ -9,20 +9,23 @@
 // Nada de esto viene de otro juego del arcade. Los numeros salen de simular
 // aqui, no de copiar los de NEON FIST (que es un juego cenital sin gravedad).
 
-export const AX0 = 24, AX1 = 576;      // paredes de la arena, en px virtuales
-export const SUELO = 222;              // la linea donde apoyan los pies
-export const ALTO = 30, ANCHO = 22;    // el caballero, en celdas
+// TODO AL DOBLE respecto al primer intento: el lienzo es 1200x540 y la
+// protagonista mide 128x180 en vez de 22x30, asi que las distancias, las
+// velocidades y las alturas se duplican para que la sensacion sea la misma.
+export const AX0 = 60, AX1 = 1140;     // paredes de la arena, en px virtuales
+export const SUELO = 452;              // la linea donde apoyan los pies
+export const ALTO = 180, ANCHO = 128;  // Romina, en celdas
 
 // --- Andar ---
-export const VEL = 120;                // px/s. Cruza la arena en 4.6 s.
-const ACEL = 900, FREN = 1400;         // px/s^2: arranca rapido, frena mas
+export const VEL = 240;                // px/s. Cruza la arena en 4.5 s.
+const ACEL = 1800, FREN = 2800;        // px/s^2: arranca rapido, frena mas
 const AIRE_CTRL = 0.55;                // cuanto manda el pulgar en el aire
 
 // --- Saltar ---
 // Gravedad ASIMETRICA: sube mas lento de lo que cae. Es lo que hace que el
 // salto se sienta con peso en vez de flotante, y es gratis.
-export const JUMP_V = 430;
-export const GRAV_UP = 1500, GRAV_DN = 2100;
+export const JUMP_V = 860;
+export const GRAV_UP = 3000, GRAV_DN = 4200;
 // Soltar pronto recorta el salto. Con 0.35 el salto corto se quedaba en 12 px
 // (medido): inutil, no servia ni para esquivar un barrido. Con 0.55 son 27 px,
 // la mitad del completo, que es una decision de verdad.
@@ -31,13 +34,13 @@ const COYOTE = 0.08, BUFFER = 0.10;    // margenes invisibles que salvan el salt
 
 // --- Rodar ---
 export const ROLL_T = 0.36, ROLL_CD = 0.62;
-const ROLL_V0 = 330;                   // pico; el perfil baja al final
+const ROLL_V0 = 660;                   // pico; el perfil baja al final
 export const ROLL_INV0 = 0.06, ROLL_INV1 = 0.28;   // invulnerable solo en medio
 
 // --- Tajo ---
 export const TAJO_T = 0.30;
 export const TAJO_A0 = 0.08, TAJO_A1 = 0.15;       // ventana activa
-export const ALCANCE = 26;             // del centro del cuerpo a la punta
+export const ALCANCE = 78;             // del centro del cuerpo a la punta de la espada
 const TAJO_FREN = 0.45;                // cuanta velocidad conserva al cortar
 
 // --- Vida ---
@@ -45,7 +48,10 @@ export const HP0 = 4;
 export const IFRAME = 1.0;
 
 // Estados
-export const QUIETO = 0, CORRE = 1, SALTA = 2, RUEDA = 3, TAJO = 4, DOLOR = 5, MUERTO = 6;
+export const QUIETO = 0, CORRE = 1, SALTA = 2, RUEDA = 3, TAJO = 4, DOLOR = 5, MUERTO = 6, BLOQUEA = 7;
+// Cuanto tarda el escudo en levantarse: antes de eso NO protege. Es lo que
+// impide que bloquear sea un boton de invulnerabilidad.
+export const BLOQ_SUBE = 0.10;
 
 export function makeCaballero(x) {
   return {
@@ -53,6 +59,7 @@ export function makeCaballero(x) {
     st: QUIETO, t: 0,
     enSuelo: true, coyote: 0, buffer: 0, cortable: 0,
     rollT: 0, rollCd: 0,
+    bloqT: 0, bloqHit: 0,
     tajoT: 0, tajoId: 0, golpeo: 0,
     hp: HP0, iframe: 0, hurtT: 0,
     animT: 0, frame: 0,
@@ -74,6 +81,15 @@ export function stepCaballero(K, inp, dt) {
   if (K.buffer > 0) K.buffer -= dt;
 
   const puedeActuar = K.st !== RUEDA && K.st !== DOLOR;
+
+  // --- Bloquear: mientras se mantiene el boton y este en el suelo ---
+  if (K.bloqHit > 0) K.bloqHit -= dt;
+  if (inp.bloquea && K.enSuelo && puedeActuar && K.st !== TAJO) {
+    if (K.st !== BLOQUEA) { K.st = BLOQUEA; K.bloqT = 0; K.animT = 0; }
+    K.bloqT += dt;
+  } else if (K.st === BLOQUEA) {
+    K.st = QUIETO; K.bloqT = 0; K.animT = 0;
+  }
 
   // --- Rodar: manda sobre todo lo demas, y cancela el tajo ---
   if (inp.rueda && K.rollCd <= 0 && K.st !== RUEDA && K.st !== DOLOR && K.enSuelo) {
@@ -113,8 +129,9 @@ export function stepCaballero(K, inp, dt) {
     K.vx *= 0.86;
     if (K.t - K.hurtIni > 0.28) { K.st = QUIETO; K.animT = 0; }
   } else {
-    const ctrl = K.enSuelo ? 1 : AIRE_CTRL;
-    const quiere = inp.dx * VEL;
+    // Con el escudo en alto se avanza a la mitad: protegerse cuesta movilidad.
+    const ctrl = (K.enSuelo ? 1 : AIRE_CTRL) * (K.st === BLOQUEA ? 0.4 : 1);
+    const quiere = inp.dx * VEL * (K.st === BLOQUEA ? 0.4 : 1);
     if (Math.abs(inp.dx) > 0.08) {
       K.dir = inp.dx < 0 ? -1 : 1;
       const a = (Math.abs(quiere) > Math.abs(K.vx) || Math.sign(quiere) !== Math.sign(K.vx)) ? ACEL : FREN;
@@ -151,7 +168,7 @@ export function stepCaballero(K, inp, dt) {
 
   // --- Estado de animacion ---
   if (K.st === QUIETO || K.st === CORRE) {
-    K.st = (!K.enSuelo) ? SALTA : (Math.abs(K.vx) > 8 ? CORRE : QUIETO);
+    K.st = (!K.enSuelo) ? SALTA : (Math.abs(K.vx) > 16 ? CORRE : QUIETO);
   }
 }
 
@@ -171,8 +188,16 @@ export function invulnerable(K) {
   return K.st === RUEDA && K.rollT >= ROLL_INV0 && K.rollT <= ROLL_INV1;
 }
 
+// Devuelve 'bloqueado' si el escudo para el golpe, true si hiere, false si no
+// le entra por invulnerabilidad.
 export function herir(K, sx) {
-  if (invulnerable(K) || !K.vivo) return false;
+  if (!K.vivo) return false;
+  // El escudo para lo que viene DE FRENTE, y solo cuando ya esta arriba.
+  if (K.st === BLOQUEA && K.bloqT >= BLOQ_SUBE) {
+    const deFrente = (sx - K.x) * K.dir > 0;
+    if (deFrente) { K.bloqHit = 0.22; K.vx = -K.dir * 90; return 'bloqueado'; }
+  }
+  if (invulnerable(K)) return false;
   K.hp--; K.iframe = IFRAME;
   K.st = DOLOR; K.hurtIni = K.t; K.hurtT = 0.28; K.animT = 0;
   K.vx = (K.x < sx ? -1 : 1) * 140;
@@ -183,6 +208,7 @@ export function herir(K, sx) {
 // Que pose y que fotograma toca dibujar. Devuelve [pose, frame].
 export function pose(K) {
   if (K.st === DOLOR || K.st === MUERTO) return ['hurt', 0];
+  if (K.st === BLOQUEA) return ['block', K.bloqHit > 0 ? 1 : 0];
   if (K.st === RUEDA) return ['roll', Math.min(3, Math.floor(K.rollT / ROLL_T * 4))];
   if (K.st === TAJO) {
     const u = K.tajoT / TAJO_T;
@@ -192,8 +218,8 @@ export function pose(K) {
   if (K.st === CORRE) {
     // El ciclo avanza con la DISTANCIA recorrida, no con el reloj: asi los
     // pies no patinan cuando acelera o frena.
-    const paso = Math.abs(K.x * 0.068) % 4;
+    const paso = Math.abs(K.x * 0.034) % 4;
     return ['run', Math.floor(paso)];
   }
-  return ['idle', Math.floor(K.animT / 0.7) % 2];
+  return ['idle', Math.floor(K.animT / 0.42) % 4];
 }
