@@ -30,7 +30,19 @@ export const EJE = 64;           // donde cae el eje del cuerpo dentro del lienz
 // puro: es un violeta muy oscuro, que sobre el campo de batalla (marron y
 // granate) no abre un agujero.
 export const P = {
-  out:  '#2b1526',   // contorno
+  // EL CONTORNO. Aqui estaba la otra mitad del "se ve simple jugando", y es
+  // medible: el contorno tenia luminancia 30 y el suelo por el que ella anda
+  // (sue3 #241c1a) tiene 30, y el fondo lejano (lej1) 32. CONTRASTE DE 1 Y 2:
+  // la silueta se fundia con el escenario, asi que de lejos no se leia un
+  // personaje sino una mancha rosa. Por eso los juegos que el puso de ejemplo
+  // "se ven geniales en un mapa grande": Soul Knight rodea al heroe de negro
+  // puro, Dead Cells lo pone rojo brillante sobre azul apagado. Lo primero
+  // que hace que un personaje se lea NO es su cara, es que su silueta despegue.
+  //
+  // Este violeta es bastante mas oscuro (luminancia 12) y da 18-20 de
+  // contraste contra el suelo y 24 contra el cielo, sin ser negro puro -- que
+  // sobre un campo de batalla marron abriria un agujero.
+  out:  '#150a14',   // contorno
   out2: '#4a2338',   // contorno interior, mas suave (pliegues del vestido)
 
   // Pelo NEGRO. En pixel art el negro plano se lee como un agujero, asi que
@@ -74,10 +86,26 @@ export const P = {
   mad2: '#96613a',   // madera base
   mad3: '#b8794a',   // madera iluminada
 
-  ojo:  '#6b3a1e',   // el iris: cafe
-  ojo2: '#a4653a',   // el borde claro del iris, que le da profundidad
+  // LOS OJOS. Dos tonos de iris (ojo/ojo2) y no tres: medido a x1.95 -- el
+  // tamaño al que se JUEGA -- los tonos vecinos se promedian y colapsan en
+  // una mancha, asi que tres cafes daban menos informacion que dos cafes
+  // separados. Lo que se lee a ese tamaño es el CONTRASTE: blanco grande,
+  // pupila negra. Es la misma ley que siguen Soul Knight (4 colores en todo
+  // el personaje) o Stardew: pocas formas, muy contrastadas.
+  // La CEJA tiene tono propio. Iba en pel3 (el pelo iluminado) y como cae
+  // pegada al flequillo se confundia con el; y en pel2 competia en negro con
+  // la pupila. Este es el punto medio: se lee como ceja sobre la frente sin
+  // robarle el contraste al ojo.
+  ceja: '#4a3a52',
+  ojo:  '#5a2f18',   // el iris: cafe oscuro
+  ojo2: '#b9763f',   // el cafe claro del borde de abajo, donde entra la luz
   ojoB: '#ffffff',
   boca: '#c4385e',
+  // El rosa del colorete y los labios. Antes el colorete se pintaba en piel1,
+  // que es un marron de sombra: a tamaño de juego eran dos manchas marrones
+  // flotando en los pomulos, que se leian como suciedad. Un colorete es ROSA
+  // y va fundido, no marron y recortado.
+  rubor:'#ef9e8e',
 };
 
 // ---------- Rasterizador de pixel art ----------

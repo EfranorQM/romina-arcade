@@ -20,7 +20,13 @@ export const BASE = {
   incl: 0,                  // inclinacion del torso, en radianes
   cabX: 0, cabY: -28,       // la cabeza, respecto al torso
   cabGiro: 0,               // giro de la cabeza
-  falAncho: 46,             // medio ancho de la falda abajo
+  // LA PROPORCION, medida. La cabeza tiene 53 px de ancho y el bajo del
+  // vestido tenia 102: CASI EL DOBLE. Salia una campana enorme con una cabeza
+  // pequeña encima -- pesada abajo, y por eso "no se sentia comoda" en
+  // movimiento: la silueta se leia como un cono, no como una persona.
+  // Con 37 el bajo queda en ~82 px = 1.55 veces la cabeza, que es la
+  // proporcion de una princesa de cuento estilizada y deja ver el cuerpo.
+  falAncho: 37,             // medio ancho de la falda abajo
   falAlto: 64,              // cuanto baja la falda desde la cadera
   falVuelo: 0,              // cuanto se abre hacia atras (al correr o saltar)
   falOnda: 0,               // desfase del borde ondulado
@@ -45,8 +51,13 @@ export const BASE = {
   escAng: 0,                // angulo del escudo
   escX: -34, escY: 16,      // el escudo, en el antebrazo izquierdo
   escZ: 0,                  // 1 = el escudo va DELANTE del cuerpo (bloquear)
+  // Los GESTOS son tablas en dibujaCara(), asi que añadir uno nuevo cuesta
+  // una linea, no un dibujo. Y como se combinan libremente (9 ojos x 6 bocas)
+  // salen 54 caras distintas sin horneaar ni un fotograma de mas.
   ojos: 'normal',           // normal | cerrados | esfuerzo | dolor
+                            // alegre | sorpresa | decidida | cansada | reojo
   boca: 'sonrisa',          // sonrisa | abierta | apretada
+                            // grito | triste | sonrisota
 };
 
 export function pose(cambios) { return Object.assign({}, BASE, cambios); }
@@ -67,7 +78,10 @@ export function dibujaPose(p) {
   // cintura. Se ensancha un poco a la altura de la mandibula y se recoge al
   // final, que es como cae un pelo liso cortado a esa altura.
   const LARGO = 34;
-  const anchoPelo = t => 20 + Math.sin(t * 2.2) * 4 - t * t * 5;
+  // El ancho de la melena va ATADO al del ovalo de la cara (19): con la
+  // cabeza mas pequeña, la formula vieja (base 20) dejaba el pelo asomando
+  // por fuera del craneo como una peluca suelta.
+  const anchoPelo = t => 18 + Math.sin(t * 2.2) * 3.5 - t * t * 4.5;
   for (let i = 0; i <= 10; i++) {
     const t = i / 10;
     pelAtras.push(cab[0] - anchoPelo(t) - p.cabGiro * 6, cab[1] - 14 + t * LARGO);
@@ -240,7 +254,9 @@ export function dibujaPose(p) {
       curva(L, xTop, fy0 + p.falAlto * 0.32,
                xm, fy0 + p.falAlto * 0.66,
                bx * 0.88 + cad[0] * 0.12, by - 7,
-               0.9 + hondo * 0.5, 1.4 + hondo * 1.1, P.ves1);
+               // mas finos: en la falda estrecha los de 2.5 px se leian como
+               // rayas pintadas y no como tela.
+               0.8 + hondo * 0.4, 1.1 + hondo * 0.8, P.ves1);
     }
   }
 
@@ -253,10 +269,12 @@ export function dibujaPose(p) {
     for (let k = 0; k <= N; k++) {
       const t = k / N;
       const x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
-      elipse(L, x, y - 7, 3, 2, P.oro2);
-      if ((i * N + k) % 5 === 0) elipse(L, x, y - 7, 2, 2.5, P.oro3);
-      elipse(L, x, y - 1, 4, 3.5, P.bla2);
-      elipse(L, x, y + 2, 4, 2.5, P.bla1);
+      // La cenefa se dimensiono para un bajo de 102 px; en uno de 84 unos
+      // remates de 4 px de radio se comen el vestido. Afinada en proporcion.
+      elipse(L, x, y - 6, 2.4, 1.7, P.oro2);
+      if ((i * N + k) % 5 === 0) elipse(L, x, y - 6, 1.7, 2.1, P.oro3);
+      elipse(L, x, y - 1, 3.2, 2.9, P.bla2);
+      elipse(L, x, y + 1.6, 3.2, 2.1, P.bla1);
     }
   }
 
@@ -446,46 +464,57 @@ export function dibujaPose(p) {
 
 
   // === 8. La CABEZA ===
+  // LA CABEZA, un punto mas pequeña. El cuerpo medido daba 2.69 cabezas de
+  // alto -- territorio "chibi" (2 a 4) -- cuando una princesa estilizada va
+  // en 3.2-3.6. Bajando el ovalo de 21x23 a 19x21 el cuerpo sube a ~3.0
+  // cabezas y, sobre todo, la cabeza deja de competir en ancho con el bajo
+  // del vestido. La CARA no encoge: los rasgos siguen en su sitio, solo se
+  // recorta el ovalo que los rodea.
   const chx = cab[0] + p.cabGiro * 4;
-  elipse(L, chx, cab[1], 21, 23, P.piel2);
-  elipse(L, chx + 4, cab[1] - 3, 15, 17, P.piel3);   // luz en la cara
+  elipse(L, chx, cab[1], 19, 21, P.piel2);
+  elipse(L, chx + 4, cab[1] - 3, 14, 15.5, P.piel3);   // luz en la cara
   // El flequillo y el pelo de delante
   const flequi = [];
   for (let i = 0; i <= 12; i++) {
     const t = i / 12, ang = Math.PI * (1 + t);
-    flequi.push(chx + Math.cos(ang) * 23, cab[1] + Math.sin(ang) * 25);
+    flequi.push(chx + Math.cos(ang) * 21, cab[1] + Math.sin(ang) * 23);
   }
-  flequi.push(chx + 20, cab[1] - 2, chx + 12, cab[1] - 12, chx, cab[1] - 6, chx - 12, cab[1] - 13, chx - 21, cab[1] - 1);
+  flequi.push(chx + 18, cab[1] - 2, chx + 11, cab[1] - 11, chx, cab[1] - 5.5, chx - 11, cab[1] - 12, chx - 19, cab[1] - 1);
   poly(L, flequi, P.pel2);
   // Mechones del flequillo, mas claros
   for (const [dx, dy, cx2, cy2, ex2, ey2] of [
-    [-20, -8, -12, -20, -2, -10], [-4, -14, 4, -22, 12, -12], [12, -12, 19, -18, 22, -4],
-  ]) curva(L, chx + dx, cab[1] + dy, chx + cx2, cab[1] + cy2, chx + ex2, cab[1] + ey2, 7, 5, P.pel3);
+    [-18, -7, -11, -18, -2, -9], [-4, -13, 4, -20, 11, -11], [11, -11, 17, -16, 20, -4],
+  ]) curva(L, chx + dx, cab[1] + dy, chx + cx2, cab[1] + cy2, chx + ex2, cab[1] + ey2, 6.5, 4.5, P.pel3);
   // Los dos mechones largos que enmarcan la cara
-  curva(L, chx - 20, cab[1] - 6, chx - 24, cab[1] + 8, chx - 20, cab[1] + 22, 8, 5, P.pel2);
-  curva(L, chx + 20, cab[1] - 6, chx + 24, cab[1] + 8, chx + 21, cab[1] + 20, 8, 5, P.pel2);
+  curva(L, chx - 18, cab[1] - 6, chx - 21.5, cab[1] + 7, chx - 18, cab[1] + 20, 7, 4.5, P.pel2);
+  curva(L, chx + 18, cab[1] - 6, chx + 21.5, cab[1] + 7, chx + 19, cab[1] + 18, 7, 4.5, P.pel2);
 
   // La cara
   dibujaCara(L, chx, cab[1], p);
 
   // === 9. La CORONA ===
-  const cy3 = cab[1] - 22;
+  // LA CORONA, medida contra la cabeza nueva. Daba 33 px de ancho para una
+  // cara de 34: 0.97x, o sea calada hasta las orejas como un casco. Una
+  // corona se apoya DENTRO del craneo, asi que tiene que ir por 0.8-0.85.
+  // Con el paso de 3.8 y seis bolas en vez de siete queda en ~27 px.
+  const cy3 = cab[1] - 20;
+  const PASO = 3.8;
   // El aro: con sombra abajo y brillo arriba, no una fila de bolas iguales.
-  for (let i = -3; i <= 3; i++) elipse(L, chx + i * 4.5, cy3 + 3, 3, 3, P.oro1);
-  for (let i = -3; i <= 3; i++) elipse(L, chx + i * 4.5, cy3 + 2, 3, 3, P.oro2);
-  for (let i = -3; i <= 3; i++) elipse(L, chx + i * 4.5, cy3 + 0.5, 2.5, 1.5, P.oro3);
+  for (let i = -3; i <= 3; i++) elipse(L, chx + i * PASO, cy3 + 3, 2.6, 2.6, P.oro1);
+  for (let i = -3; i <= 3; i++) elipse(L, chx + i * PASO, cy3 + 2, 2.6, 2.6, P.oro2);
+  for (let i = -3; i <= 3; i++) elipse(L, chx + i * PASO, cy3 + 0.5, 2.2, 1.3, P.oro3);
   // Las puntas, cada una con su cara en sombra: asi tienen volumen.
-  for (const [dx, alto] of [[-9, 7], [0, 11], [9, 7]]) {
-    poly(L, [chx + dx - 4, cy3, chx + dx + 4, cy3, chx + dx, cy3 - alto], P.oro2);
-    poly(L, [chx + dx - 4, cy3, chx + dx, cy3, chx + dx, cy3 - alto], P.oro1);
-    poly(L, [chx + dx + 1, cy3 - 1, chx + dx + 3, cy3 - 1, chx + dx, cy3 - alto + 1], P.oro3);
+  for (const [dx, alto] of [[-7.6, 6], [0, 9.5], [7.6, 6]]) {
+    poly(L, [chx + dx - 3.4, cy3, chx + dx + 3.4, cy3, chx + dx, cy3 - alto], P.oro2);
+    poly(L, [chx + dx - 3.4, cy3, chx + dx, cy3, chx + dx, cy3 - alto], P.oro1);
+    poly(L, [chx + dx + 0.8, cy3 - 1, chx + dx + 2.6, cy3 - 1, chx + dx, cy3 - alto + 1], P.oro3);
   }
   // Las piedras, con su brillo de un pixel arriba a la izquierda
-  elipse(L, chx, cy3 - 11, 3.5, 3.5, P.joya);
-  elipse(L, chx - 1, cy3 - 12, 1.2, 1.2, P.bla2);
+  elipse(L, chx, cy3 - 9.5, 3, 3, P.joya);
+  elipse(L, chx - 1, cy3 - 10.5, 1.1, 1.1, P.bla2);
   for (const s of [-1, 1]) {
-    elipse(L, chx + s * 9, cy3 - 7, 2.5, 2.5, P.joya2);
-    elipse(L, chx + s * 9 - 1, cy3 - 8, 1, 1, P.bla2);
+    elipse(L, chx + s * 7.6, cy3 - 6, 2.2, 2.2, P.joya2);
+    elipse(L, chx + s * 7.6 - 1, cy3 - 7, 0.9, 0.9, P.bla2);
   }
 
   // === 10. El ESCUDO POR DELANTE, al bloquear ===
@@ -502,61 +531,170 @@ export function dibujaPose(p) {
 
 // La cara: ojos grandes con brillo, cejas, nariz de un pixel y boca.
 function dibujaCara(L, cx, cy, p) {
+  // LA CARA, REDIBUJADA PARA EL TAMAÑO AL QUE SE JUEGA.
+  //
+  // El sprite mide 128x180 y la cara 56 px de alto, pero JUGANDO el lienzo de
+  // 1200x540 se estira x1.95: la cara acaba en 109 px de pantalla, casi tres
+  // veces mas pequeña que en tools/ver-cara.html (que la pinta a x5.5). Por
+  // eso "en el HTML se ve genial y jugando se siente simple": es el mismo
+  // dibujo, visto 2.8 veces mas chico.
+  //
+  // Lo que se pierde al encoger NO es parejo. Los rasgos finos se disuelven y
+  // los de contraste sobreviven. Medido a x1.95: el chispazo del ojo caia a
+  // 2 px, la nariz a 3, el labio a 3 -- manchitas que no se leen como rasgos.
+  // Mientras tanto las CEJAS (3 px de grosor, oscuras) eran lo primero que se
+  // veia y aplastaban los ojos: cara de enfado permanente hasta en reposo.
+  // Eso era el "sin vida".
+  //
+  // Asi que se redibuja con la ley que siguen Soul Knight, Stardew y Dead
+  // Cells -- POCAS FORMAS, MUY CONTRASTADAS -- pero aprovechando que aqui hay
+  // 56 px de cara y no 7:
+  //   1. El OJO manda. Mas grande y mas abierto, con el blanco amplio y la
+  //      pupila bien negra: es lo unico que aguanta cualquier escala.
+  //   2. Las CEJAS obedecen. Finas, mas altas y en un tono que no compite con
+  //      la pupila. Expresan, no gritan.
+  //   3. El COLORETE en rosa fundido, no en marron recortado.
+  //   4. Fuera lo que mide 2-3 px y no aporta (el chispazo, la nariz de
+  //      elipse). La nariz pasa a ser una sombra suave de dos celdas.
   const oy = cy + 2;
-  if (p.ojos === 'cerrados') {
-    for (const dx of [-8, 8]) {
-      curva(L, cx + dx - 5, oy, cx + dx, oy + 3, cx + dx + 5, oy, 2.5, 2.5, P.out);
-    }
-  } else {
-    const alto = p.ojos === 'esfuerzo' ? 4 : p.ojos === 'dolor' ? 3 : 6;
-    for (const dx of [-8, 8]) {
-      // El ojo: blanco, iris cafe en dos tonos, pupila y DOS brillos.
-      // OJO CON EL SOMBREADO: probe una sombra de parpado sobre el blanco y
-      // una linea bajo el ojo, y a 46 px de cara se comian el ojo entero --
-      // quedaban dos manchas oscuras con cara de enfado permanente. A este
-      // tamaño el ojo se lee por CONTRASTE (blanco grande, pupila negra), no
-      // por bandas de sombra. Renderizado a x7 para verlo, no a ojo.
-      elipse(L, cx + dx, oy, 5, alto + 1, P.ojoB);
-      elipse(L, cx + dx + 1, oy + 1, 3.5, alto * 0.75, P.ojo2);
-      elipse(L, cx + dx + 1, oy + 1.5, 3, alto * 0.62, P.ojo);
-      elipse(L, cx + dx + 1, oy + 1, 1.8, alto * 0.42, P.out);
-      elipse(L, cx + dx - 1, oy - 1.5, 1.5, 1.5, P.ojoB);   // el brillo grande
-      elipse(L, cx + dx + 2.5, oy + 2, 0.9, 0.9, P.ojoB);   // el chispazo chico
-      // Pestañas arriba
-      linea(L, cx + dx - 5, oy - alto, cx + dx + 5, oy - alto - 1, 2.5, P.out);
-      // la pestaña que sobresale en el rabillo, como en las referencias
+  const OJX = 8.5;              // separacion de los ojos respecto al centro
+
+  // ---- LOS OJOS ----
+  // Cada gesto define tres cosas: cuanto se abre el ojo (alto), si el parpado
+  // lo tapa por arriba (tapa) y hacia donde mira la pupila (mirX, mirY).
+  // Mover la PUPILA es lo que mas expresion da por menos pixeles: la misma
+  // cara mirando al frente, de reojo o hacia arriba son tres personajes
+  // distintos, y no cuesta un dibujo nuevo -- cuesta dos numeros.
+  const OJOS = {
+    normal:   { alto: 7,   tapa: 0,   mirX: 0,    mirY: 0,    ceja:  0   },
+    cerrados: { alto: 0,   tapa: 0,   mirX: 0,    mirY: 0,    ceja:  0   },
+    // OJO CON SUMAR 'alto' PEQUEÑO Y 'tapa' GRANDE: se restan del mismo ojo.
+    // Medido, dolor y cansada quedaban en 22-24 celdas de blanco visible (la
+    // cara normal tiene 148): dos rendijas negras, no unos ojos entornados.
+    // Si el ojo ya es bajo, el parpado tiene que ser suave.
+    esfuerzo: { alto: 5,   tapa: 0.8, mirX: 0.6,  mirY: 0,    ceja:  2.5 },
+    dolor:    { alto: 4.5, tapa: 0.6, mirX: 0,    mirY: 0.5,  ceja: -2.5 },
+    // --- los nuevos ---
+    // ALEGRE: ojos en arco hacia arriba, la sonrisa de los ojos. Es la cara
+    // de victoria, y en pixel art se hace con la curva al REVES que cerrados.
+    alegre:   { alto: 0,   tapa: 0,   mirX: 0,    mirY: 0,    ceja:  1,   arco: 1 },
+    // SORPRESA: ojo muy abierto y pupila pequeña -- el truco clasico. La
+    // pupila chica en un blanco grande es lo que lee como susto.
+    sorpresa: { alto: 8.5, tapa: 0,   mirX: 0,    mirY: 0,    ceja:  3,   pup: 0.62 },
+    // DECIDIDA: entrecerrados y mirando al frente, cejas bajas. La cara de
+    // encarar al jefe. Distinta de 'esfuerzo': aqui no sufre, amenaza.
+    decidida: { alto: 5.5, tapa: 0.7, mirX: 0.5,  mirY: 0,    ceja:  1.8 },
+    // CANSADA: parpados caidos y mirada baja, sin el ceño del dolor.
+    cansada:  { alto: 5,   tapa: 1.2, mirX: 0,    mirY: 0.7,  ceja: -1   },
+    // DE REOJO: mira a un lado sin girar la cabeza. Sirve para que MIRE al
+    // enemigo cuando lo tiene al lado, que es puro caracter.
+    reojo:    { alto: 6.5, tapa: 0.3, mirX: 1.0,  mirY: 0,    ceja:  0.5 },
+  };
+  const E = OJOS[p.ojos] || OJOS.normal;
+
+  if (E.alto === 0) {
+    // Ojo cerrado (o en arco de alegria). El grosor importa: con 3 px los dos
+    // arcos se leian como una VENDA cruzando la cara. 2.2 basta.
+    const s2 = E.arco ? -1 : 1;     // arco hacia arriba = alegre
+    for (const dx of [-OJX, OJX]) {
+      curva(L, cx + dx - 5.5, oy - 0.5 * s2,
+               cx + dx, oy + 2.6 * s2,
+               cx + dx + 5.5, oy - 0.5 * s2, 2.2, 2.2, P.out);
       const s = Math.sign(dx);
-      curva(L, cx + dx + s * 4, oy - alto, cx + dx + s * 6, oy - alto - 1.5,
-               cx + dx + s * 7.5, oy - alto - 2.5, 2, 1, P.out);
+      curva(L, cx + dx + s * 4.8, oy - 0.8, cx + dx + s * 6.6, oy - 2,
+               cx + dx + s * 8, oy - 3.2, 1.8, 0.9, P.out);
+    }
+  } else {
+    const alto = E.alto;
+    const pup = E.pup || 1;          // sorpresa achica la pupila
+    for (const dx of [-OJX, OJX]) {
+      const s = Math.sign(dx);
+      // la pupila se desplaza segun la mirada: hacia donde ella mira
+      // La pupila se mueve DENTRO del blanco, nunca fuera: el blanco tiene
+      // 5.6 de radio y la pupila 2.2, asi que el centro no puede alejarse mas
+      // de ~2.6 px del centro del ojo o asoma por el borde y parece bizca.
+      const TOPE = 2.6;
+      const mx = Math.max(-TOPE, Math.min(TOPE, E.mirX * s * 1.6));
+      const my = Math.max(-2, Math.min(2, E.mirY * 2));
+      const px = cx + dx + s * 0.5 + mx;
+      const py = oy + 0.6 + my;
+      // 1. El blanco, GRANDE: es el que hace que el ojo se lea de lejos.
+      elipse(L, cx + dx, oy, 5.6, alto + 1.2, P.ojoB);
+      // 2. El iris en DOS tonos: el claro asoma por abajo, donde da la luz.
+      elipse(L, px, py + 0.9, 3.8 * pup, alto * 0.78, P.ojo2);
+      elipse(L, px, py - 0.2, 3.8 * pup, alto * 0.72, P.ojo);
+      // 3. La pupila, negra y gorda: el ancla de contraste de toda la cara.
+      elipse(L, px, py, 2.2 * pup, alto * 0.5, P.out);
+      // 4. UN brillo, y grande. El chispazo de 0.9 px se caia a 2 px: fuera.
+      elipse(L, px - s * 1.4, py - 2.4, 1.9, 1.9, P.ojoB);
+      // 5. El PARPADO que baja por arriba. Es lo que separa 'cansada' de
+      //    'normal' sin cambiar nada mas, y se pinta en piel para que parezca
+      //    parpado y no sombra.
+      if (E.tapa > 0) {
+        elipse(L, cx + dx, oy - alto - 1.2 + E.tapa, 5.8, E.tapa + 1.4, P.piel2);
+      }
+      // 6. La linea de pestañas, gruesa y solo ARRIBA.
+      curva(L, cx + dx - 5.6, oy - alto + 0.5 + E.tapa,
+               cx + dx, oy - alto - 2 + E.tapa,
+               cx + dx + 5.6, oy - alto + 0.5 + E.tapa, 2.6, 2.6, P.out);
+      curva(L, cx + dx + s * 5, oy - alto + 0.5 + E.tapa,
+               cx + dx + s * 7, oy - alto - 1 + E.tapa,
+               cx + dx + s * 8.5, oy - alto - 2.5 + E.tapa, 2.2, 1, P.out);
     }
   }
-  // Cejas
-  // CEJAS. Finas y separadas del ojo: con 2.5 px de grosor y pegadas encima
-  // se leian como un ceño de enfado permanente, hasta en la cara de reposo.
-  // Ahora son de 2 px, dos pixeles mas arriba, y en pel2 (no pel1) para que
-  // no compitan en negro con la pupila.
-  const cejaY = p.ojos === 'esfuerzo' || p.ojos === 'dolor' ? oy - 12 : oy - 13.5;
-  const cejaIncl = p.ojos === 'esfuerzo' ? 2 : p.ojos === 'dolor' ? -2 : 0;
-  curva(L, cx - 12, cejaY + cejaIncl, cx - 7.5, cejaY - 2.5, cx - 3.5, cejaY - 1 - cejaIncl, 2, 1.5, P.pel2);
-  curva(L, cx + 3.5, cejaY - 1 - cejaIncl, cx + 7.5, cejaY - 2.5, cx + 12, cejaY + cejaIncl, 1.5, 2, P.pel2);
-  // Nariz
-  elipse(L, cx + 1, oy + 8, 1.5, 1.5, P.piel1);
-  // Boca
-  if (p.boca === 'abierta') {
-    elipse(L, cx + 1, oy + 14, 4, 4.5, P.out);
-    elipse(L, cx + 1, oy + 15, 3, 3, P.boca);
-    elipse(L, cx + 1, oy + 16.5, 2, 1.2, P.ves4);   // la lengua, insinuada
-  } else if (p.boca === 'apretada') {
-    linea(L, cx - 4, oy + 14, cx + 6, oy + 14, 2.5, P.boca);
-    linea(L, cx - 3, oy + 15.5, cx + 5, oy + 15.5, 1.4, P.ves4);  // el labio
-  } else {
-    curva(L, cx - 4, oy + 13, cx + 1, oy + 16, cx + 6, oy + 13, 2.5, 2.5, P.boca);
-    // el labio de abajo, mas claro: es lo que hace que la sonrisa tenga boca
-    curva(L, cx - 3, oy + 15, cx + 1, oy + 17, cx + 5, oy + 15, 1.6, 1.6, P.ves4);
+
+  // ---- LAS CEJAS ----
+  // La ALTURA se ancla SIEMPRE a la misma distancia del borde de arriba del
+  // ojo: antes bajaba con el gesto y acababa tocandolo, y volvia el ceño. Lo
+  // que expresa es la INCLINACION (E.ceja), no la altura. Y van sobre la
+  // FRENTE, no dentro del flequillo, en tono propio (P.ceja): medido por el
+  // perfil vertical, caian en y34..40 justo donde esta el pelo.
+  const cejaY = oy - (E.alto || 5) - 4.5;
+  for (const s of [-1, 1]) {
+    curva(L, cx + s * 12, cejaY + E.ceja,
+             cx + s * 7.8, cejaY - 2,
+             cx + s * 3.8, cejaY - 0.5 - E.ceja, 1.8, 1.3, P.ceja);
   }
-  // Colorete
-  elipse(L, cx - 13, oy + 7, 4, 2.5, P.piel1);
-  elipse(L, cx + 14, oy + 7, 4, 2.5, P.piel1);
+
+  // LA NARIZ: dos celdas de sombra suave. Era una elipse que a x1.95 quedaba
+  // en 3 px -- un lunar.
+  elipse(L, cx + 1, oy + 7.5, 1.6, 1.2, P.piel1);
+
+  // ---- LA BOCA ----
+  // Tambien por tabla. Una boca son dos curvas (el labio de arriba en P.boca
+  // y el de abajo en P.rubor) o una elipse si esta abierta.
+  const B = p.boca;
+  if (B === 'abierta' || B === 'grito') {
+    // GRITO: la misma boca abierta pero mas alta y estirada. Para el salto y
+    // el golpe fuerte.
+    const h = B === 'grito' ? 6.2 : 4.8;
+    const w = B === 'grito' ? 3.6 : 4.2;
+    elipse(L, cx + 1, oy + 14, w, h, P.out);
+    elipse(L, cx + 1, oy + 14.6, w - 1, h - 1.4, P.boca);
+    elipse(L, cx + 1, oy + 15.6 + h * 0.15, w - 2.2, 1.3, P.rubor);
+  } else if (B === 'apretada') {
+    curva(L, cx - 5, oy + 13.4, cx + 1, oy + 14.6, cx + 6.5, oy + 13.4, 2.6, 2.6, P.boca);
+    curva(L, cx - 3.5, oy + 15.2, cx + 1, oy + 16, cx + 5, oy + 15.2, 1.6, 1.6, P.rubor);
+  } else if (B === 'triste') {
+    // La sonrisa AL REVES: comisuras hacia abajo. Un solo signo cambiado y es
+    // otra cara entera.
+    curva(L, cx - 5, oy + 15.6, cx + 1, oy + 12.6, cx + 6.5, oy + 15.6, 2.6, 2.6, P.boca);
+  } else if (B === 'sonrisota') {
+    // La sonrisa ANCHA de victoria: mas abierta y con el labio marcado.
+    curva(L, cx - 6.5, oy + 12.4, cx + 1, oy + 17.4, cx + 8, oy + 12.4, 3, 3, P.boca);
+    curva(L, cx - 4.5, oy + 14.8, cx + 1, oy + 18.4, cx + 6, oy + 14.8, 2, 2, P.rubor);
+  } else {
+    curva(L, cx - 5, oy + 12.8, cx + 1, oy + 16.4, cx + 6.5, oy + 12.8, 2.8, 2.8, P.boca);
+    curva(L, cx - 3.5, oy + 15, cx + 1, oy + 17.2, cx + 5, oy + 15, 1.8, 1.8, P.rubor);
+  }
+
+  // EL COLORETE, en ROSA y fundido. En piel1 (un marron de sombra) salian dos
+  // manchas que a tamaño de juego parecian suciedad en los pomulos.
+  for (const s of [-1, 1]) {
+    const bx = cx + s * 13 + 0.5;
+    elipse(L, bx, oy + 6.5, 4.2, 2.8, P.rubor);
+    elipse(L, bx, oy + 6.5, 2.6, 1.6, P.piel1);
+  }
 }
 
 export function horneaPose(p) { return aCanvas(dibujaPose(p)); }
