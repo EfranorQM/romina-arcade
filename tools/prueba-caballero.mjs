@@ -122,8 +122,9 @@ console.log('== 5) TAJO ==');
   stepCaballero(K, { ...nada, golpea: true }, DT);
   let act = 0, n = 0;
   while (K.st === C.TAJO) { if (espadaActiva(K)) act += DT; stepCaballero(K, nada, DT); n++; }
-  console.log(`tajo: ciclo ${fmt(n * DT * 1000)} ms, activo ${fmt(act * 1000)} ms (${Math.round(act / (n * DT) * 100)}%)`);
-  ok(Math.abs(n * DT - TAJO_T) < 0.03, `el ciclo dura ${TAJO_T * 1000} ms`);
+  console.log(`tajo 1: ciclo ${fmt(n * DT * 1000)} ms, activo ${fmt(act * 1000)} ms (${Math.round(act / (n * DT) * 100)}%)`);
+  // El PRIMER golpe del combo dura 260 ms a proposito: es el rapido.
+  ok(Math.abs(n * DT - C.TAJOS[0][0]) < 0.03, `el primer golpe dura ${C.TAJOS[0][0] * 1000} ms`);
   ok(act >= 0.05 && act <= 0.09, 'la ventana activa esta entre 50 y 90 ms');
   // Se puede cancelar con un rodar
   const K2 = makeCaballero(300);
@@ -131,13 +132,26 @@ console.log('== 5) TAJO ==');
   corre(K2, 0.05);
   stepCaballero(K2, { ...nada, rueda: true }, DT);
   ok(K2.st === C.RUEDA, 'el rodar cancela el tajo');
-  // Golpear corriendo conserva algo de impulso
+  // EL COMBO AVANZA, pero correr sigue siendo mas rapido. Esto es lo que
+  // impide que machacar el boton sea la mejor forma de cruzar la arena --
+  // medido, con el empuje original el tercer golpe salia a 294 px/s contra
+  // los 240 de correr.
   const K3 = makeCaballero(300);
-  corre(K3, 1, { ...nada, dx: 1 });
-  const v0 = K3.vx;
-  stepCaballero(K3, { ...nada, dx: 1, golpea: true }, DT);
-  console.log(`al cortar corriendo conserva ${Math.round(K3.vx / v0 * 100)}% de su velocidad`);
-  ok(K3.vx > v0 * 0.25 && K3.vx < v0 * 0.7, 'cortar corriendo conserva entre el 25% y el 70%');
+  const x0 = K3.x;
+  let vmax = 0;
+  const golpes = [0, 12, 26];
+  for (let i = 0; i < 70; i++) {
+    stepCaballero(K3, { ...nada, golpea: golpes.includes(i) }, DT);
+    vmax = Math.max(vmax, Math.abs(K3.vx));
+  }
+  const avance = K3.x - x0;
+  const K4 = makeCaballero(300);
+  const x1 = K4.x;
+  corre(K4, 70 * DT, { ...nada, dx: 1 });
+  console.log(`el combo avanza ${fmt(avance)} px (punta ${fmt(vmax)} px/s); corriendo, ${fmt(K4.x - x1)} px`);
+  ok(avance >= 55 && avance <= 130, 'el combo avanza entre 55 y 130 px (media zancada por golpe)');
+  ok(vmax < VEL, 'pero su punta NO llega a la velocidad de correr');
+  ok(avance < (K4.x - x1), 'correr sigue siendo mas rapido que machacar el boton');
 }
 
 console.log('== 6) DAÑO ==');
@@ -177,7 +191,7 @@ console.log('== 7) POSES ==');
   // REAL de poses de cada accion (atk tiene 5, block 3, jump 3...), no contra
   // un 0..3 fijo: ese tope fijo habria dejado pasar un desbordamiento el dia
   // que se añadieron fotogramas al tajo.
-  const CUENTA = { idle: 6, run: 8, jump: 7, roll: 4, atk: 5, block: 4, hurt: 3 };
+  const CUENTA = { idle: 6, run: 8, jump: 7, roll: 4, atk: 5, atk2: 5, atk3: 6, bash: 3, block: 4, hurt: 3 };
   const K2 = makeCaballero(300);
   let malo = null;
   const vistos = {};
@@ -207,25 +221,66 @@ console.log('== 7) POSES ==');
   // COMER GOLPES MIENTRAS BLOQUEA (o no salen los del impacto del escudo).
   // La primera version solo aporreaba y daba 3 falsos fallos por eso: el
   // arnes medía al piloto, no al juego.
-  const K3 = makeCaballero(300);
+  // TRES GUIONES DELIBERADOS en vez de un piloto aporreando con modulos.
+  //
+  // El piloto de modulos (i%13, i%31...) no vale para esto: encadenaba el
+  // combo pero seguia pulsando y cortaba el giro antes de su ultimo
+  // fotograma, y al arreglar eso rompia el bloqueo. Un guion que HACE LA
+  // ACCION ENTERA como la haria una persona es mas corto y no miente.
   const v3 = {};
-  for (let i = 0; i < 12000; i++) {
-    // Cada 600 frames se esta 120 quieto del todo: eso es respirar.
-    const quieto = (i % 600) < 120;
-    const bloqueando = !quieto && (i % 113) < 26;
-    const inp = quieto
-      ? { dx: 0, salta: false, golpea: false, rueda: false, saltaAbajo: false, bloquea: false }
-      : { dx: Math.sin(i / 23) * 1.4, salta: i % 41 === 0, golpea: i % 31 === 0,
-          rueda: i % 67 === 0, saltaAbajo: i % 41 < 10, bloquea: bloqueando };
-    stepCaballero(K3, inp, DT);
-    // Le pegan DE FRENTE mientras tiene el escudo arriba: eso dispara bloqHit
-    // y con el los dos fotogramas del impacto.
-    if (bloqueando && i % 59 === 0) herir(K3, K3.x + K3.dir * 60);
-    if (i % 173 === 0) { K3.iframe = 0; herir(K3, K3.x + K3.dir * 60); }
-    if (!K3.vivo) { K3.vivo = true; K3.hp = HP0; K3.st = 0; }
-    const [p2, f2] = pose(K3);
-    (v3[p2] = v3[p2] || new Set()).add(f2);
+  const anota = K => { const [p2, f2] = pose(K); (v3[p2] = v3[p2] || new Set()).add(f2); };
+  const jugar = (K, n, inp) => { for (let i = 0; i < n; i++) { stepCaballero(K, inp, DT); anota(K); } };
+
+  // GUION 1: el combo entero de tres, dejando que el giro REMATE.
+  {
+    const K = makeCaballero(300);
+    jugar(K, 1, { ...nada, golpea: true });
+    jugar(K, 11, nada);
+    jugar(K, 1, { ...nada, golpea: true });   // enlaza el 2
+    jugar(K, 13, nada);
+    jugar(K, 1, { ...nada, golpea: true });   // enlaza el 3
+    jugar(K, 40, nada);                       // y se le deja acabar
+    // Y un combo que se QUEDA EN DOS: es lo que pasa cuando alguien encadena
+    // dos y se para. Sin esto el ultimo fotograma de atk2 no se ve nunca,
+    // porque siempre se enlazaba al tercero.
+    jugar(K, 40, nada);
+    jugar(K, 1, { ...nada, golpea: true });
+    jugar(K, 12, nada);
+    jugar(K, 1, { ...nada, golpea: true });   // enlaza el 2 ...
+    jugar(K, 30, nada);                       // ... y lo deja terminar
+    // Y un golpe suelto, el arranque limpio
+    jugar(K, 30, nada);
+    jugar(K, 1, { ...nada, golpea: true });
+    jugar(K, 25, nada);
   }
+
+  // GUION 2: el escudo -- levantar, aguantar, comer un golpe, y empujar.
+  {
+    const K = makeCaballero(300);
+    jugar(K, 3, { ...nada, bloquea: true });        // subiendo (frame 0)
+    jugar(K, 20, { ...nada, bloquea: true });       // plantada (frame 1)
+    herir(K, K.x + K.dir * 60);                     // le entra: 2 y 3
+    jugar(K, 20, { ...nada, bloquea: true });
+    // el EMPUJON: atacar con el escudo arriba
+    jugar(K, 1, { ...nada, bloquea: true, golpea: true });
+    jugar(K, 20, { ...nada, bloquea: true });
+    jugar(K, 10, nada);
+  }
+
+  // GUION 3: moverse, saltar, aterrizar, rodar, respirar y que le peguen.
+  {
+    const K = makeCaballero(300);
+    jugar(K, 90, { ...nada, dx: 1 });                       // correr
+    jugar(K, 1, { ...nada, dx: 1, salta: true, saltaAbajo: true });
+    jugar(K, 40, { ...nada, dx: 1, saltaAbajo: true });     // salto entero
+    jugar(K, 15, nada);                                     // y el aterrizaje
+    jugar(K, 1, { ...nada, rueda: true });
+    jugar(K, 25, nada);                                     // la rodada
+    jugar(K, 120, nada);                                    // respirar
+    K.iframe = 0; herir(K, K.x + 60);
+    jugar(K, 25, nada);                                     // el dolor entero
+  }
+
   for (const nombre in CUENTA) {
     const vistas = v3[nombre] ? v3[nombre].size : 0;
     const faltan = [];

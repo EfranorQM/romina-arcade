@@ -220,6 +220,113 @@ export const POSES = {
            falGajos: tela(4.0, 0.45), falBorde: borde(4.0, 0.50) }),
   ],
 
+  // TAJO 2 - EL DERECHO. El segundo del combo: viene del otro lado, de abajo
+  // hacia arriba. Tiene que verse DISTINTO al primero o el combo no se nota;
+  // por eso este barre al reves (de +1.5 a -0.6) y ella se abre en vez de
+  // cerrarse.
+  atk2: [
+    // 1. RECOGE. La espada baja al costado, el peso al pie de atras.
+    pose({ incl: 0.22, cabGiro: 0.35, cadY: 114, torY: -32, falVuelo: 10, falOnda: 1.2,
+           falAncho: 46, codD: [16, 22], manD: [26, 42], espAng: 1.75,
+           codI: [-12, 18], manI: [-20, 36], escX: -30, escY: 14,
+           falGajos: tela(0.5, 0.6), falBorde: borde(0.5, 0.66),
+           ojos: 'esfuerzo', boca: 'apretada' }),
+    // 2. BARRE de abajo a arriba, cruzando. Aqui hace daño.
+    pose({ incl: -0.16, cabGiro: 0.5, cadY: 108, torY: -37, falVuelo: 22, falOnda: 2.6,
+           falAncho: 49, codD: [24, 6], manD: [42, -6], espAng: -0.55,
+           estela: [1.45, -0.55],
+           codI: [-14, 14], manI: [-24, 28], escX: -30, escY: 6, escAng: 0.4,
+           falGajos: tela(1.9, 1.05), falBorde: borde(1.9, 1.15),
+           ojos: 'esfuerzo', boca: 'abierta' }),
+    // 3. ARRIBA. La espada acaba en alto, ella estirada.
+    pose({ incl: -0.28, cabGiro: 0.45, cadY: 106, torY: -38, falVuelo: 16, falOnda: 3.8,
+           falAncho: 47, codD: [20, -6], manD: [34, -22], espAng: -1.35,
+           estela: [0.2, -1.35],
+           codI: [-16, 12], manI: [-28, 24], escX: -32, escY: 4, escAng: 0.5,
+           falGajos: tela(2.9, 0.85), falBorde: borde(2.9, 0.94),
+           ojos: 'esfuerzo', boca: 'abierta' }),
+    // 4. BAJA. La deja caer por el peso.
+    pose({ incl: -0.10, cadY: 111, torY: -35, falVuelo: 8, falOnda: 4.8, falAncho: 46,
+           codD: [17, 8], manD: [28, 12], espAng: -0.4,
+           codI: [-14, 16], manI: [-24, 32], escX: -33, escY: 10,
+           falGajos: tela(3.8, 0.6), falBorde: borde(3.8, 0.66),
+           boca: 'apretada' }),
+    // 5. GUARDIA.
+    pose({ incl: 0.02, torY: -33, falVuelo: 2, falOnda: 5.8,
+           codD: [15, 20], manD: [24, 38], espAng: 0.9,
+           falGajos: tela(4.6, 0.4), falBorde: borde(4.6, 0.44) }),
+  ],
+
+  // TAJO 3 - EL GIRO. El remate del combo: da una vuelta ENTERA sobre si
+  // misma con la espada extendida. Seis fotogramas porque dura 0.46 s (casi el
+  // doble que los otros) y porque una vuelta necesita verse girar, no
+  // teletransportarse.
+  //
+  // La falda es la protagonista aqui: en un giro es lo que mas vuela, asi que
+  // va a amplitud maxima y el vuelo sube hasta 34.
+  atk3: [
+    // 1. CARGA. Se agacha y se enrosca al maximo, espada muy atras.
+    pose({ incl: -0.42, cabGiro: 0.6, cadY: 120, torY: -29, falVuelo: -20, falOnda: 0.4,
+           falAncho: 42, codD: [0, -10], manD: [-10, -24], espAng: -2.6,
+           codI: [-18, 10], manI: [-30, 22], escX: -36, escY: 6, escAng: 0.6,
+           falGajos: tela(0.0, 0.8), falBorde: borde(0.0, 0.88),
+           ojos: 'esfuerzo', boca: 'apretada' }),
+    // 2. ARRANCA el giro. El cuerpo empieza a rotar, la falda se despega.
+    pose({ incl: 0.12, cabGiro: 0.2, cadY: 114, torY: -34, falVuelo: 12, falOnda: 1.4,
+           falAncho: 48, codD: [12, -14], manD: [18, -26], espAng: -2.0,
+           codI: [-16, 16], manI: [-26, 30], escX: -30, escY: 12, escAng: 0.2,
+           falGajos: tela(1.1, 1.1), falBorde: borde(1.1, 1.21),
+           ojos: 'esfuerzo', boca: 'apretada' }),
+    // 3. LA VUELTA, primera mitad. Brazo extendido del todo, falda volando.
+    pose({ incl: 0.40, cabGiro: 0.6, cadY: 109, torY: -36, falVuelo: 34, falOnda: 2.8,
+           falAncho: 54, codD: [26, -2], manD: [46, -4], espAng: -0.6,
+           estela: [-2.5, -0.6],
+           codI: [-8, 20], manI: [-10, 40], escX: -22, escY: 20, escAng: -0.5,
+           falGajos: tela(2.2, 1.35), falBorde: borde(2.2, 1.48),
+           ojos: 'esfuerzo', boca: 'abierta' }),
+    // 4. LA VUELTA, segunda mitad. Sigue girando, la espada cruza abajo.
+    pose({ incl: 0.34, cabGiro: 0.55, cadY: 110, torY: -35, falVuelo: 32, falOnda: 4.0,
+           falAncho: 53, codD: [24, 12], manD: [42, 14], espAng: 0.5,
+           estela: [-0.6, 0.5],
+           codI: [-10, 20], manI: [-14, 40], escX: -26, escY: 18, escAng: -0.3,
+           falGajos: tela(3.3, 1.3), falBorde: borde(3.3, 1.43),
+           ojos: 'esfuerzo', boca: 'abierta' }),
+    // 5. FRENA. Le cuesta parar la vuelta: se pasa de largo.
+    pose({ incl: 0.20, cabGiro: 0.3, cadY: 113, torY: -34, falVuelo: 20, falOnda: 5.2,
+           falAncho: 50, codD: [19, 20], manD: [32, 34], espAng: 1.2,
+           codI: [-13, 19], manI: [-21, 39], escX: -31, escY: 15,
+           falGajos: tela(4.4, 0.9), falBorde: borde(4.4, 0.99),
+           boca: 'apretada' }),
+    // 6. RECUPERA. Vuelve a plantarse; el combo ha terminado.
+    pose({ incl: 0.06, cadY: 112, torY: -33, falVuelo: 6, falOnda: 6.2, falAncho: 47,
+           codD: [15, 22], manD: [24, 42], espAng: 1.3,
+           falGajos: tela(5.4, 0.55), falBorde: borde(5.4, 0.60) }),
+  ],
+
+  // EMPUJON DE ESCUDO. El tercer verbo del escudo: no hace daño, pero empuja
+  // y rompe la guardia. Tres fotogramas -- se echa atras, embiste, vuelve.
+  // El escudo va siempre POR DELANTE (escZ), que es lo que lo hace legible.
+  bash: [
+    // 1. CARGA. Recoge el hombro para embestir.
+    pose({ incl: -0.14, cabGiro: 0.1, cadY: 116, torY: -31, falVuelo: -8, falOnda: 0.6,
+           falAncho: 46, codD: [8, 22], manD: [10, 38], espAng: 2.6,
+           codI: [-8, 10], manI: [-2, 18], escX: 2, escY: -8, escAng: 0.12, escZ: 1,
+           falGajos: tela(0.2, 0.5), falBorde: borde(0.2, 0.55),
+           ojos: 'esfuerzo', boca: 'apretada' }),
+    // 2. EMBISTE. Todo el cuerpo detras del escudo, hacia delante.
+    pose({ incl: 0.30, cabGiro: 0.3, cadY: 112, torY: -34, falVuelo: 20, falOnda: 2.0,
+           falAncho: 50, codD: [10, 20], manD: [14, 36], espAng: 2.4,
+           codI: [2, 16], manI: [22, 22], escX: 20, escY: -4, escAng: -0.08, escZ: 1,
+           falGajos: tela(1.6, 1.15), falBorde: borde(1.6, 1.27),
+           ojos: 'esfuerzo', boca: 'abierta' }),
+    // 3. VUELVE. Recoge el escudo a la guardia.
+    pose({ incl: 0.10, cabGiro: 0.2, cadY: 115, torY: -32, falVuelo: 8, falOnda: 3.4,
+           falAncho: 48, codD: [9, 21], manD: [12, 37], espAng: 2.5,
+           codI: [-4, 14], manI: [8, 20], escX: 10, escY: -6, escAng: 0.06, escZ: 1,
+           falGajos: tela(2.7, 0.7), falBorde: borde(2.7, 0.77),
+           ojos: 'esfuerzo', boca: 'apretada' }),
+  ],
+
   // BLOQUEAR: cuatro fotogramas.
   //
   // PARECIA QUE SE DABA LA VUELTA. Y la fisica estaba bien (dir=1 medido): era

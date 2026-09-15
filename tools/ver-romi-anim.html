@@ -3,7 +3,7 @@
        node tools/ver.js tools/ver-romi-anim.html anim.png 1500 1700 -->
 <meta charset="utf-8">
 <style>body{margin:0;background:#241c1a}canvas{display:block}</style>
-<canvas id="c" width="1800" height="1780"></canvas>
+<canvas id="c" width="1800" height="2500"></canvas>
 <script type="module">
 import { POSES } from '../www/js/games/romi-anim.js';
 import { horneaPose } from '../www/js/games/romi-pose.js';
@@ -11,7 +11,7 @@ import { text } from '../www/js/font.js';
 
 const g = document.getElementById('c').getContext('2d');
 g.imageSmoothingEnabled = false;
-g.fillStyle = '#241c1a'; g.fillRect(0, 0, 1800, 1780);
+g.fillStyle = '#241c1a'; g.fillRect(0, 0, 1800, 2500);
 
 let y = 14;
 for (const k in POSES) {

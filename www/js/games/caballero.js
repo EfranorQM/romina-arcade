@@ -57,6 +57,7 @@ export default {
     this.t = 0; this.hitstop = 0;
     this.golpes = 0; this.saltos = 0; this.rodadas = 0;
     this.msg = ''; this.msgT = 0;
+    this.combo = 0; this.comboT = 0;
 
     // Muñecos de paja: se parten de un tajo y vuelven solos a los 2 s. Solo
     // estan para que la espada tenga algo que tocar.
@@ -76,12 +77,35 @@ export default {
       golpea: this.golpea, rueda: this.rueda, bloquea: this.bEscudo.pressed,
     };
     const antesSuelo = K.enSuelo, antesSt = K.st, antesTajo = K.tajoId;
+    const antesEsc = K.escId, antesParada = K.parada;
     this.salta = false; this.golpea = false; this.rueda = false;
 
     C.stepCaballero(K, inp, dt);
 
     // --- Sonidos y efectos de lo que acaba de pasar ---
-    if (K.tajoId !== antesTajo) { SFX.espadazo(); this.golpes++; }
+    // Cada golpe del combo suena distinto: el tercero (el giro) mas grave y
+    // con temblor. Si los tres sonaran igual, el combo no se oiria como combo.
+    if (K.tajoId !== antesTajo) {
+      const n = C.golpeCombo(K);
+      SFX.espadazo();
+      this.golpes++;
+      this.combo = n + 1;
+      this.comboT = 1.0;
+      if (n === 2) { cam.shake(2.5, 0.1); vibrate(12); }
+      else vibrate(5);
+    }
+    // El EMPUJON de escudo
+    if (K.escId !== antesEsc) {
+      SFX.clang(); vibrate(14); cam.shake(2, 0.08);
+      burst(K.x + K.dir * 40, SUELO - 70, 7, { rnd: Math.random, colors: [PC.ace3, PC.oro3], speed: 170, life: 0.3, size: 4, grav: 180 });
+      this.msg = 'EMPUJON'; this.msgT = 0.6;
+    }
+    // La PARADA perfecta: destello de oro y el aviso
+    if (K.parada > 0 && antesParada <= 0) {
+      SFX.clang(); vibrate(22); cam.shake(4, 0.14); this.hitstop = 7 / 60;
+      burst(K.x + K.dir * 34, SUELO - 74, 18, { rnd: Math.random, colors: [PC.oro3, PC.bla2, PC.ace4], speed: 300, life: 0.5, size: 4, grav: 60 });
+      this.msg = 'PARADA!'; this.msgT = 0.9;
+    }
     if (!antesSuelo && K.enSuelo) {
       // Aterrizaje: polvo y un temblor chiquito
       burst(K.x, SUELO, 9, { rnd: Math.random, colors: [PM.sue1, PM.sue2], speed: 120, life: 0.32, size: 4, grav: 520 });
@@ -112,6 +136,18 @@ export default {
         }
       }
     }
+    // El EMPUJON no corta, pero tumba el muñeco de un golpe de escudo.
+    if (C.escudoActivo(K)) {
+      const [ex, ey] = C.puntaEscudo(K);
+      for (const p of this.pajas) {
+        if (p.roto > 0) continue;
+        if (Math.abs(p.x - ex) < 40) {
+          p.roto = 1.4; this.hitstop = 4 / 60; cam.shake(2.5, 0.1);
+          burst(p.x, SUELO - 50, 10, { rnd: Math.random, colors: [PM.hueso, PM.sue1], speed: 200, life: 0.4, size: 4, grav: 520 });
+        }
+      }
+    }
+    if (this.comboT > 0) this.comboT -= dt;
     for (const p of this.pajas) if (p.roto > 0) { p.roto -= dt; if (p.roto <= 0) p.t = 0; }
 
     // --- Camara: sigue al caballero con holgura ---
@@ -226,6 +262,18 @@ export default {
     const s = `TAJOS ${this.golpes}  SALTOS ${this.saltos}  RODADAS ${this.rodadas}`;
     text(g, s, VW - 14 - measure(s, 2), 32, '#c9a9bc', 2);
     if (this.msgT > 0) textCenter(g, this.msg, VW / 2, 72, PC.oro3, 4);
+    // El CONTADOR DE COMBO. Crece con cada golpe encadenado y el tercero sale
+    // en oro y mas grande: es lo que hace ver el ritmo del combo mientras se
+    // juega, no solo sentirlo.
+    if (this.comboT > 0 && this.combo > 1) {
+      const u = Math.min(1, this.comboT * 3);
+      const esc = this.combo === 3 ? 6 : 5;
+      const col = this.combo === 3 ? PC.oro3 : PC.ves4;
+      g.globalAlpha = Math.min(1, u * 1.4);
+      textCenter(g, 'x' + this.combo, VW / 2, 118, col, esc);
+      if (this.combo === 3) textCenter(g, 'GIRO', VW / 2, 164, PC.bla2, 3);
+      g.globalAlpha = 1;
+    }
   },
 
   drawControles(g) {
