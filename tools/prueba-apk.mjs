@@ -62,6 +62,12 @@ if (!aapt) {
   // se instala sin pedir nada y el boton falla siempre.
   ok(perms.includes('android.permission.INTERNET'),
      'tiene permiso de INTERNET (lo necesita el boton de actualizar)');
+  // Las fotos del juego GALERIA. Es el permiso ESPECIFICO de imagenes, no el
+  // amplio de almacenamiento.
+  ok(perms.includes('android.permission.READ_MEDIA_IMAGES'),
+     'tiene permiso de FOTOS (lo necesita GALERIA)');
+  ok(!perms.includes('android.permission.WRITE_EXTERNAL_STORAGE'),
+     'NO pide escribir en el almacenamiento (solo lee fotos)');
 }
 
 // --- El nombre y el icono ---
@@ -105,6 +111,30 @@ for (const f of ['js/update.js', 'sw.js', 'js/main.js', 'js/menu.js', 'js/games/
 }
 ok(distintos.length === 0, `los ficheros del APK son identicos a www/ (${iguales}/5)` +
    (distintos.length ? ' -> distintos: ' + distintos.join(', ') : ''));
+
+// --- El puente nativo de fotos ---
+// android/ esta en .gitignore y se regenera, asi que el MainActivity con el
+// puente vive en android-src/ y hay que COPIARLO en cada compilacion. Si se
+// olvida, el puente desaparece sin avisar y GALERIA se queda en caratulas
+// para siempre -- un fallo mudo, que es el peor tipo.
+console.log('\n== 4b) LOS PUENTES NATIVOS ==');
+{
+  const dex = lista.filter(n => n.endsWith('.dex'));
+  ok(dex.length > 0, `lleva codigo compilado (${dex.length} .dex)`);
+  // HAY QUE MIRAR EN TODOS LOS .dex, no solo en el primero. Con multidex el
+  // codigo de la app suele caer en el ULTIMO (aqui, classes4.dex): mirar solo
+  // classes.dex daba un falso fallo.
+  let fotos = false, giro = false;
+  for (const d of dex) {
+    try {
+      const buf = leeDelApk(d);
+      if (buf.includes('AndroidFotos')) fotos = true;
+      if (buf.includes('AndroidGiro')) giro = true;
+    } catch (e) { /* un dex ilegible no invalida los demas */ }
+  }
+  ok(fotos, 'el puente AndroidFotos esta compilado dentro del APK (lo usa GALERIA)');
+  ok(giro, 'el puente AndroidGiro sigue dentro (la orientacion por escena)');
+}
 
 // --- El arranque del actualizador ---
 // Comprueba el fallo que se le colo al telefono: la actualizacion se

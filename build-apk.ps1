@@ -115,8 +115,11 @@ if ($py) {
 }
 
 # --- 4c. Instalar el puente de orientacion ---
-# MainActivity.java lleva el puente que gira la pantalla por escena (SURVIVAL y
-# el menu apaisados, los otros cinco juegos verticales). Se copia desde
+# MainActivity.java lleva DOS puentes nativos:
+#   - el que gira la pantalla por escena (SURVIVAL y el menu apaisados, los
+#     juegos verticales)
+#   - el que lee las fotos del telefono para el juego GALERIA
+# Se copia desde
 # android-src/, que SI se versiona, porque android/ esta en .gitignore y la
 # regenera `npx cap add android`: dejar el original solo dentro de android/
 # seria perderlo en el proximo clon del proyecto.
@@ -132,9 +135,9 @@ $destino = Join-Path $root 'android\app\src\main\java\com\romina\juegos\MainActi
 if (Test-Path $puente) {
   New-Item -ItemType Directory -Force (Split-Path $destino) | Out-Null
   Copy-Item $puente $destino -Force
-  Write-Host 'Puente de orientacion instalado' -ForegroundColor Green
+  Write-Host 'Puentes nativos instalados (orientacion y fotos)' -ForegroundColor Green
 } else {
-  Write-Host 'AVISO: falta android-src\MainActivity.java. SURVIVAL pedira el giro a mano.' -ForegroundColor Yellow
+  Write-Host 'AVISO: falta android-src\MainActivity.java. SURVIVAL pedira el giro a mano y GALERIA jugara con caratulas.' -ForegroundColor Yellow
 }
 
 # --- 4d. Instalar el tema de pantalla completa ---
