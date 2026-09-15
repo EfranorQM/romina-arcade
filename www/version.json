@@ -1,5 +1,5 @@
 {
-  "version": "1.0.4",
+  "version": "1.0.5",
   "fecha": "2026-09-15",
   "archivos": [
     "index.html",
@@ -20,6 +20,7 @@
     "js/games/caba-mundo.js",
     "js/games/caballero.js",
     "js/games/furia.js",
+    "js/games/galeria.js",
     "js/games/lastwave.js",
     "js/games/masa-arte.js",
     "js/games/masa-caballera.js",
