@@ -682,6 +682,14 @@ function boot() {
     // reanudara Pausa.salir() cuando ella toque: asi la cancion no arranca sola
     // encima de una pantalla quieta.
     if (!Pausa.activa) resumeAudio();
+    // La escena puede querer enterarse de que volvimos. GALERIA lo usa: si
+    // ella acaba de conceder el permiso de fotos en el dialogo del sistema,
+    // este es el momento en que se puede comprobar (el dialogo es asincrono y
+    // no devuelve nada al JavaScript).
+    const esc = sm.cur;
+    if (esc && typeof esc.resume === 'function') {
+      try { esc.resume(); } catch (e) { /* una escena no puede tumbar la app */ }
+    }
   }
 
   document.addEventListener('visibilitychange', () => {
