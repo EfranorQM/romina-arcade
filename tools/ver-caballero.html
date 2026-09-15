@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- EL CABALLERO: hoja de contactos de todos sus fotogramas.
+       node tools/ver.js tools/ver-caballero.html caballero.png 1200 1500
+     Arriba, cada pose a TAMAÑO DE JUEGO sobre la linea de suelo (asi es como
+     se va a ver en el telefono). Abajo, la misma a 4x para ver las celdas.
+     Se juzga arriba: ampliado todo parece bueno. -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#1a1620}canvas{display:block}</style>
+<canvas id="c" width="1200" height="1500"></canvas>
+<script type="module">
+import { bakeCaballero, drawCaballero, FRAMES, P } from '../www/js/games/caba-art.js';
+import { text } from '../www/js/font.js';
+
+const g = document.getElementById('c').getContext('2d');
+g.imageSmoothingEnabled = false;
+g.fillStyle = '#1a1620'; g.fillRect(0, 0, 1200, 1500);
+
+const S = bakeCaballero();
+
+// Una tira por pose: cada fotograma a 1x sobre su linea de suelo, y debajo a 4x.
+const POSES = [
+  ['QUIETO (respira)', 'idle'],
+  ['CORRER', 'run'],
+  ['SALTAR: impulso / aire / caida', 'jump'],
+  ['RODAR', 'roll'],
+  ['TAJO: arranque / activo / recuperacion', 'atk'],
+  ['DOLOR', 'hurt'],
+];
+
+let y = 16;
+for (const [nombre, k] of POSES) {
+  const n = FRAMES[k].length;
+  text(g, nombre, 12, y, '#c9a227', 2);
+  y += 20;
+  // Fondo de "arena": una banda de piedra con la linea de suelo
+  const suelo = y + 52;
+  g.fillStyle = '#2a2430'; g.fillRect(0, y, 1200, 64);
+  g.fillStyle = '#3c3444'; g.fillRect(0, suelo, 1200, 2);
+  for (let i = 0; i < n; i++) {
+    // 1x, como se ve jugando
+    drawCaballero(g, S, 40 + i * 60, suelo, 1, k, i);
+    // y mirando a la izquierda, para comprobar el espejo
+    drawCaballero(g, S, 40 + i * 60 + 28, suelo, -1, k, i);
+  }
+  y += 70;
+  // 4x
+  for (let i = 0; i < n; i++) {
+    const cv = S.der[k][i];
+    g.drawImage(cv, 12 + i * (cv.width * 4 + 10), y, cv.width * 4, cv.height * 4);
+  }
+  y += FRAMES[k][0].length * 4 + 18;
+}
+
+// La paleta, para revisarla de un vistazo
+text(g, 'PALETA', 12, y, '#c9a227', 2); y += 20;
+let px = 12;
+for (const k in P) {
+  g.fillStyle = P[k]; g.fillRect(px, y, 46, 30);
+  g.fillStyle = '#ffffff'; text(g, k, px, y + 34, '#8996a8', 1);
+  px += 52;
+}
+</script>

@@ -122,9 +122,14 @@ const sm = {
     setSmooth(!!m.smooth);
     // Cuantas veces mas grande es el lienzo real que el virtual. Va con el
     // filtrado, y por el mismo motivo: setVirtual reaplica lo que se deje puesto
-    // aqui. Solo lo piden los juegos de arte suave; el pixel art no lo necesita
-    // (su dibujo YA es de rejilla) y le costaria el cuadruple de relleno.
-    setSupersample(m.smooth ? (m.ss || 1) : 1);
+    // aqui. Lo piden los juegos que quieren mas detalle del que cabe en el
+    // lienzo virtual, y cuesta el cuadruple de relleno.
+    //
+    // NO va atado a meta.smooth. Lo estuvo, y era un error: un juego de PIXEL
+    // ART tambien lo quiere, porque le deja dibujar sprites con el doble de
+    // celdas sin agrandarlos en pantalla. Atado, un juego nitido que pidiera
+    // ss:2 lo recibia como 1 y todo su arte salia al doble de tamano.
+    setSupersample(m.ss || 1);
     // meta.wide = escena apaisada (el menu y el fin de partida). Sin el, es un
     // juego y va vertical. Se le pide el giro al telefono ANTES de fijar la
     // resolucion, para que el navegador ya este girando cuando el juego mida.

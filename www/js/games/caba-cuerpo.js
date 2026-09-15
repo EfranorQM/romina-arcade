@@ -1,0 +1,199 @@
+// EL CABALLERO - su fisica y su maquina de estados. SIN DOM: el juego y el
+// arnes de Node (tools/prueba-caballero.mjs) mueven exactamente este modelo,
+// como en el AHORCADO.
+//
+// Es el segundo juego del arcade con SUELO y gravedad (el otro es FURIA), y el
+// primero donde se camina. Por eso el eje Y NO lo manda el pulgar: lo manda la
+// fisica. El pulgar solo mueve en X y decide cuando se salta.
+//
+// Nada de esto viene de otro juego del arcade. Los numeros salen de simular
+// aqui, no de copiar los de NEON FIST (que es un juego cenital sin gravedad).
+
+export const AX0 = 24, AX1 = 576;      // paredes de la arena, en px virtuales
+export const SUELO = 222;              // la linea donde apoyan los pies
+export const ALTO = 30, ANCHO = 22;    // el caballero, en celdas
+
+// --- Andar ---
+export const VEL = 120;                // px/s. Cruza la arena en 4.6 s.
+const ACEL = 900, FREN = 1400;         // px/s^2: arranca rapido, frena mas
+const AIRE_CTRL = 0.55;                // cuanto manda el pulgar en el aire
+
+// --- Saltar ---
+// Gravedad ASIMETRICA: sube mas lento de lo que cae. Es lo que hace que el
+// salto se sienta con peso en vez de flotante, y es gratis.
+export const JUMP_V = 430;
+export const GRAV_UP = 1500, GRAV_DN = 2100;
+// Soltar pronto recorta el salto. Con 0.35 el salto corto se quedaba en 12 px
+// (medido): inutil, no servia ni para esquivar un barrido. Con 0.55 son 27 px,
+// la mitad del completo, que es una decision de verdad.
+const CORTE_T = 0.09, CORTE_F = 0.55;
+const COYOTE = 0.08, BUFFER = 0.10;    // margenes invisibles que salvan el salto
+
+// --- Rodar ---
+export const ROLL_T = 0.36, ROLL_CD = 0.62;
+const ROLL_V0 = 330;                   // pico; el perfil baja al final
+export const ROLL_INV0 = 0.06, ROLL_INV1 = 0.28;   // invulnerable solo en medio
+
+// --- Tajo ---
+export const TAJO_T = 0.30;
+export const TAJO_A0 = 0.08, TAJO_A1 = 0.15;       // ventana activa
+export const ALCANCE = 26;             // del centro del cuerpo a la punta
+const TAJO_FREN = 0.45;                // cuanta velocidad conserva al cortar
+
+// --- Vida ---
+export const HP0 = 4;
+export const IFRAME = 1.0;
+
+// Estados
+export const QUIETO = 0, CORRE = 1, SALTA = 2, RUEDA = 3, TAJO = 4, DOLOR = 5, MUERTO = 6;
+
+export function makeCaballero(x) {
+  return {
+    x, y: SUELO, vx: 0, vy: 0, dir: 1,
+    st: QUIETO, t: 0,
+    enSuelo: true, coyote: 0, buffer: 0, cortable: 0,
+    rollT: 0, rollCd: 0,
+    tajoT: 0, tajoId: 0, golpeo: 0,
+    hp: HP0, iframe: 0, hurtT: 0,
+    animT: 0, frame: 0,
+    vivo: true,
+  };
+}
+
+// Un paso. `inp` = { dx, salta, golpea, rueda }: dx es el stick (-1..1) y los
+// otros tres son FLANCOS (true solo en el frame en que se pulsan).
+export function stepCaballero(K, inp, dt) {
+  if (!K.vivo) return;
+  K.t += dt; K.animT += dt;
+  if (K.iframe > 0) K.iframe -= dt;
+  if (K.rollCd > 0) K.rollCd -= dt;
+  if (K.hurtT > 0) K.hurtT -= dt;
+
+  // Buffer de salto: si pulsa un poco antes de tocar suelo, se le guarda.
+  if (inp.salta) K.buffer = BUFFER;
+  if (K.buffer > 0) K.buffer -= dt;
+
+  const puedeActuar = K.st !== RUEDA && K.st !== DOLOR;
+
+  // --- Rodar: manda sobre todo lo demas, y cancela el tajo ---
+  if (inp.rueda && K.rollCd <= 0 && K.st !== RUEDA && K.st !== DOLOR && K.enSuelo) {
+    K.st = RUEDA; K.rollT = 0; K.rollCd = ROLL_CD;
+    K.vx = ROLL_V0 * K.dir;
+    K.animT = 0;
+  }
+
+  // --- Saltar ---
+  if (K.buffer > 0 && (K.enSuelo || K.coyote > 0) && K.st !== RUEDA && K.st !== DOLOR) {
+    K.vy = -JUMP_V; K.enSuelo = false; K.coyote = 0; K.buffer = 0;
+    K.cortable = CORTE_T;
+    K.st = SALTA; K.animT = 0;
+  }
+  // Salto cortable: soltar pronto lo deja a la mitad de alto.
+  if (K.cortable > 0) {
+    K.cortable -= dt;
+    if (!inp.saltaAbajo && K.vy < 0) { K.vy *= CORTE_F; K.cortable = 0; }
+  }
+
+  // --- Tajo ---
+  if (inp.golpea && puedeActuar && K.st !== TAJO) {
+    K.st = TAJO; K.tajoT = 0; K.tajoId++; K.golpeo = 0; K.animT = 0;
+    K.vx *= TAJO_FREN;
+  }
+
+  // --- Movimiento en X ---
+  if (K.st === RUEDA) {
+    K.rollT += dt;
+    // Perfil: arranca fuerte y se apaga al final, para que la rodada termine
+    // donde se ve que termina en vez de frenar en seco.
+    const u = K.rollT / ROLL_T;
+    const f = u < 0.15 ? u / 0.15 : u > 0.72 ? (1 - u) / 0.28 : 1;
+    K.vx = ROLL_V0 * f * K.dir;
+    if (K.rollT >= ROLL_T) { K.st = QUIETO; K.vx = 0; K.animT = 0; }
+  } else if (K.st === DOLOR) {
+    K.vx *= 0.86;
+    if (K.t - K.hurtIni > 0.28) { K.st = QUIETO; K.animT = 0; }
+  } else {
+    const ctrl = K.enSuelo ? 1 : AIRE_CTRL;
+    const quiere = inp.dx * VEL;
+    if (Math.abs(inp.dx) > 0.08) {
+      K.dir = inp.dx < 0 ? -1 : 1;
+      const a = (Math.abs(quiere) > Math.abs(K.vx) || Math.sign(quiere) !== Math.sign(K.vx)) ? ACEL : FREN;
+      K.vx += Math.sign(quiere - K.vx) * a * ctrl * dt;
+      if (Math.abs(K.vx - quiere) < 12) K.vx = quiere;
+    } else if (K.enSuelo) {
+      const f = FREN * dt;
+      K.vx = Math.abs(K.vx) <= f ? 0 : K.vx - Math.sign(K.vx) * f;
+    }
+  }
+
+  // --- Gravedad y suelo ---
+  if (!K.enSuelo) {
+    K.vy += (K.vy < 0 ? GRAV_UP : GRAV_DN) * dt;
+    K.y += K.vy * dt;
+    if (K.y >= SUELO) {
+      K.y = SUELO; K.vy = 0; K.enSuelo = true;
+      if (K.st === SALTA) { K.st = QUIETO; K.animT = 0; }
+    }
+  } else {
+    K.coyote = COYOTE;
+  }
+  if (K.coyote > 0 && !K.enSuelo) K.coyote -= dt;
+
+  K.x += K.vx * dt;
+  if (K.x < AX0) { K.x = AX0; K.vx = 0; }
+  else if (K.x > AX1) { K.x = AX1; K.vx = 0; }
+
+  // --- Ciclo del tajo ---
+  if (K.st === TAJO) {
+    K.tajoT += dt;
+    if (K.tajoT >= TAJO_T) { K.st = K.enSuelo ? QUIETO : SALTA; K.animT = 0; }
+  }
+
+  // --- Estado de animacion ---
+  if (K.st === QUIETO || K.st === CORRE) {
+    K.st = (!K.enSuelo) ? SALTA : (Math.abs(K.vx) > 8 ? CORRE : QUIETO);
+  }
+}
+
+// La espada esta cortando en este frame.
+export function espadaActiva(K) {
+  return K.st === TAJO && K.tajoT >= TAJO_A0 && K.tajoT < TAJO_A1;
+}
+
+// Punto de la punta de la espada (para colisiones y chispas).
+export function puntaEspada(K) {
+  return [K.x + K.dir * ALCANCE, K.y - 16];
+}
+
+// Es invulnerable ahora mismo (por rodar o por i-frames).
+export function invulnerable(K) {
+  if (K.iframe > 0) return true;
+  return K.st === RUEDA && K.rollT >= ROLL_INV0 && K.rollT <= ROLL_INV1;
+}
+
+export function herir(K, sx) {
+  if (invulnerable(K) || !K.vivo) return false;
+  K.hp--; K.iframe = IFRAME;
+  K.st = DOLOR; K.hurtIni = K.t; K.hurtT = 0.28; K.animT = 0;
+  K.vx = (K.x < sx ? -1 : 1) * 140;
+  if (K.hp <= 0) { K.vivo = false; K.st = MUERTO; }
+  return true;
+}
+
+// Que pose y que fotograma toca dibujar. Devuelve [pose, frame].
+export function pose(K) {
+  if (K.st === DOLOR || K.st === MUERTO) return ['hurt', 0];
+  if (K.st === RUEDA) return ['roll', Math.min(3, Math.floor(K.rollT / ROLL_T * 4))];
+  if (K.st === TAJO) {
+    const u = K.tajoT / TAJO_T;
+    return ['atk', u < 0.27 ? 0 : u < 0.50 ? 1 : u < 0.78 ? 2 : 3];
+  }
+  if (!K.enSuelo) return ['jump', K.vy < -80 ? 0 : K.vy > 80 ? 2 : 1];
+  if (K.st === CORRE) {
+    // El ciclo avanza con la DISTANCIA recorrida, no con el reloj: asi los
+    // pies no patinan cuando acelera o frena.
+    const paso = Math.abs(K.x * 0.068) % 4;
+    return ['run', Math.floor(paso)];
+  }
+  return ['idle', Math.floor(K.animT / 0.7) % 2];
+}

@@ -301,6 +301,15 @@ export const SONGS = {
     { wave:'noise', pattern:'H.hHH.hHH.hHH.hH', vol:0.06 },
   ]},
 
+  // EL CABALLERO: Mi menor, marcha lenta de campo de batalla. El bajo pisa en
+  // blancas como un tambor de guerra y el arpegio baja: es un sitio donde ya
+  // se perdio una batalla, no una carga heroica.
+  caballero: { bpm: 96, tracks: [
+    { wave:'tri',   pattern:'E.......E.......C.......G.......', vol:0.17 },
+    { wave:'pulse', duty:0.5, pattern:'e...b...g...e...c...g...d...g...', vol:0.055 },
+    { wave:'noise', pattern:'H.......H...h...H.......H...hh..', vol:0.055 },
+  ]},
+
   // LA MASA: Re menor a tempo medio, un duelo. El bajo pisa en negras y deja
   // un hueco al final del compas (la masa rumiando); el arpegio es corto y
   // vuelve siempre a la misma nota, como algo que te da vueltas.
@@ -347,6 +356,13 @@ export const SFX = {
   boing:    () => sfx({ type: 'tri', f0: 300, f1: 420, dur: 0.10, vol: 0.2 }),
   bostezo:  () => sfx({ type: 'tri', f0: 300, f1: 200, dur: 0.6, vol: 0.15 }),
   tarareo:  () => { [392, 440, 392].forEach((f, i) => setTimeout(() => sfx({ type: 'tri', f0: f, dur: 0.12, vol: 0.14 }), i * 140)); },
+  // EL CABALLERO
+  espadazo: () => sfx({ type: 'noise', f0: 3200, f1: 900, dur: 0.07, vol: 0.18 }),
+  corta:    () => { sfx({ type: 'noise', f0: 1800, f1: 300, dur: 0.12, vol: 0.34 }); sfx({ type: 'saw', f0: 240, f1: 90, dur: 0.10, vol: 0.20 }); },
+  clang:    () => { sfx({ type: 'pulse', duty: 0.125, f0: 1900, f1: 1400, dur: 0.07, vol: 0.30 }); sfx({ type: 'noise', f0: 2600, f1: 1200, dur: 0.10, vol: 0.16 }); },
+  salto:    () => sfx({ type: 'pulse', duty: 0.25, f0: 200, f1: 420, dur: 0.10, vol: 0.16 }),
+  aterriza: () => sfx({ type: 'noise', f0: 420, f1: 110, dur: 0.09, vol: 0.20 }),
+  rodar:    () => sfx({ type: 'noise', f0: 700, f1: 260, dur: 0.20, vol: 0.16 }),
   // LA MASA
   tajo:     () => sfx({ type: 'noise', f0: 2400, f1: 300, dur: 0.09, vol: 0.30 }),
   muda:     () => { sfx({ type: 'tri', f0: 160, f1: 45, dur: 0.8, vol: 0.4 }); sfx({ type: 'noise', f0: 900, f1: 80, dur: 0.6, vol: 0.28 }); },

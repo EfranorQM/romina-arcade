@@ -470,7 +470,49 @@ const masa = () => make(d => {
   frame(d, '#ff4d63');
 });
 
-const BUILDERS = { skyline, neonfist, lastwave, symbiote, furia, survival, ahorcado, masa };
+// ---------- EL CABALLERO: la silueta contra el incendio ----------
+// Lo que hay que leer es MEDIEVAL y DE LADO: un caballero de perfil con la
+// espada en alto recortado contra un cielo que arde, y la muralla detras.
+const caballero = () => make(d => {
+  sky(d, '#7d4436', '#241c1a');
+  // El disco del sol bajo, detras de todo
+  d.fillStyle = '#d9793f'; d.beginPath(); d.arc(64, 74, 22, 0, 7); d.fill();
+  // Muralla en ruinas, silueta oscura
+  d.fillStyle = '#241c26';
+  for (const [x, w, h] of [[4, 18, 34], [24, 14, 22], [56, 20, 40], [78, 12, 26], [86, 16, 30]]) {
+    d.fillRect(x, 96 - h, w, h);
+    for (let i = 0; i < w; i += 7) d.fillRect(x + i, 96 - h - 4, 4, 5);
+  }
+  // Suelo
+  d.fillStyle = '#382c27'; d.fillRect(0, 96, CW, CH - 96);
+  d.fillStyle = '#241c1a'; d.fillRect(0, 104, CW, CH - 104);
+  // Lanzas clavadas
+  d.fillStyle = '#5a4a33';
+  for (const [x, h] of [[12, 16], [22, 11], [80, 14], [90, 10]]) d.fillRect(x, 96 - h, 2, h);
+  // El caballero, de perfil, espada en alto
+  const cx = 46, base = 100;
+  d.fillStyle = '#9c1b3c';                                    // capa
+  d.beginPath(); d.moveTo(cx - 4, base - 30); d.lineTo(cx - 13, base - 6);
+  d.lineTo(cx - 4, base - 10); d.closePath(); d.fill();
+  d.fillStyle = '#8996a8'; d.fillRect(cx - 5, base - 30, 11, 18);   // torso
+  d.fillStyle = '#ced7e4'; d.fillRect(cx - 5, base - 30, 3, 18);
+  d.fillStyle = '#8996a8'; d.fillRect(cx - 5, base - 12, 4, 12); d.fillRect(cx + 1, base - 12, 4, 12);
+  d.fillStyle = '#4a3728'; d.fillRect(cx - 6, base - 3, 6, 3); d.fillRect(cx + 1, base - 3, 6, 3);
+  d.fillStyle = '#ced7e4'; d.fillRect(cx - 5, base - 38, 11, 9);    // yelmo
+  d.fillStyle = '#14121a'; d.fillRect(cx - 3, base - 35, 7, 2);
+  d.fillStyle = '#ffd24a'; d.fillRect(cx + 1, base - 35, 3, 2);
+  d.fillStyle = '#9c1b3c'; d.fillRect(cx - 3, base - 42, 6, 5);     // penacho
+  // El brazo y la espada en alto, en diagonal
+  d.fillStyle = '#8996a8'; d.fillRect(cx + 4, base - 30, 5, 4);
+  d.strokeStyle = '#b9c4d2'; d.lineWidth = 4; d.lineCap = 'butt';
+  d.beginPath(); d.moveTo(cx + 8, base - 28); d.lineTo(cx + 26, base - 54); d.stroke();
+  d.strokeStyle = '#ffffff'; d.lineWidth = 1.5;
+  d.beginPath(); d.moveTo(cx + 9, base - 29); d.lineTo(cx + 26, base - 54); d.stroke();
+  d.fillStyle = '#c9a227'; d.fillRect(cx + 5, base - 30, 8, 3);     // guarda
+  frame(d, '#c8d0dc');
+});
+
+const BUILDERS = { skyline, neonfist, lastwave, symbiote, furia, survival, ahorcado, masa, caballero };
 
 // Portada generica: si algun dia se suma un juego y nadie le dibuja caratula,
 // sale una caja con sus colores y su inicial en vez de un hueco.
