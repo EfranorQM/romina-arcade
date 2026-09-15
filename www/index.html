@@ -27,6 +27,64 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<script type="module" src="js/main.js"></script>
+
+<!-- EL ARRANQUE DEL ACTUALIZADOR VA AQUI, Y NO EN main.js, A PROPOSITO.
+     Un <script type="module"> empieza a pedir TODOS sus imports en cuanto se
+     parsea. Si el service worker se registrase dentro de main.js, para cuando
+     corriera ya se habrian pedido games.js y los diez juegos -- de la version
+     vieja. Ese fue el fallo que hizo que una actualizacion se descargara
+     entera, dijera "AL DIA", y siguiera ejecutando el codigo anterior.
+     Aqui se registra y se le dice que version servir ANTES de tocar el juego,
+     y solo entonces se carga main.js.
+     Si algo falla, se carga el juego igual: peor es no arrancar. -->
+<script>
+(function () {
+  function arranca() {
+    var s = document.createElement('script');
+    s.type = 'module';
+    s.src = 'js/main.js';
+    document.body.appendChild(s);
+  }
+  if (!('serviceWorker' in navigator)) { arranca(); return; }
+
+  // Que version toca. Se lee aqui (no en update.js) porque update.js es un
+  // modulo y llegaria tarde. Misma logica: una version pendiente se estrena
+  // ahora, y si la anterior no llego a confirmarse se descarta.
+  var ver = null;
+  try {
+    var sosp = localStorage.getItem('rom.sosp');
+    if (sosp) {                      // arranco mal la ultima vez: se revierte
+      caches.delete('rom-' + sosp);
+      localStorage.removeItem('rom.sosp');
+      if (localStorage.getItem('rom.ver') === sosp) localStorage.removeItem('rom.ver');
+    }
+    var pend = localStorage.getItem('rom.pend');
+    if (pend) {                      // hay una descargada: se estrena AHORA
+      localStorage.setItem('rom.ver', pend);
+      localStorage.removeItem('rom.pend');
+      localStorage.setItem('rom.sosp', pend);   // a prueba hasta que demuestre
+    }
+    ver = localStorage.getItem('rom.ver');
+  } catch (e) {}
+
+  var listo = false;
+  function sigue() { if (!listo) { listo = true; arranca(); } }
+  setTimeout(sigue, 3000);           // si el worker se atasca, no se espera mas
+
+  navigator.serviceWorker.register('sw.js').then(function () {
+    return navigator.serviceWorker.ready;
+  }).then(function (reg) {
+    var sw = navigator.serviceWorker.controller || reg.active;
+    if (!sw || !ver) { sigue(); return; }
+    // Se espera a que el worker CONFIRME que ya sabe que version servir. Sin
+    // esta confirmacion los modulos podrian pedirse antes de que se entere,
+    // que es justo el fallo que esto viene a arreglar.
+    var ch = new MessageChannel();
+    ch.port1.onmessage = function () { sigue(); };
+    sw.postMessage({ tipo: 'usa', version: ver }, [ch.port2]);
+    setTimeout(sigue, 800);
+  }).catch(sigue);
+})();
+</script>
 </body>
 </html>

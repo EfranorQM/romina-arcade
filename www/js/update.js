@@ -45,7 +45,7 @@ const LS = {
 
 // La version que trae el APK de fabrica. La reescribe tools/publica.mjs en
 // cada publicacion, para que el numero que se ve en el menu sea el de verdad.
-export const VERSION_APK = '1.0.5';
+export const VERSION_APK = '1.0.6';
 
 // Que version se esta usando ahora mismo.
 export function versionActual() {
@@ -63,42 +63,21 @@ export const Update = {
 // ---------- Arranque ----------
 // Se llama UNA vez al cargar la app, antes de nada.
 export async function iniciaUpdate() {
-  // REGLA 4: si la ultima vez se estreno una version y no llego a marcarse
-  // como buena, es que casco al arrancar. Se descarta y se vuelve atras.
-  const sospechosa = LS.sosp;
-  if (sospechosa) {
-    console.warn('[update] la version', sospechosa, 'no arranco bien; se descarta');
-    await borraCache(sospechosa);
-    LS.sosp = null;
-    if (LS.ver === sospechosa) LS.ver = null;   // vuelve a la del APK
-  }
-
-  // REGLA 3: una version descargada se estrena AHORA, al arrancar, no antes.
-  const pend = LS.pend;
-  if (pend) {
-    LS.ver = pend;
-    LS.pend = null;
-    LS.sosp = pend;      // en prueba: si no se confirma, se revierte
-    console.log('[update] estrenando la version', pend);
-  }
-
-  if (!('serviceWorker' in navigator)) return;
-  try {
-    const reg = await navigator.serviceWorker.register('./sw.js');
-    await navigator.serviceWorker.ready;
-    // Decirle al worker que version tiene que servir
-    manda({ tipo: 'usa', version: versionActual() });
-    // Si arranco bien, a los 20 s se da por buena. Si el juego casca antes,
-    // este temporizador no llega a saltar y en el proximo arranque se revierte.
-    if (LS.sosp) {
-      setTimeout(() => {
-        console.log('[update] la version', LS.sosp, 'va bien: confirmada');
-        LS.sosp = null;
-      }, 20000);
-    }
-    return reg;
-  } catch (e) {
-    console.warn('[update] no se pudo registrar el worker:', e.message);
+  // OJO: registrar el worker y estrenar la version pendiente YA LO HA HECHO
+  // index.html, antes de cargar ningun modulo. Tiene que ser asi: un
+  // <script type="module"> pide todos sus imports en cuanto se parsea, asi que
+  // para cuando esta funcion corre, games.js y los diez juegos ya se han
+  // pedido. Hacerlo aqui llegaba tarde -- la actualizacion se descargaba,
+  // decia "AL DIA", y seguia ejecutando el codigo viejo.
+  //
+  // Aqui solo queda CONFIRMAR que la version estrenada funciona. Si el juego
+  // casca antes de los 20 s, este temporizador no llega a saltar, la marca
+  // 'sosp' se queda puesta y el proximo arranque la revierte sola.
+  if (LS.sosp) {
+    setTimeout(() => {
+      console.log('[update] la version', LS.sosp, 'va bien: confirmada');
+      LS.sosp = null;
+    }, 20000);
   }
 }
 
