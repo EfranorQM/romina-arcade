@@ -538,7 +538,36 @@ const caballero = () => make(d => {
   frame(d, '#ef4a84');
 });
 
-const BUILDERS = { skyline, neonfist, lastwave, symbiote, furia, survival, ahorcado, masa, caballero };
+// GALERIA: tres caratulas en cascada, una de ellas resaltada. Se dibujan como
+// marcos de colores, no como miniaturas de verdad: a 96x128 una caratula
+// dentro de otra seria una mancha.
+const galeria = () => make(d => {
+  sky(d, '#2a1a58', '#0d0620');
+  const cards = [
+    [10, 16, '#4de0f0', 0.55],
+    [34, 34, '#e0249a', 0.7],
+    [22, 58, '#ffe066', 1],     // la elegida: entera y con marco de oro
+    [50, 74, '#7fb3ff', 0.6],
+  ];
+  for (const [x, y, col, a] of cards) {
+    d.globalAlpha = a;
+    d.fillStyle = '#12082a'; d.fillRect(x, y, 30, 40);
+    d.strokeStyle = col; d.lineWidth = 2; d.strokeRect(x + 1, y + 1, 28, 38);
+    // un brillo dentro, para que no sean cajas vacias
+    d.fillStyle = col; d.globalAlpha = a * 0.35;
+    d.fillRect(x + 5, y + 24, 20, 12);
+    d.globalAlpha = a;
+    d.beginPath(); d.arc(x + 15, y + 15, 5, 0, 7); d.fill();
+  }
+  d.globalAlpha = 1;
+  // El dedo que la toca
+  d.fillStyle = '#ffd9b8';
+  d.fillRect(42, 96, 9, 18);
+  d.fillRect(45, 90, 6, 10);
+  frame(d, '#ffe066');
+});
+
+const BUILDERS = { skyline, neonfist, lastwave, symbiote, furia, survival, ahorcado, masa, caballero, galeria };
 
 // Portada generica: si algun dia se suma un juego y nadie le dibuja caratula,
 // sale una caja con sus colores y su inicial en vez de un hueco.

@@ -45,7 +45,7 @@ const LS = {
 
 // La version que trae el APK de fabrica. La reescribe tools/publica.mjs en
 // cada publicacion, para que el numero que se ve en el menu sea el de verdad.
-export const VERSION_APK = '1.0.4';
+export const VERSION_APK = '1.0.5';
 
 // Que version se esta usando ahora mismo.
 export function versionActual() {
