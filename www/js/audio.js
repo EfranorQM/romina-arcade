@@ -300,6 +300,15 @@ export const SONGS = {
     { wave:'pulse', duty:0.125, pattern:'a.e.a.c.e.a.c.e.f.c.f.a.c.e.g.b.', vol:0.075 },
     { wave:'noise', pattern:'H.hHH.hHH.hHH.hH', vol:0.06 },
   ]},
+
+  // LA MASA: Re menor a tempo medio, un duelo. El bajo pisa en negras y deja
+  // un hueco al final del compas (la masa rumiando); el arpegio es corto y
+  // vuelve siempre a la misma nota, como algo que te da vueltas.
+  masa: { bpm: 128, tracks: [
+    { wave:'tri',   pattern:'D...D...F...F...D...D...C.......', vol:0.16 },
+    { wave:'pulse', duty:0.25, pattern:'d...f.a.d...f.g.d...f.a.c.e.g...', vol:0.06 },
+    { wave:'noise', pattern:'H...h.H.H...h...', vol:0.05 },
+  ]},
 };
 
 // Presets listos.
@@ -338,4 +347,8 @@ export const SFX = {
   boing:    () => sfx({ type: 'tri', f0: 300, f1: 420, dur: 0.10, vol: 0.2 }),
   bostezo:  () => sfx({ type: 'tri', f0: 300, f1: 200, dur: 0.6, vol: 0.15 }),
   tarareo:  () => { [392, 440, 392].forEach((f, i) => setTimeout(() => sfx({ type: 'tri', f0: f, dur: 0.12, vol: 0.14 }), i * 140)); },
+  // LA MASA
+  tajo:     () => sfx({ type: 'noise', f0: 2400, f1: 300, dur: 0.09, vol: 0.30 }),
+  muda:     () => { sfx({ type: 'tri', f0: 160, f1: 45, dur: 0.8, vol: 0.4 }); sfx({ type: 'noise', f0: 900, f1: 80, dur: 0.6, vol: 0.28 }); },
+  crece:    () => { [330, 440, 660].forEach((f, i) => setTimeout(() => sfx({ type: 'pulse', duty: 0.25, f0: f, f1: f * 1.25, dur: 0.08, vol: 0.2 }), i * 60)); },
 };

@@ -422,7 +422,55 @@ const ahorcado = () => make(d => {
   frame(d, '#ff9bc8');
 });
 
-const BUILDERS = { skyline, neonfist, lastwave, symbiote, furia, survival, ahorcado };
+// ---------- LA MASA: la masa con muchos ojos y una espada que la mira ----------
+// Lo que hay que leer es que la cosa TE MIRA: una masa de carne con varios
+// ojos, todos vueltos hacia la espada de abajo, y una costra de hueso donde
+// ya la cortaron. La espada es chica y esta abajo: el monstruo es el que manda
+// en la caja.
+const masa = () => make(d => {
+  sky(d, '#2a0a12', '#07030f');
+  // La masa: un blob irregular de carne, tres capas como en el juego.
+  const lobulo = (cx, cy, r, col, k) => {
+    d.fillStyle = col; d.beginPath();
+    for (let i = 0; i <= 40; i++) {
+      const a = (i / 40) * Math.PI * 2;
+      const rr = r * (1 + 0.10 * Math.sin(a * 3 + k) + 0.06 * Math.sin(a * 5 + k * 2));
+      const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
+      if (i === 0) d.moveTo(x, y); else d.lineTo(x, y);
+    }
+    d.closePath(); d.fill();
+  };
+  lobulo(48, 50, 34, '#3d0810', 0.3);
+  lobulo(48, 50, 28, '#8e1224', 0.3);
+  lobulo(45, 47, 18, '#c9203a', 0.3);
+  // Costra de hueso abajo a la derecha: por ahi ya la cortaron.
+  d.strokeStyle = '#ffe8a8'; d.lineWidth = 5; d.lineCap = 'round';
+  d.beginPath(); d.arc(48, 50, 30, 0.25, 1.15); d.stroke();
+  d.strokeStyle = '#c9b07a'; d.lineWidth = 2;
+  d.beginPath(); d.arc(48, 50, 26, 0.3, 1.1); d.stroke();
+  // Un latigo que sale por la izquierda y cae hacia la espada.
+  d.strokeStyle = '#8e1224'; d.lineWidth = 6;
+  d.beginPath(); d.moveTo(24, 58); d.quadraticCurveTo(0, 74, 14, 96); d.stroke();
+  d.strokeStyle = '#c9203a'; d.lineWidth = 3;
+  d.beginPath(); d.moveTo(24, 58); d.quadraticCurveTo(2, 74, 14, 96); d.stroke();
+  // Ojos, todos mirando abajo, a ella.
+  const ojo = (x, y, r) => {
+    d.fillStyle = '#ffe8a8'; d.beginPath(); d.arc(x, y, r, 0, 7); d.fill();
+    d.fillStyle = '#1a0306'; d.beginPath(); d.arc(x + r * 0.15, y + r * 0.35, r * 0.45, 0, 7); d.fill();
+  };
+  ojo(40, 40, 6); ojo(58, 46, 4.5); ojo(30, 56, 3.5); ojo(62, 32, 3); ojo(52, 62, 3.2);
+  // La espada, abajo, apuntando a la masa, con el arco del tajo.
+  d.strokeStyle = 'rgba(77,224,240,0.9)'; d.lineWidth = 3;
+  d.beginPath(); d.arc(56, 96, 18, -2.4, -0.7); d.stroke();
+  d.fillStyle = '#d9dce6';
+  d.beginPath(); d.moveTo(44, 118); d.lineTo(50, 116); d.lineTo(70, 90); d.lineTo(66, 86); d.closePath(); d.fill();
+  d.fillStyle = '#ffffff';
+  d.beginPath(); d.moveTo(50, 116); d.lineTo(70, 90); d.lineTo(68, 88); d.lineTo(48, 114); d.closePath(); d.fill();
+  d.fillStyle = '#ff5c9d'; d.fillRect(40, 114, 10, 5);
+  frame(d, '#ff4d63');
+});
+
+const BUILDERS = { skyline, neonfist, lastwave, symbiote, furia, survival, ahorcado, masa };
 
 // Portada generica: si algun dia se suma un juego y nadie le dibuja caratula,
 // sale una caja con sus colores y su inicial en vez de un hueco.

@@ -1,0 +1,87 @@
+<!doctype html>
+<!-- LA MASA: hoja de contactos. Cada estado de la masa y de la caballera a
+     tamano real (como se ve jugando) y ampliado x3, con su etiqueta.
+       node tools/ver.js tools/ver-masa.html masa.png 1540 1900
+     Se juzga a tamano real: ampliado todo parece bueno. -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#07030f}canvas{display:block}</style>
+<canvas id="c" width="1540" height="1900"></canvas>
+<script type="module">
+import { makeMasa, step, crecerCadena, crecerPlaca, LATIGO, GARRA, HOJA, C_AVISO, C_GOLPE, AVISO, EMBISTE, ATURDIDA, MUDANDO, RUMIA, armarParada, sectorDe, renacer } from '../www/js/games/masa-cuerpo.js';
+import { makeCaballera, stepCaballera } from '../www/js/games/masa-caballera.js';
+import { drawMasa, drawCaballera, bakeCaballera, P } from '../www/js/games/masa-arte.js';
+import { text } from '../www/js/font.js';
+
+const g = document.getElementById('c').getContext('2d');
+g.imageSmoothingEnabled = false;
+g.fillStyle = '#07030f'; g.fillRect(0, 0, 1540, 1900);
+
+let seed = 7;
+const rnd = () => { seed ^= seed << 13; seed >>>= 0; seed ^= seed >>> 17; seed ^= seed << 5; seed >>>= 0; return seed / 4294967296; };
+const DT = 1 / 60;
+const S = bakeCaballera();
+
+// Lienzo de mundo: la masa vive en (135,150) y la caballera en (135,215)
+const W = document.createElement('canvas'); W.width = 270; W.height = 400;
+const w = W.getContext('2d'); w.imageSmoothingEnabled = false;
+
+function escena(prep, dibuja) {
+  const M = makeMasa(135, 150);
+  const K = makeCaballera(135, 218);
+  const t = prep(M, K) || 3.3;
+  w.fillStyle = P.bg; w.fillRect(0, 0, 270, 400);
+  w.fillStyle = P.dk;
+  for (let x = 6; x < 270; x += 24) w.fillRect(x, 0, 1, 400);
+  for (let y = 6; y < 400; y += 24) w.fillRect(0, y, 270, 1);
+  if (dibuja) dibuja(M, K, t); else { drawMasa(w, M, K, t, 0); drawCaballera(w, K, S, t); }
+  return W;
+}
+function run(M, K, secs) { const n = Math.round(secs / DT); for (let i = 0; i < n; i++) step(M, K, DT, rnd, null); }
+
+const celdas = [];
+function celda(nombre, prep, dibuja) { celdas.push({ nombre, prep, dibuja }); }
+
+celda('RONDA 1, en reposo', (M, K) => { M.st = RUMIA; M.cd = 99; run(M, K, 1.2); });
+celda('RONDA 3, placa x2 abajo, 3 ojos', (M, K) => { M.ronda = 3; M.st = RUMIA; M.cd = 99; crecerPlaca(M, 3); crecerPlaca(M, 3); crecerPlaca(M, 2); crecerPlaca(M, 4); run(M, K, 1.2); });
+celda('AVISO de embestida (carril)', (M, K) => { M.st = RUMIA; M.cd = 99; run(M, K, 0.5); M.st = AVISO; M.t = 0.2; M.lx = 0; M.ly = 1; M.aimOn = 1; run(M, K, 0.1); return 3.3; });
+celda('LATIGO en reposo (ronda 2)', (M, K) => { M.ronda = 2; M.st = RUMIA; M.cd = 99; crecerCadena(M, LATIGO, 4); run(M, K, 1.5); });
+celda('LATIGO avisando: la linea y el anillo', (M, K) => { M.ronda = 2; M.st = RUMIA; M.cd = 99; crecerCadena(M, LATIGO, 4); run(M, K, 1.2); const o = M.org[0]; o.st = C_AVISO; o.t = 0; o.tx = K.x + 30; o.ty = K.y + 10; run(M, K, 0.25); return 3.35; });
+celda('LATIGO golpeando', (M, K) => { M.ronda = 2; M.st = RUMIA; M.cd = 99; crecerCadena(M, LATIGO, 4); run(M, K, 1.2); const o = M.org[0]; o.st = C_AVISO; o.t = 0; o.tx = K.x + 30; o.ty = K.y + 10; run(M, K, 0.41); run(M, K, 0.08); });
+celda('GARRA + PARADA (piedra gris)', (M, K) => { M.ronda = 3; M.st = RUMIA; M.cd = 99; M.parada = 1; crecerCadena(M, GARRA, 2); run(M, K, 1.2); armarParada(M, K); run(M, K, 0.05); });
+celda('HERIDA abierta + EXPUESTA', (M, K) => { M.ronda = 4; M.st = RUMIA; M.cd = 99; M.herida = 3; M.heridaT = 2; M.expuesta = 0.4; crecerPlaca(M, 9); crecerPlaca(M, 9); run(M, K, 0.8); return 3.3; });
+celda('RONDA 7: HOJA, 7 ojos, placas', (M, K) => { M.ronda = 7; M.st = RUMIA; M.cd = 99; crecerPlaca(M, 0); crecerPlaca(M, 0); crecerPlaca(M, 0); crecerPlaca(M, 1); crecerPlaca(M, 11); crecerCadena(M, HOJA, 5); crecerCadena(M, LATIGO, 8); M.patas = 2; run(M, K, 1.5); });
+celda('MUDANDO: convulsion, ojos cerrados', (M, K) => { M.ronda = 2; M.st = RUMIA; M.cd = 99; run(M, K, 0.5); M.hp = 0; M.viva = false; M.st = MUDANDO; M.convT = 0.8; run(M, K, 0.3); });
+celda('ATURDIDA contra la pared', (M, K) => { M.st = RUMIA; M.cd = 99; run(M, K, 0.5); M.st = ATURDIDA; M.t = 0.3; for (let i = 0; i < 12; i++) M.vel[i] += (rnd() - 0.5) * 300; run(M, K, 0.08); });
+celda('Destello de tajo', (M, K) => { M.st = RUMIA; M.cd = 99; run(M, K, 0.5); }, (M, K, t) => { drawMasa(w, M, K, t, 2); drawCaballera(w, K, S, t); });
+
+// Dibujo de celdas: real x1 a la izquierda, x3 a la derecha
+const CW = 120, CH = 120, COLS = 3, PADX = 20, PADY = 24;
+const cellW = CW + 6 + CW * 3 + PADX, cellH = CH * 3 + PADY + 14;
+celdas.forEach((c, i) => {
+  const cx = 10 + (i % COLS) * cellW, cy = 10 + Math.floor(i / COLS) * cellH;
+  const img = escena(c.prep, c.dibuja);
+  g.drawImage(img, 135 - CW / 2, 150 - CH / 2 - 10, CW, CH, cx, cy + 14, CW, CH);
+  g.drawImage(img, 135 - CW / 2, 150 - CH / 2 - 10, CW, CH, cx + CW + 6, cy + 14, CW * 3, CH * 3);
+  text(g, c.nombre, cx, cy, '#ffe14d', 1);
+});
+
+// La caballera: caras, caminar, las fases del tajo, descolocada, invulnerable
+const ry = 10 + Math.ceil(celdas.length / COLS) * cellH + 10;
+text(g, 'LA CABALLERA: abajo, arriba, izq, der / caminando / tajo: arranque, activo, recuperacion / descolocada / invulnerable', 10, ry, '#ffe14d', 1);
+const K2 = makeCaballera(0, 0);
+const casos = [
+  K => { K.face = 0; }, K => { K.face = 1; }, K => { K.face = 2; }, K => { K.face = 3; },
+  K => { K.face = 3; K.walkF = 1; },
+  K => { K.face = 0; K.pT = 0.30 - 0.04; }, K => { K.face = 0; K.pT = 0.30 - 0.12; }, K => { K.face = 0; K.pT = 0.30 - 0.22; },
+  K => { K.face = 3; K.pT = 0.30 - 0.12; },
+  K => { K.face = 0; K.stag = 0.3; }, K => { K.face = 0; K.iframe = 0.5; },
+];
+casos.forEach((f, i) => {
+  const K = makeCaballera(60, 60); f(K);
+  w.fillStyle = P.bg; w.fillRect(0, 0, 270, 400);
+  drawCaballera(w, K, S, 3.31);
+  const cx = 10 + i * 95;
+  g.drawImage(W, 30, 30, 60, 60, cx, ry + 14, 60, 60);
+  g.drawImage(W, 30, 30, 60, 60, cx, ry + 80, 60 * 1.5, 60 * 1.5);
+});
+</script>

@@ -16,6 +16,7 @@
 //     mueveX:Y       mueve el dedo apoyado
 //     sueltaX:Y      levanta el dedo
 //     js:EXPR        evalua EXPR en la pagina (para llegar a una escena)
+//     hastaN:EXPR    espera (tope N ms) a que EXPR sea verdad en la pagina
 //     archivo:RUTA   evalua un .js del proyecto (para guiones con ';' dentro)
 //     disparo        guarda una captura numerada
 //
@@ -235,6 +236,19 @@ async function drag(cdp, x1, y1, x2, y2, steps, stepMs) {
         const v = r.result && r.result.result && r.result.result.value;
         if (v !== undefined) console.log('js -> ' + JSON.stringify(v));
       }
+    }
+    // Espera a que una expresion sea verdad (sondea cada 50 ms, tope N ms).
+    // Sirve para capturar un instante que no se puede cronometrar desde fuera:
+    // una muda, una pantalla de fin, el aviso de un ataque.
+    else if ((m = step.match(/^hasta(\d+):(.+)$/))) {
+      const tope = Date.now() + (+m[1]);
+      let ok = false;
+      while (Date.now() < tope) {
+        const r = await cdp.send('Runtime.evaluate', { expression: '!!(' + m[2] + ')', returnByValue: true });
+        if (r.result && r.result.result && r.result.result.value === true) { ok = true; break; }
+        await sleep(50);
+      }
+      if (!ok) console.error('hasta: se agoto el tiempo sin que fuera verdad: ' + m[2]);
     }
     else if (step === 'disparo') {
       const r = await cdp.send('Page.captureScreenshot', { format: 'png' });

@@ -1,6 +1,6 @@
 # ROMINA'S ARCADE
 
-Siete juegos, 100% offline, para el Redmi Note 10: seis de acción y uno de pensar.
+Ocho juegos, 100% offline, para el Redmi Note 10: siete de acción y uno de pensar.
 
 ---
 
@@ -60,6 +60,7 @@ La app queda con su ícono (una marquesina de arcade en neón) y ya no pide nada
 | **FURIA** | Moto de montaña: 8 niveles con meta | Derecha = acelerar · Izquierda = saltar (tocar) y frenar (mantener) · En el aire, las dos zonas giran la moto |
 | **SURVIVAL** | Roma defiende su línea de todo lo que amenaza una relación | **Se juega de lado.** Pulgar izquierdo = mover · Pulgar derecho = disparar; **arrastrándolo se apunta** · Botón de la estrella = bomba |
 | **AHORCADO** | Adivina la palabra: un muñeco colgado de seis globos sobre un estanque, y cada fallo revienta uno | Tocar una letra (cuenta al soltar; deslizar fuera cancela) · **SOLA** = palabras de la lista con su categoría · **A DOS** = uno escribe la secreta, le pasa el teléfono al otro · Al muñeco se lo puede arrastrar, empujar y hacerle cosquillas: no cuesta nada |
+| **LA MASA** | Romina con espada contra una masa que aprende de ti: cada vez que la matas, muda y vuelve con un órgano que contrarresta lo que TÚ haces | Pulgar izquierdo = mover · Botón grande = tajo · Botón chico = esquivar · Siete mudas; matar la séptima es ganar |
 
 Sin tutoriales, sin diálogos, sin historia. Se toca y se juega.
 Los récords se guardan solos. El sonido se activa y desactiva desde el menú.
@@ -80,7 +81,7 @@ www/                  el juego (esto es todo lo que corre)
     audio.js          sonido y música, todo sintetizado
     gfx.js            sprites, partículas
     font.js           fuente pixel 5x7
-    games/            los siete juegos
+    games/            los ocho juegos
       surv-defs.js    SURVIVAL: enemigos, jefes y reglas
       surv-art.js     SURVIVAL: las criaturas, dibujadas por código
       ahorcado.js     AHORCADO: la escena y los dos modos
@@ -89,6 +90,12 @@ www/                  el juego (esto es todo lo que corre)
       ahorc-arte.js   AHORCADO: cielo, estanque, rana, globos y cuerpo
       ahorc-teclado.js AHORCADO: el teclado en pantalla
       ahorc-palabras.js AHORCADO: las palabras (las privadas van al principio)
+      masa.js         LA MASA: pulgar, sonido, HUD, ceremonia y pantalla final
+      masa-pelea.js   LA MASA: el director (rondas, mudas, puntaje), sin DOM
+      masa-cuerpo.js  LA MASA: nucleo, piel y organos, sin DOM: se mide en Node
+      masa-mente.js   LA MASA: los contadores y las lecciones de cada muda
+      masa-caballera.js LA MASA: Romina con espada, sin DOM
+      masa-arte.js    LA MASA: el dibujo
 docs/                 investigación técnica y diseños
 tools/                utilidades de desarrollo (no entran en el APK)
   icono.py            dibuja el ícono del APK en las cinco densidades
@@ -232,6 +239,47 @@ node tools/prueba-ahorcado.mjs        # la física, diez pruebas con umbral
 node tools/prueba-palabras.mjs        # la lista, los bots y las canciones
 node tools/ver.js tools/ver-ahorcado.html caras.png 1000 1150   # las 16 expresiones a tamaño real
 VERTICAL=1 node tools/ver-app.js x.png "espera900;js:__arcade.sm.go(__arcade.GAMES[6],{seed:7});espera2500;toca261:856;espera1200;archivo:tools/prueba-ahorcado-app.js;espera300;archivo:tools/prueba-ahorcado-app.js;espera300;archivo:tools/prueba-ahorcado-app.js;espera300;archivo:tools/prueba-ahorcado-app.js"
+```
+
+## LA MASA
+
+Un juego de pelea contra un solo enemigo que **aprende de ella**. La masa
+empieza siendo un charco de carne con un ojo que acecha, avisa y embiste (los
+mismos 480 ms de aviso que el charger de NEON FIST). Cada vez que Romina la
+mata, la masa **muda**: convulsiona a cámara lenta, alrededor se repite en
+silueta blanca la última pelea de ella, y vuelve con un ojo más y un órgano
+nuevo que contrarresta lo que ella hizo. Si pega siempre por abajo, le crece
+una placa de hueso abajo (CLANG: por ahí ya no). Si esquiva siempre a la
+derecha, le crece un látigo que cae justo ahí. Si se le pega, una garra; si se
+queda lejos, patas; si repite el combo, aprende a pararlo. Un letrero lo dice
+(`APRENDIO / TAJO POR ABAJO`), pero **solo cuando es verdad**: con pocas
+muestras dice CRECIO, y si ella varía, dice NO ME PILLO NADA. Lo que ella deja
+de hacer, la masa lo olvida: la placa se cae. Siete mudas; la séptima lleva una
+hoja que pega como ella. Matarla es ganar; morir muestra TU MONSTRUO con los
+hábitos que le aprendió, en palabras.
+
+No hay red neuronal ni evolución simulada: son contadores por sector y una
+tabla de contramedidas, lo que hacen Killer Instinct, los ghosts de Tekken y
+Metal Gear V. La lectura literal ("una IA que se inventa su forma") se
+descartó midiendo: con treinta espadazos por pelea el retrato de la jugadora es
+ruido. El diseño entero, con cada número y por qué, está en
+`docs/design-masa.md`.
+
+- **La pelea entera es sin DOM** (`masa-pelea.js` y lo que arrastra): el juego
+  y el arnés de Node llaman a la misma función de paso. Cuatro pilotos físicos
+  (con manías, variado, listo, machacador) juegan 400 partidas y 33 umbrales
+  deciden: la masa le aprende la esquiva al de manías en 90 de 100, al variado
+  no le inventa nada, al machacador lo para 397 de 622 veces, y la jugadora
+  buena gana 63 de 100 en cuatro minutos y medio.
+- **Nada hiere sin aviso de ≥ 0,35 s**, nunca más de tres avisos seguidos, y
+  lo aprendido cambia cuándo y hacia dónde ataca, nunca cuánto avisa.
+- Los mismos controles y la misma Romina que en NEON FIST, con espada: el
+  pulgar ya sabe jugar esto.
+
+```
+node tools/prueba-masa.mjs                                  # los 33 umbrales
+node tools/ver.js tools/ver-masa.html masa.png 1540 1900    # la hoja de contactos
+VERTICAL=1 node tools/ver-app.js x.png "espera900;js:__arcade.sm.go(__arcade.GAMES[7],{seed:7});espera700;archivo:tools/prueba-masa-app.js;hasta90000:__arcade.sm.cur.P.estado==='muda';espera1200;disparo"
 ```
 
 ## El menú

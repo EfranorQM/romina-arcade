@@ -25,7 +25,8 @@ El guion es una lista de pasos separados por `;`:
 | `tocaX:Y` | un toque corto |
 | `arrastraX:Y:X2:Y2` | arrastra despacio |
 | `tiroX:Y:X2:Y2` | arrastra rápido y suelta (gesto de impulso) |
-| `js:EXPR` | evalúa una expresión y **imprime lo que devuelve** |
+| `js:EXPR` | evalúa una expresión y **imprime lo que devuelve** (sin `;` dentro: parte los pasos) |
+| `hastaN:EXPR` | espera (tope N ms) a que EXPR sea verdad: para capturar una muda, un aviso, un fin |
 | `archivo:RUTA` | evalúa un `.js` del proyecto (para código con `;` dentro) |
 | `disparo` | guarda una captura |
 
@@ -72,6 +73,41 @@ node tools/ver-app.js x.png "espera900;js:__arcade.sm.go(__arcade.GAMES[5],{seed
 y dispara siempre) y vigila que ninguna lista crezca sin freno, que la ola
 avance y que el puntaje suba. Con ella se descubrió que las olas duraban
 veinticinco segundos.
+
+## Probar LA MASA
+
+```
+node tools/prueba-masa.mjs             # 80 partidas con cuatro pilotos, 33 umbrales
+node tools/prueba-masa.mjs detalle     # cada partida ronda por ronda
+node tools/ver.js tools/ver-masa.html masa.png 1540 1900
+```
+
+El arnés importa la pelea real (`masa-pelea.js`, sin DOM) y la juegan cuatro
+pilotos **físicos**: caminan, tienen el alcance de la espada, reaccionan a los
+avisos con latencia humana y a veces no reaccionan. Uno tiene manías (pega por
+abajo, esquiva a su derecha, repite el combo), uno es variado, uno es listo
+(entra por el sector sin placa, sale de la línea amarilla) y uno machaca el
+botón. Los umbrales miden que la masa aprende al de manías y no se inventa nada
+del variado, que el listo puede ganar, y que nadie muere en seis segundos.
+Cada constante del cuerpo y de la mente salió de aquí; si se toca una, se
+vuelve a correr.
+
+La hoja de contactos enseña la masa en once estados (placas, látigo avisando y
+golpeando, garra con parada, herida, la ronda 7, la muda, aturdida) y a la
+caballera en sus fases, a tamaño real y ampliada. Aquí se vio que la carne
+giraba hacia el morado y se fundía con la arena, que el látigo era un
+tentáculo gordo, y que los órganos dibujados encima partían el cuerpo con una
+raya negra.
+
+```
+# jugar sola dentro de la app con el piloto listo, y capturar la muda
+VERTICAL=1 node tools/ver-app.js x.png "espera900;js:__arcade.sm.go(__arcade.GAMES[7],{seed:7});espera700;archivo:tools/prueba-masa-app.js;hasta90000:__arcade.sm.cur.P.estado==='muda';espera1200;disparo;archivo:tools/prueba-masa-app.js"
+```
+
+`prueba-masa-app.js` engancha el piloto al `update()` del juego y, en la
+segunda llamada, devuelve ronda, puntaje, lo que dijo cada muda, errores de
+JavaScript y ms por frame. Con `hasta` se captura el instante exacto de una
+muda o de la pantalla final sin cronometrar nada desde fuera.
 
 ## Ver las carátulas del menú
 
