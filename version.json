@@ -1,5 +1,5 @@
 {
-  "version": "1.0.12",
+  "version": "1.0.13",
   "fecha": "2026-09-15",
   "archivos": [
     "index.html",
@@ -31,6 +31,10 @@
     "js/games/moto-art.js",
     "js/games/moto-world.js",
     "js/games/neonfist.js",
+    "js/games/ogro-anim.js",
+    "js/games/ogro-art.js",
+    "js/games/ogro-cuerpo.js",
+    "js/games/ogro-pose.js",
     "js/games/romi-anim.js",
     "js/games/romi-armas.js",
     "js/games/romi-art.js",
