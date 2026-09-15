@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- ROMINA: la princesa, a tamaño de juego y ampliada.
+       node tools/ver.js tools/ver-romina.html romina.png 1000 900
+     La de la izquierda es como se ve JUGANDO. Las otras, para el detalle. -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#2a2028}canvas{display:block}</style>
+<canvas id="c" width="1000" height="900"></canvas>
+<script type="module">
+import { horneaPose, pose } from '../www/js/games/romi-pose.js';
+import { text } from '../www/js/font.js';
+
+const g = document.getElementById('c').getContext('2d');
+g.imageSmoothingEnabled = false;
+g.fillStyle = '#2a2028'; g.fillRect(0, 0, 1000, 900);
+
+const quieta = horneaPose(pose({}));
+
+// A tamaño de juego (x1), sobre una banda de suelo
+g.fillStyle = '#382c27'; g.fillRect(0, 40, 1000, 200);
+g.fillStyle = '#241c1a'; g.fillRect(0, 216, 1000, 24);
+text(g, 'A TAMANO DE JUEGO (asi se ve en el telefono)', 12, 16, '#ffd98a', 2);
+g.drawImage(quieta, 30, 60);
+// Varias juntas, para ver como se lee en grupo
+for (let i = 0; i < 3; i++) g.drawImage(quieta, 200 + i * 150, 60);
+
+// x2 y x3
+text(g, 'x2', 12, 256, '#ffd98a', 2);
+g.drawImage(quieta, 30, 280, quieta.width * 2, quieta.height * 2);
+text(g, 'x3 (para ver el pixel)', 320, 256, '#ffd98a', 2);
+g.drawImage(quieta, 320, 280, quieta.width * 3, quieta.height * 3);
+</script>
