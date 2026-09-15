@@ -38,6 +38,13 @@ export const BASE = {
   //   falBorde[i]  -1..1  cuanto sube (-) o baja (+) el bajo de ese gajo
   falGajos: null,
   falBorde: null,
+  // EL GIRO DEL CUERPO, -1..1. Es LA pieza que faltaba: el sprite se dibujaba
+  // siempre de frente (los hombros sumaban 0 en las 51 poses, la cara tenia
+  // los dos ojos identicos) y por eso "se sentia como si estuviera mirandote"
+  // en vez de encarar al enemigo de lado. Con giro > 0 el cuerpo se escorza
+  // hacia +x, que es donde ella mira por convencion.
+  // Con giro = 0 TODO queda bit a bit como estaba: es inerte por defecto.
+  giro: 0,
   hombD: 15, hombI: -15,    // los hombros
   // Los brazos: codo y mano, respecto al hombro
   // El codo y la mano, respecto al hombro. Medido en el render: con la mano a
@@ -69,10 +76,30 @@ export function dibujaPose(p) {
   const tor = [cad[0] + p.torX, cad[1] + p.torY];
   const cab = [tor[0] + p.cabX + Math.sin(p.incl) * 20, tor[1] + p.cabY];
 
+  // Las derivadas del giro, que usan el torso y los hombros.
+  //   g   el giro acotado a -1..1
+  //   eD  cuanto CRECE el lado de delante  (perspectiva: se acerca)
+  //   eI  cuanto ENCOGE el lado de detras  (se aleja)
+  // El de atras encoge mucho mas de lo que el de delante crece (0.38 contra
+  // 0.10) porque asi es como funciona el escorzo de verdad: lo que se va no
+  // se dobla de tamaño, se come.
+  const g = Math.max(-1, Math.min(1, p.giro || 0));
+  const gA = Math.abs(g);
+  const eD = 1 + 0.10 * g, eI = 1 - 0.38 * g;
+
   // === 1. El pelo de DETRAS: una masa ancha que cae por la espalda ===
   // Cae por DETRAS: estrecho a la altura de la cara (no la tapa) y se ensancha
   // a media espalda. Antes salia igual de ancho arriba que abajo y se comia la
   // cara y los hombros, como un casco marron.
+  // EL PELO SIGUE A LA CABEZA, pero solo un poco. Iba a -cabGiro*6 mientras
+  // la cara va a +cabGiro*4: se separaban 10 px por unidad de giro, asi que a
+  // giro alto la mejilla asomaba 7 celdas por fuera de la melena y quedaba un
+  // hueco de piel en la sien. Medido, con -1.5 la mejilla asoma 0.6/2.6/3.4
+  // celdas a giro 0.3/0.65/0.8 -- que es lo correcto en un 3/4: la mejilla de
+  // delante SI sobresale del pelo, pero no se escapa de la cabeza.
+  // (El primer intento fue +2.5, que dejaba la holgura en ~0 y ademas
+  // invertia el signo en las cuatro poses de cabGiro negativo. Medido y
+  // descartado: conservar el signo y bajar la magnitud es el cambio barato.)
   const pelAtras = [];
   // MEDIA MELENA: acaba en el hombro (34 px por debajo de la cara), no en la
   // cintura. Se ensancha un poco a la altura de la mandibula y se recoge al
@@ -84,11 +111,11 @@ export function dibujaPose(p) {
   const anchoPelo = t => 18 + Math.sin(t * 2.2) * 3.5 - t * t * 4.5;
   for (let i = 0; i <= 10; i++) {
     const t = i / 10;
-    pelAtras.push(cab[0] - anchoPelo(t) - p.cabGiro * 6, cab[1] - 14 + t * LARGO);
+    pelAtras.push(cab[0] - anchoPelo(t) - p.cabGiro * 1.5, cab[1] - 14 + t * LARGO);
   }
   for (let i = 10; i >= 0; i--) {
     const t = i / 10;
-    pelAtras.push(cab[0] + anchoPelo(t) - p.cabGiro * 6, cab[1] - 14 + t * LARGO);
+    pelAtras.push(cab[0] + anchoPelo(t) - p.cabGiro * 1.5, cab[1] - 14 + t * LARGO);
   }
   poly(L, pelAtras, P.pel2);
   // El pelo en SOMBRA por el lado de dentro: sin esto la melena es una mancha
@@ -96,11 +123,11 @@ export function dibujaPose(p) {
   const pelSombra = [];
   for (let i = 0; i <= 10; i++) {
     const t = i / 10;
-    pelSombra.push(cab[0] - anchoPelo(t) - p.cabGiro * 6, cab[1] - 14 + t * LARGO);
+    pelSombra.push(cab[0] - anchoPelo(t) - p.cabGiro * 1.5, cab[1] - 14 + t * LARGO);
   }
   for (let i = 10; i >= 0; i--) {
     const t = i / 10;
-    pelSombra.push(cab[0] - anchoPelo(t) * 0.35 - p.cabGiro * 6, cab[1] - 14 + t * LARGO);
+    pelSombra.push(cab[0] - anchoPelo(t) * 0.35 - p.cabGiro * 1.5, cab[1] - 14 + t * LARGO);
   }
   poly(L, pelSombra, P.pel1);
   // Mechones sueltos que salen de la masa
@@ -116,8 +143,8 @@ export function dibujaPose(p) {
   // sitio. Va en dos trazos rotos, como se pinta un reflejo en pixel art.
   for (const [t0, t1, gr] of [[0.12, 0.42, 4], [0.54, 0.80, 3]]) {
     const y0 = cab[1] - 14 + t0 * LARGO, y1 = cab[1] - 14 + t1 * LARGO;
-    const x0 = cab[0] + anchoPelo(t0) * 0.62 - p.cabGiro * 6;
-    const x1 = cab[0] + anchoPelo(t1) * 0.58 - p.cabGiro * 6;
+    const x0 = cab[0] + anchoPelo(t0) * 0.62 - p.cabGiro * 1.5;
+    const x1 = cab[0] + anchoPelo(t1) * 0.58 - p.cabGiro * 1.5;
     curva(L, x0, y0, (x0 + x1) / 2 + 2, (y0 + y1) / 2, x1, y1, gr, gr * 0.6, P.pel4);
   }
 
@@ -299,43 +326,58 @@ export function dibujaPose(p) {
   // acaba justo donde la tela empieza. Estaba en 17 y sobresalia 4 px por
   // fuera de la falda a cada lado, lo que ensanchaba la cadera por debajo del
   // cinturon y remataba el escalon.
+  // EL TORSO YA NO ES UN RELOJ DE ARENA DE ESPEJO. Con el giro, el lado de
+  // delante crece un poco y el de atras se come bastante -- que es como
+  // funciona el escorzo: lo que se aleja no se encoge suave, desaparece.
+  //
+  // aCaderaI tiene SUELO en 12 y no es un parche: medido, con giro 0.42 (el
+  // de correr) 14*eI da 12.0 y el arranque de la falda (A0) es 13, o sea el
+  // vientre se metia por dentro de la tela y abria un hueco. Ademas es cierto
+  // anatomicamente: la pelvis gira menos que los hombros.
   const aPecho = 19, aTalle = 11, aCadera = 14;
+  const aPechoD = aPecho * eD, aPechoI = aPecho * eI;
+  const aTalleD = aTalle * eD, aTalleI = aTalle * eI;
+  const aCaderaD = aCadera * eD, aCaderaI = Math.max(12, aCadera * eI);
+  // La banda de sombra del lado de atras engorda con el giro: al escorzarse,
+  // mas superficie del torso queda de canto y en sombra.
+  const bandaS = 7 + 5 * g;
   // El contorno, con el talle metido: un reloj de arena suave. Los vertices
   // van en orden (lado derecho hacia abajo, lado izquierdo hacia arriba).
   const cuerpo = [
-    tor[0] - aPecho + sx, yPecho,
-    tor[0] + aPecho + sx, yPecho,
-    tor[0] + (aPecho - 3) + sx * 0.7, yPecho + th * 0.34,
-    tor[0] + aTalle + sx * 0.3, yTalle,
-    cad[0] + aCadera, yCad,
-    cad[0] - aCadera, yCad,
-    tor[0] - aTalle + sx * 0.3, yTalle,
-    tor[0] - (aPecho - 3) + sx * 0.7, yPecho + th * 0.34,
+    tor[0] - aPechoI + sx, yPecho,
+    tor[0] + aPechoD + sx, yPecho,
+    tor[0] + (aPechoD - 3) + sx * 0.7, yPecho + th * 0.34,
+    tor[0] + aTalleD + sx * 0.3, yTalle,
+    cad[0] + aCaderaD, yCad,
+    cad[0] - aCaderaI, yCad,
+    tor[0] - aTalleI + sx * 0.3, yTalle,
+    tor[0] - (aPechoI - 3) + sx * 0.7, yPecho + th * 0.34,
   ];
   poly(L, cuerpo, P.ves2);
   // Sombra a la izquierda y brillo a la derecha, siguiendo la MISMA curva:
   // es lo que hace que se lea como un volumen y no como una plancha.
-  poly(L, [tor[0] - aPecho + sx, yPecho,
-           tor[0] - aPecho + 7 + sx, yPecho,
-           tor[0] - aTalle + 4 + sx * 0.3, yTalle,
-           cad[0] - aCadera + 5, yCad,
-           cad[0] - aCadera, yCad,
-           tor[0] - aTalle + sx * 0.3, yTalle,
-           tor[0] - (aPecho - 3) + sx * 0.7, yPecho + th * 0.34], P.ves1);
-  poly(L, [tor[0] + aPecho - 8 + sx, yPecho,
-           tor[0] + aPecho + sx, yPecho,
-           tor[0] + (aPecho - 3) + sx * 0.7, yPecho + th * 0.34,
-           tor[0] + aTalle + sx * 0.3, yTalle,
-           cad[0] + aCadera, yCad,
-           cad[0] + aCadera - 6, yCad,
-           tor[0] + aTalle - 5 + sx * 0.3, yTalle], P.ves3);
+  poly(L, [tor[0] - aPechoI + sx, yPecho,
+           tor[0] - aPechoI + bandaS + sx, yPecho,
+           tor[0] - aTalleI + (4 + 3 * g) + sx * 0.3, yTalle,
+           cad[0] - aCaderaI + 5, yCad,
+           cad[0] - aCaderaI, yCad,
+           tor[0] - aTalleI + sx * 0.3, yTalle,
+           tor[0] - (aPechoI - 3) + sx * 0.7, yPecho + th * 0.34], P.ves1);
+  poly(L, [tor[0] + aPechoD - 8 + sx, yPecho,
+           tor[0] + aPechoD + sx, yPecho,
+           tor[0] + (aPechoD - 3) + sx * 0.7, yPecho + th * 0.34,
+           tor[0] + aTalleD + sx * 0.3, yTalle,
+           cad[0] + aCaderaD, yCad,
+           cad[0] + aCaderaD - 6, yCad,
+           tor[0] + aTalleD - 5 + sx * 0.3, yTalle], P.ves3);
   // Las dos costuras del corpino, que marcan el talle aunque la silueta sea
   // pequeña en pantalla. En los vestidos de las referencias son lo que da la
   // sensacion de cuerpo ajustado.
   for (const s of [-1, 1]) {
-    curva(L, tor[0] + s * 12 + sx, yPecho + 3,
-             tor[0] + s * 7.5 + sx * 0.4, tor[1] + 6,
-             tor[0] + s * 9, yTalle - 1, 2, 2, P.ves1);
+    const e = s > 0 ? eD : eI;
+    curva(L, tor[0] + s * 12 * e + sx, yPecho + 3,
+             tor[0] + s * 7.5 * e + sx * 0.4, tor[1] + 6,
+             tor[0] + s * 9 * e, yTalle - 1, 2, 2, P.ves1);
   }
   // El escote y el cuello
   elipse(L, tor[0] + sx, yPecho + 1, 11, 5, P.piel2);
@@ -354,8 +396,8 @@ export function dibujaPose(p) {
   elipse(L, cab[0], cab[1] + 21, 1, 1, P.bla2);
   // Cinturon de oro EN EL TALLE (antes iba recto y ancho, lo que borraba la
   // cintura justo donde hacia falta verla). Ahora es estrecho y se cine.
-  for (let i = -aTalle; i <= aTalle; i++) {
-    const u = i / aTalle;
+  for (let i = -Math.round(aTalleI); i <= Math.round(aTalleD); i++) {
+    const u = i / (i < 0 ? aTalleI : aTalleD);
     elipse(L, tor[0] + i * 1.0 + sx * 0.3, yTalle + Math.abs(u) * 1.5, 1.6, 3, P.oro2);
   }
   elipse(L, tor[0] + sx * 0.3, yTalle, 5, 4.5, P.oro3);
@@ -365,19 +407,35 @@ export function dibujaPose(p) {
   elipse(L, tor[0] + Math.sin(p.incl) * 7, tor[1] - 6, 3, 3, P.joya2);
 
   // === 5. Los BRAZOS ===
-  for (const [lado, hom, codo, mano] of [
-    [-1, p.hombI, p.codI, p.manI],
-    [1, p.hombD, p.codD, p.manD],
+  // CON EL GIRO, LOS DOS BRAZOS DEJAN DE SER IGUALES. El de delante baja un
+  // poco y crece; el de atras se recoge hacia el eje, SUBE y encoge. Ese
+  // desnivel de hombros es, junto con los ojos, lo que hace que el cuerpo se
+  // lea de lado y no de frente.
+  //
+  // LA GUARDA izqDetras NO ES OPCIONAL: en bash y block el brazo izquierdo NO
+  // esta detras -- cruza al frente sujetando el escudo (manI[0] positivo y
+  // escZ=1). Recogerlo hacia el eje ahi lo ALEJARIA del escudo, que es
+  // justamente el fallo que costo arreglar en esas dos animaciones.
+  const izqDetras = (p.manI[0] < 0) && !p.escZ;
+  const hombOfD = p.hombD * (1 - 0.18 * g);
+  const hombOfI = p.hombI * (1 - (izqDetras ? 0.62 : 0) * g);
+  for (const [lado, hom, codo, mano, dy, sc] of [
+    [-1, hombOfI, p.codI, p.manI, -2.6 * g, 1 - 0.22 * g],
+    [1, hombOfD, p.codD, p.manD, 2.2 * g, 1 + 0.06 * g],
   ]) {
-    const hx = tor[0] + hom + Math.sin(p.incl) * 8, hy = tor[1] - th * 0.18;
+    const hx = tor[0] + hom + Math.sin(p.incl) * 8, hy = tor[1] - th * 0.18 + dy;
     const cx = hx + codo[0], cy = hy + codo[1];
     const mx = hx + mano[0], my = hy + mano[1];
     // MANGA abullonada del hombro. Tres bandas en vez de dos: base, luz y
     // brillo, mas el pliegue de abajo donde la tela se recoge. Con dos tonos
     // salia una pelota plana pegada al hombro.
-    elipse(L, hx, hy + 3, 12, 11, P.ves1);          // el fondo, en sombra
-    elipse(L, hx + lado * 1, hy + 1, 11, 10, P.ves3);
-    elipse(L, hx - lado * 2, hy - 1, 7.5, 6.5, P.ves4);
+    elipse(L, hx, hy + 3, 12 * sc, 11 * sc, P.ves1);          // el fondo, en sombra
+    elipse(L, hx + lado * 1, hy + 1, 11 * sc, 10 * sc, P.ves3);
+    // El brillo especular se APAGA en el hombro de atras: lo que se aleja no
+    // recibe la luz de frente. Es lo que remata la lectura de volumen.
+    if (!(lado === -1 && g > 0.25 && izqDetras)) {
+      elipse(L, hx - lado * 2, hy - 1, 7.5 * sc, 6.5 * sc, P.ves4);
+    }
     // los pliegues de la manga, que es lo que la hace tela y no globo
     for (const a of [-0.6, 0.1, 0.8]) {
       curva(L, hx + Math.cos(a) * 3, hy + 8,
@@ -385,15 +443,15 @@ export function dibujaPose(p) {
                hx + Math.cos(a) * 10, hy + 9, 1.8, 1.2, P.ves1);
     }
     // el puño de oro donde acaba la manga
-    elipse(L, hx + lado * 2, hy + 10, 8, 3, P.oro2);
+    elipse(L, hx + lado * 2, hy + 10, 8 * sc, 3, P.oro2);
     // Antebrazo y brazo, con una banda de sombra por debajo
-    linea(L, hx, hy + 6, cx, cy, 9, P.piel2);
-    linea(L, cx, cy, mx, my, 8, P.piel2);
+    linea(L, hx, hy + 6, cx, cy, 9 * sc, P.piel2);
+    linea(L, cx, cy, mx, my, 8 * sc, P.piel2);
     linea(L, hx - lado, hy + 9, cx - lado, cy + 2, 3, P.piel1);
     linea(L, cx - lado, cy + 2, mx - lado, my + 2, 2.5, P.piel1);
     // La mano, con el nudillo insinuado
-    elipse(L, mx, my, 6, 6, P.piel3);
-    elipse(L, mx + lado * 2, my - 1, 3, 3.5, P.piel2);
+    elipse(L, mx, my, 6 * sc, 6 * sc, P.piel3);
+    elipse(L, mx + lado * 2, my - 1, 3 * sc, 3.5 * sc, P.piel2);
   }
 
   // === 6. El ESCUDO, en el antebrazo izquierdo ===
@@ -407,7 +465,9 @@ export function dibujaPose(p) {
 
   // === 7. La ESPADA, en la mano derecha ===
   if (p.esp !== 0) {
-    const hx = tor[0] + p.hombD + Math.sin(p.incl) * 8, hy = tor[1] - th * 0.18;
+    // La espada cuelga del hombro derecho YA DESPLAZADO por el giro, o el
+    // arma se despega de la mano que la sostiene.
+    const hx = tor[0] + hombOfD + Math.sin(p.incl) * 8, hy = tor[1] - th * 0.18 + 2.2 * g;
     const mx = hx + p.manD[0], my = hy + p.manD[1];
     // La ESTELA del barrido, ANTES de la hoja para que la hoja quede encima.
     // Es lo que faltaba en el tajo: sin ella la espada solo aparecia en otro
@@ -556,6 +616,18 @@ function dibujaCara(L, cx, cy, p) {
   //   3. El COLORETE en rosa fundido, no en marron recortado.
   //   4. Fuera lo que mide 2-3 px y no aporta (el chispazo, la nariz de
   //      elipse). La nariz pasa a ser una sombra suave de dos celdas.
+  // EL GIRO DE LA CARA, normalizado. cabGiro llega de 0 a 0.8 segun la pose;
+  // G lo lleva a 0..1 con una curva de arranque rapido (el exponente 0.65),
+  // porque los primeros grados de giro son los que mas se notan en una cara.
+  //
+  // El guardian de la regresion es el Math.pow: con cabGiro = 0 da
+  // exactamente 0, asi que las 19 poses que no declaran cabGiro quedan bit a
+  // bit como estaban. (El `|| 1` de dentro del sign no protege nada -- con
+  // cabGiro=0 vale 1 y sign da +1 -- pero es inofensivo porque el pow ya ha
+  // anulado todo. Se deja por claridad del signo cuando cabGiro != 0.)
+  const G = Math.sign(p.cabGiro || 1) * Math.pow(Math.min(1, Math.abs(p.cabGiro) / 0.8), 0.65);
+  const aG = Math.abs(G), sG = Math.sign(G) || 1;
+
   const oy = cy + 2;
   const OJX = 8.5;              // separacion de los ojos respecto al centro
 
@@ -596,50 +668,72 @@ function dibujaCara(L, cx, cy, p) {
     // Ojo cerrado (o en arco de alegria). El grosor importa: con 3 px los dos
     // arcos se leian como una VENDA cruzando la cara. 2.2 basta.
     const s2 = E.arco ? -1 : 1;     // arco hacia arriba = alegre
+    // ESTA RAMA TAMBIEN ESCORZA, y no es un detalle: cuatro poses usan
+    // 'cerrados' con cabGiro -0.5 y -0.8 (la rodada), o sea los giros mas
+    // fuertes de todo el set. Si solo escorzara la rama de ojos abiertos, en
+    // los fotogramas mas dramaticos la cara giraria al maximo con dos ojos
+    // perfectamente simetricos -- justo el sintoma que se quiere curar.
     for (const dx of [-OJX, OJX]) {
-      curva(L, cx + dx - 5.5, oy - 0.5 * s2,
-               cx + dx, oy + 2.6 * s2,
-               cx + dx + 5.5, oy - 0.5 * s2, 2.2, 2.2, P.out);
-      const s = Math.sign(dx);
-      curva(L, cx + dx + s * 4.8, oy - 0.8, cx + dx + s * 6.6, oy - 2,
-               cx + dx + s * 8, oy - 3.2, 1.8, 0.9, P.out);
+      const lado = Math.sign(dx);
+      const atras = lado * sG < 0;               // el ojo del lado que se aleja
+      const kx = atras ? 1 - 0.55 * aG : 1 + 0.05 * aG;
+      const des = -sG * aG * 1.6 * (atras ? 1.7 : 0.6);
+      const ox = cx + dx * (atras ? 1 - 0.30 * aG : 1) + des;
+      curva(L, ox - 5.5 * kx, oy - 0.5 * s2,
+               ox, oy + 2.6 * s2,
+               ox + 5.5 * kx, oy - 0.5 * s2, 2.2, 2.2, P.out);
+      curva(L, ox + lado * 4.8 * kx, oy - 0.8, ox + lado * 6.6 * kx, oy - 2,
+               ox + lado * 8 * kx, oy - 3.2, 1.8, 0.9, P.out);
     }
   } else {
     const alto = E.alto;
     const pup = E.pup || 1;          // sorpresa achica la pupila
     for (const dx of [-OJX, OJX]) {
       const s = Math.sign(dx);
+      // EL ESCORZO. En una cara de 3/4 los dos ojos NO son iguales: el del
+      // lado que se aleja se ve mas estrecho y mas pegado al borde de la
+      // cara. Medido, hoy los dos daban 12 celdas de blanco EN TODOS los
+      // gestos (delta 0 = cara frontal); con esto el delta va de 4 celdas a
+      // giro 0.3 (7.8 px de pantalla) a 8 celdas a giro 0.8 (15.6 px).
+      const atras = s * sG < 0;                  // ¿es el ojo que se aleja?
+      const kx = atras ? 1 - 0.55 * aG : 1 + 0.05 * aG;   // cuanto se comprime
+      const des = -sG * aG * 1.6 * (atras ? 1.7 : 0.6);   // y cuanto se corre
+      // LA PUPILA TIENE SUELO. Sin el, en 'sorpresa' (que ya achica la pupila
+      // a 0.62) el ojo de atras se quedaba en 8 celdas de negro: una mota, no
+      // una pupila. Y la pupila es el ancla de contraste de toda la cara.
+      const kPup = Math.max(0.78, kx);
+      const cxo = cx + dx * (atras ? 1 - 0.30 * aG : 1) + des;
       // la pupila se desplaza segun la mirada: hacia donde ella mira
       // La pupila se mueve DENTRO del blanco, nunca fuera: el blanco tiene
       // 5.6 de radio y la pupila 2.2, asi que el centro no puede alejarse mas
       // de ~2.6 px del centro del ojo o asoma por el borde y parece bizca.
-      const TOPE = 2.6;
-      const mx = Math.max(-TOPE, Math.min(TOPE, E.mirX * s * 1.6));
+      const TOPE = 2.6 * kx;
+      const mx = Math.max(-TOPE, Math.min(TOPE, E.mirX * s * 1.6 * kx));
       const my = Math.max(-2, Math.min(2, E.mirY * 2));
-      const px = cx + dx + s * 0.5 + mx;
+      const px = cxo + s * 0.5 * kx + mx;
       const py = oy + 0.6 + my;
       // 1. El blanco, GRANDE: es el que hace que el ojo se lea de lejos.
-      elipse(L, cx + dx, oy, 5.6, alto + 1.2, P.ojoB);
+      elipse(L, cxo, oy, 5.6 * kx, alto + 1.2, P.ojoB);
       // 2. El iris en DOS tonos: el claro asoma por abajo, donde da la luz.
-      elipse(L, px, py + 0.9, 3.8 * pup, alto * 0.78, P.ojo2);
-      elipse(L, px, py - 0.2, 3.8 * pup, alto * 0.72, P.ojo);
+      elipse(L, px, py + 0.9, 3.8 * pup * kPup, alto * 0.78, P.ojo2);
+      elipse(L, px, py - 0.2, 3.8 * pup * kPup, alto * 0.72, P.ojo);
       // 3. La pupila, negra y gorda: el ancla de contraste de toda la cara.
-      elipse(L, px, py, 2.2 * pup, alto * 0.5, P.out);
+      elipse(L, px, py, 2.2 * pup * kPup, alto * 0.5, P.out);
       // 4. UN brillo, y grande. El chispazo de 0.9 px se caia a 2 px: fuera.
-      elipse(L, px - s * 1.4, py - 2.4, 1.9, 1.9, P.ojoB);
+      elipse(L, px - s * 1.4 * kx, py - 2.4, 1.9 * kPup, 1.9, P.ojoB);
       // 5. El PARPADO que baja por arriba. Es lo que separa 'cansada' de
       //    'normal' sin cambiar nada mas, y se pinta en piel para que parezca
       //    parpado y no sombra.
       if (E.tapa > 0) {
-        elipse(L, cx + dx, oy - alto - 1.2 + E.tapa, 5.8, E.tapa + 1.4, P.piel2);
+        elipse(L, cxo, oy - alto - 1.2 + E.tapa, 5.8 * kx, E.tapa + 1.4, P.piel2);
       }
       // 6. La linea de pestañas, gruesa y solo ARRIBA.
-      curva(L, cx + dx - 5.6, oy - alto + 0.5 + E.tapa,
-               cx + dx, oy - alto - 2 + E.tapa,
-               cx + dx + 5.6, oy - alto + 0.5 + E.tapa, 2.6, 2.6, P.out);
-      curva(L, cx + dx + s * 5, oy - alto + 0.5 + E.tapa,
-               cx + dx + s * 7, oy - alto - 1 + E.tapa,
-               cx + dx + s * 8.5, oy - alto - 2.5 + E.tapa, 2.2, 1, P.out);
+      curva(L, cxo - 5.6 * kx, oy - alto + 0.5 + E.tapa,
+               cxo, oy - alto - 2 + E.tapa,
+               cxo + 5.6 * kx, oy - alto + 0.5 + E.tapa, 2.6, 2.6, P.out);
+      curva(L, cxo + s * 5 * kx, oy - alto + 0.5 + E.tapa,
+               cxo + s * 7 * kx, oy - alto - 1 + E.tapa,
+               cxo + s * 8.5 * kx, oy - alto - 2.5 + E.tapa, 2.2, 1, P.out);
     }
   }
 
