@@ -35,21 +35,27 @@ export const VEL_FURIA = 165;
 // un campo aparte. Que los dos personajes usen el mismo convenio es lo que
 // permite leer el juego sin traducir.
 export const GARROTE = 0, PISOTON = 1, BARRIDO = 2, EMBESTIDA = 3;
+// EL ALCANCE SALE DEL DIBUJO. Con el ogro pintado a mano (ogro-sprite.js), en
+// el fotograma del golpe la punta del garrote llega a 301 px de la raiz. Con
+// el alcance viejo (150) el daño acababa en 216: ella podia quedarse a 250,
+// VER el garrote cruzarle la cabeza y no recibir nada. Con 240 el daño llega
+// a 306 (con su radio de 26), justo donde acaba la punta.
 export const ATAQUES = [
   // GARROTE: el basico. Carga larga y legible (0.42) para que se pueda parar.
   // El parry util de ella va de 0.117 a 0.267 s desde que pulsa, asi que con
   // 0.42 de carga le sobran ~0.15 s para elegir cuando pulsar. Leible sin
   // ser gratis.
-  [0.95, 0.42, 0.52, 20, 1, 150],
+  [0.95, 0.42, 0.52, 20, 1, 240],
   // PISOTON: el lento a proposito. 0.62 de carga -- se ve venir de lejos --
   // y de el nace la ONDA que viaja por el suelo. La recuperacion de 0.73 s
   // es el hueco de castigo mas grande que da el jefe.
   [1.45, 0.62, 0.72, 0, 2, 120],
-  // BARRIDO: pasa a la altura del pecho, POR ENCIMA de la rodada... no: pasa
-  // BAJO y hay que rodarlo. Su parte activa (0.16) no pasa de los 220 ms
-  // utiles de la ventana invulnerable de la rodada (ROLL_INV0 0.06 a
-  // ROLL_INV1 0.28), asi que rodar SIEMPRE tiene solucion si se clava.
-  [0.88, 0.40, 0.56, 34, 1, 190],
+  // BARRIDO: una estocada a la altura del pecho, que no se salta: hay que
+  // rodarla. Su parte activa (0.16) no pasa de los 220 ms utiles de la
+  // ventana invulnerable de la rodada (ROLL_INV0 0.06 a ROLL_INV1 0.28), asi
+  // que rodar SIEMPRE tiene solucion si se clava. Sale en el mismo fotograma
+  // que el garrote, asi que llega igual de lejos.
+  [0.88, 0.40, 0.56, 34, 1, 240],
   // EMBESTIDA: cruza la arena. Si ella se aparta, el ogro choca con la pared
   // y queda abierto 1.25 s: el hueco mas grande del jefe.
   [1.30, 0.50, 1.00, 0, 2, 70],
@@ -66,6 +72,12 @@ export const ONDA_CIEGA = 60;
 // Estados
 export const ESPERA = 0, ANDA = 1, ATACA = 2, ABIERTO = 3, DOLOR = 4, RUGE = 5, MUERTO = 6;
 
+// Por que se quedo ABIERTO. A la fisica le da igual (la ventana es la misma),
+// pero se VE distinto: jadeando tras un ataque, rebotado del escudo o aturdido
+// contra la pared. Lo apunta quien lo abre: aqui el fin de un ataque y el
+// choque, y la escena la parada.
+export const POR_FIN = 'fin', POR_PARADA = 'parada', POR_PARED = 'pared';
+
 // Las fases: al cruzar cada umbral RUGE (invulnerable 1.2 s) y cambia el paso.
 export const FASE2 = 0.66, FASE3 = 0.33;
 export const RUGE_T = 1.20;
@@ -76,7 +88,7 @@ export function makeOgro(x) {
     st: ESPERA, t: 0, animT: 0,
     hp: HP0, fase: 1, invul: 0,
     atk: -1, atkT: 0, golpeo: 0,
-    abiertoT: 0, esperaT: 0.6,
+    abiertoT: 0, abiertoPor: POR_FIN, esperaT: 0.6,
     ondas: [],
     ultimo: -1, repes: 0,      // memoria, para no repetir el mismo ataque
     vivo: true,
@@ -239,6 +251,7 @@ function pasoAtaque(O, K, dt) {
       // esquivarla bien, y lo que convierte la embestida en una oportunidad.
       O.x = Math.max(AX0 + CUERPO_R, Math.min(AX1 - CUERPO_R, O.x));
       O.st = ABIERTO; O.t = 0; O.abiertoT = 1.25; O.vx = 0; O.atk = -1;
+      O.abiertoPor = POR_PARED;
       return;
     }
   }
@@ -259,6 +272,7 @@ function pasoAtaque(O, K, dt) {
     // giro (el golpe fuerte), que es el premio justo para el ataque que mas
     // precision pide.
     O.abiertoT = cual === PISOTON ? 0.73 : cual === BARRIDO ? 0.50 : 0.55;
+    O.abiertoPor = POR_FIN;
     O.atk = -1; O.vx = 0;
   }
 }

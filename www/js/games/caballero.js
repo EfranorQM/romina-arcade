@@ -19,8 +19,7 @@ import { bakeRomina, drawRomina } from './romi-anim.js';
 import { P as PC } from './romi-art.js';
 import { bakeMundo, drawMundo, P as PM } from './caba-mundo.js';
 import * as OG from './ogro-cuerpo.js';
-import { bakeOgro, drawOgro, poseOgro } from './ogro-anim.js';
-import { P as POG } from './ogro-art.js';
+import { bakeOgro, drawOgro, poseOgro, pisadaOgro, vueloOgro, P as POG } from './ogro-sprite.js';
 
 const SUELO = C.SUELO;
 
@@ -69,6 +68,7 @@ export default {
 
     this.O = OG.makeOgro(880);
     this.SO = bakeOgro();
+    this.flashO = 0;          // el destello blanco del ogro al recibir un tajo
     this.grietas = [];        // las marcas que deja el pisoton en el suelo
     this.fin = 0;             // >0 cuando acaba la pelea (gana o pierde)
     this.finT = 0;
@@ -78,6 +78,9 @@ export default {
     if (this.hitstop > 0) { this.hitstop -= dt; return; }
     this.t += dt;
     if (this.msgT > 0) this.msgT -= dt;
+    // Despues del hitstop a proposito: el destello dura TODA la congelacion
+    // del golpe y se apaga cuando el mundo vuelve a moverse.
+    if (this.flashO > 0) this.flashO -= dt;
 
     const K = this.K;
     const inp = {
@@ -196,9 +199,12 @@ export default {
       burst(O.x, SUELO - 150, 18, { rnd: Math.random, colors: [POG.ojo, POG.dien],
                                     speed: 220, life: 0.6, size: 4, grav: -60 });
     }
-    // Un paso pesado hace temblar el suelo un poquito.
-    if (O.st === OG.ANDA && ((this.t * 4) | 0) !== this._paso) {
-      this._paso = (this.t * 4) | 0;
+    // Un paso pesado hace temblar el suelo un poquito. Va con el PIE del
+    // dibujo (pisadaOgro), no con un reloj: un temblor que no coincide con la
+    // pisada se nota mas que no tener temblor.
+    const pisada = pisadaOgro(O);
+    if (O.st === OG.ANDA && pisada !== this._paso) {
+      this._paso = pisada;
       cam.shakeDecay(1.2, 0.08);
       burst(O.x, SUELO, 3, { rnd: Math.random, colors: [PM.sue2], speed: 60,
                              life: 0.3, size: 3, grav: 300 });
@@ -211,6 +217,7 @@ export default {
         const dano = C.TAJOS[K.tajoId][4];
         if (OG.hiereOgro(O, dano, K.dir)) {
           this.hitstop = (K.tajoId === 2 ? 8 : 5) / 60;
+          this.flashO = 0.1;
           cam.shake(K.tajoId === 2 ? 4 : 3, 0.12);
           SFX.corta(); vibrate(K.tajoId === 2 ? 22 : 14);
           burst(O.x + K.dir * -30, SUELO - 120, 14,
@@ -240,6 +247,7 @@ export default {
           // El PARRY: el premio ya lo pone herir() (K.parada). Aqui se le
           // devuelve el golpe al ogro: se queda abierto.
           O.st = OG.ABIERTO; O.t = 0; O.abiertoT = 0.55; O.atk = -1;
+          O.abiertoPor = OG.POR_PARADA;
           this.hitstop = 9 / 60; cam.shake(4, 0.14); SFX.clang(); vibrate(26);
           this.msg = 'PARADA!'; this.msgT = 0.8;
           burst(K.x + K.dir * 30, SUELO - 90, 14,
@@ -365,20 +373,21 @@ export default {
     // que hace leer quien esta mas cerca de la camara.
     {
       const O = this.O;
-      const [nom, fr] = poseOgro(O, OG.ATAQUES);
-      // su sombra
-      const osw = 54, osh = 10;
-      g.globalAlpha = 0.38; g.fillStyle = '#000000';
-      for (let dy = -osh; dy <= osh; dy++) {
+      const po = poseOgro(O);
+      // su sombra: tan ancha como su postura (los pies van de -64 a +60), y
+      // se encoge y se aclara cuando salta, como la de ella.
+      const vuelo = vueloOgro(po);
+      const osw = Math.max(40, 76 - vuelo * 0.3), osh = Math.max(5, 10 - vuelo * 0.05);
+      g.globalAlpha = Math.max(0.15, 0.38 - vuelo * 0.003); g.fillStyle = '#000000';
+      for (let dy = -Math.ceil(osh); dy <= Math.ceil(osh); dy++) {
         const u = dy / osh;
         if (u * u > 1) continue;
         const ww = osw * Math.sqrt(1 - u * u);
         g.fillRect(Math.round(O.x - cx - ww), SUELO - 2 + dy, Math.round(ww * 2), 1);
       }
       g.globalAlpha = 1;
-      // el destello blanco al recibir, y el rojo de la furia
       const parpadea = O.invul > 0 && O.st !== OG.RUGE && ((O.invul * 16) | 0) & 1;
-      if (!parpadea) drawOgro(g, this.SO, O.x - cx, SUELO, O.dir, nom, fr);
+      if (!parpadea) drawOgro(g, this.SO, O.x - cx, SUELO, O.dir, po, this.flashO / 0.1);
     }
 
     // Sombra de Romina. Era un fillRect: un rectangulo negro de 5 px que se

@@ -109,6 +109,33 @@ segunda llamada, devuelve ronda, puntaje, lo que dijo cada muda, errores de
 JavaScript y ms por frame. Con `hasta` se captura el instante exacto de una
 muda o de la pantalla final sin cronometrar nada desde fuera.
 
+## El OGRO de ROMINA
+
+```
+node tools/prueba-ogro.mjs                             # la pelea medida: 13 secciones
+node tools/ver.js tools/ver-ogro.html ogro.png 1500 5000
+python tools/gif-ogro.py garrote vistas/garrote.gif    # el MOVIMIENTO, a su velocidad
+python tools/ogro-atlas.py RUTA/PNG/Animation/Troll1   # rehornear la hoja
+```
+
+El ogro ya no se dibuja por código: es un troll **pintado a mano** (pack
+gratuito de CraftPix, <https://free-game-assets.itch.io/free-2d-game-troll>).
+`ogro-atlas.py` lo reduce a 232 px, lo alinea (cada animación del pack trae un
+lienzo distinto), le pone paleta común de 32 colores y contorno, y escribe
+`www/img/ogro.png` más la tabla `ogro-atlas.js`. El pack original **no está en
+el repo** (la licencia prohíbe redistribuir los archivos de origen y el repo es
+público): para rehornear hay que bajarlo otra vez.
+
+`ogro-sprite.js` decide qué fotograma toca: cada ataque es un guion que se
+reparte sobre los tiempos de `ogro-cuerpo.js` (carga, golpe, vuelta), así que
+la física no se tocó para cambiar el dibujo. La sección 13 del arnés comprueba
+que el daño del garrote llega hasta donde llega la punta **dibujada**: con el
+alcance de antes, el garrote le cruzaba la cabeza a ella sin hacerle nada.
+
+`ver-ogro.html` enseña cada secuencia fotograma a fotograma (en rojo, la parte
+activa). Con `?s=garrote` saca una sola secuencia a tamaño real, que es lo que
+`gif-ogro.py` convierte en GIF. `vistas/` no va al repo.
+
 ## Ver las carátulas del menú
 
 ```

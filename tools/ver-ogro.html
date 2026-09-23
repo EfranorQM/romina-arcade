@@ -1,68 +1,125 @@
 <!doctype html>
-<!-- EL OGRO: su silueta, al lado de ella y al tamaño al que se juega.
-     La prueba que manda es la de x1.95 sobre el campo: si ahi no se lee como
-     un ogro, no lo arregla ningun detalle.
-       node tools/ver.js tools/ver-ogro.html ogro.png 1500 900 -->
+<!-- EL OGRO: cada ataque fotograma a fotograma, con el tiempo del juego.
+     Usa los modulos REALES (ogro-sprite.js y ogro-cuerpo.js): lo que se ve
+     aqui es lo que sale en el telefono.
+
+       node tools/ver.js tools/ver-ogro.html ogro.png 1500 2200
+
+     Con ?s=NOMBRE saca UNA secuencia a tamaño real, un fotograma por celda,
+     para montar un GIF (python tools/gif-ogro.py). Nombres: garrote, pisoton,
+     barrido, embestida, ruge, dolor, pared, parada, jadeo, muere, anda, espera.
+       node tools/ver.js "tools/ver-ogro.html?s=garrote" tira.png 9000 470 -->
 <meta charset="utf-8">
 <style>body{margin:0;background:#241c1a}canvas{display:block}</style>
-<canvas id="c" width="1500" height="900"></canvas>
+<canvas id="c" width="1500" height="2200"></canvas>
 <script type="module">
-import { pose, dibujaPose, horneaPose } from '../www/js/games/ogro-pose.js';
-import { POSES } from '../www/js/games/romi-anim.js';
-import { horneaPose as horneaRomi } from '../www/js/games/romi-pose.js';
+import * as OG from '../www/js/games/ogro-cuerpo.js';
+import { poseOgro, drawOgro, bakeOgro, cargaOgro } from '../www/js/games/ogro-sprite.js';
+import { bakeRomina, drawRomina } from '../www/js/games/romi-anim.js';
+import { bakeMundo, drawMundo } from '../www/js/games/caba-mundo.js';
+import { SUELO } from '../www/js/games/caba-cuerpo.js';
 import { text } from '../www/js/font.js';
-const g = document.getElementById('c').getContext('2d');
+
+await cargaOgro();
+const cv = document.getElementById('c');
+const g = cv.getContext('2d');
 g.imageSmoothingEnabled = false;
-g.fillStyle='#241c1a'; g.fillRect(0,0,1500,900);
+const SO = bakeOgro();
+const SR = bakeRomina();
 
-// 1. A TAMAÑO DE JUEGO, junto a ella, sobre el suelo del campo
-text(g, 'A TAMANO DE JUEGO (x1) sobre el campo -- el ogro y ella', 14, 12, '#ffe066', 2);
-g.fillStyle='#2b1f2e'; g.fillRect(0, 36, 1500, 296);
-g.fillStyle='#382c27'; g.fillRect(0, 300, 1500, 36);
-g.fillStyle='#241c1a'; g.fillRect(0, 330, 1500, 6);
-const og = horneaPose(pose({}));
-const ro = horneaRomi(POSES.idle[0]);
-// pies del ogro en 260 del lienzo -> se apoya en y=296
-g.drawImage(og, 40, 300 - 350);
-g.drawImage(ro, 500, 300 - 176);
-text(g, 'ogro 232 px', 150, 318, '#b0d46c', 2);
-text(g, 'ella 167 px', 540, 318, '#ef4a84', 2);
-
-// 2. las poses clave
-text(g, 'LAS POSES (x0.9)', 14, 352, '#ffe066', 2);
-const CLAVE = [
-  ['reposo', {}],
-  ['carga garrote', {garAng:-1.5, codD:[36,-14], manD:[44,-30], incl:-0.18, ojos:'furia'}],
-  ['garrotazo', {garAng:0.9, codD:[54,34], manD:[70,58], incl:0.3, estela:[-1.5,0.9], ojos:'furia'}],
-  ['pisoton', {garAng:1.6, cadY:260-58, flexion:1, incl:0.24, codD:[40,44], manD:[48,78], bocaAb:0.5}],
-  ['ruge', {bocaAb:1, ojos:'furia', incl:-0.2, codD:[50,-6], manD:[62,-18], codI:[-50,-6], manI:[-62,-18], garAng:-1.35}],
-  ['dolor', {ojos:'dolor', incl:-0.3, cabY:-24, garAng:1.9, sangra:1}],
-];
-let x = 14;
-for (const [nom, cam] of CLAVE) {
-  const cv = horneaPose(pose(cam));
-  g.save(); g.translate(x, 380); g.scale(0.62,0.62);
-  g.drawImage(cv, 0, 0); g.restore();
-  text(g, nom, x, 632, '#b0d46c', 2);
-  x += 248;
+// Cada secuencia: como montar el ogro en el instante t, y cuanto dura.
+function ataque(k) {
+  return { dura: OG.ATAQUES[k][0], pon(O, t) { O.st = OG.ATACA; O.atk = k; O.atkT = t; },
+           fases: [OG.ATAQUES[k][1], OG.ATAQUES[k][2]] };
 }
+function abierto(por, dura) {
+  return { dura, pon(O, t) { O.st = OG.ABIERTO; O.t = t; O.abiertoT = dura; O.abiertoPor = por; } };
+}
+const SEC = {
+  garrote: ataque(OG.GARROTE),
+  pisoton: ataque(OG.PISOTON),
+  barrido: ataque(OG.BARRIDO),
+  embestida: ataque(OG.EMBESTIDA),
+  ruge: { dura: OG.RUGE_T, pon(O, t) { O.st = OG.RUGE; O.t = t; } },
+  dolor: { dura: 0.24, pon(O, t) { O.st = OG.DOLOR; O.t = t; } },
+  pared: abierto('pared', 1.25),
+  parada: abierto('parada', 0.55),
+  jadeo: abierto('fin', 0.55),
+  muere: { dura: 1.2, pon(O, t) { O.st = OG.MUERTO; O.vivo = false; O.t = t; } },
+  anda: { dura: 1.2, pon(O, t) { O.st = OG.ANDA; O.vx = OG.VEL; O.animT = t; } },
+  espera: { dura: 1.0, pon(O, t) { O.st = OG.ESPERA; O.animT = t; } },
+};
 
-// 3. la silueta pura: ¿se reconoce a contraluz?
-text(g, 'LA SILUETA SOLA (si aqui no se lee como un ogro, no funciona)', 14, 664, '#ff8fbc', 2);
-x = 14;
-for (const [nom, cam] of CLAVE.slice(0,5)) {
-  const L = dibujaPose(pose(cam));
-  const cv = document.createElement('canvas');
-  cv.width = 430; cv.height = 372;
-  const c2 = cv.getContext('2d');
-  const img = c2.createImageData(cv.width, cv.height);
-  for (let i = 0; i < L.d.length; i++) {
-    if (!L.d[i]) continue;
-    img.data[i*4] = 176; img.data[i*4+1] = 212; img.data[i*4+2] = 108; img.data[i*4+3] = 255;
+const params = new URLSearchParams(location.search);
+const sola = params.get('s');
+
+if (sola) {
+  // UNA secuencia a tamaño real, a 30 fotogramas por segundo, con ella al
+  // borde del alcance del garrote para ver si el golpe le llega o no.
+  const s = SEC[sola], fps = +(params.get('fps') || 30);
+  const n = Math.ceil(s.dura * fps) + 1;
+  const CW = 620, CH = 470, suelo = 440;
+  cv.width = n * CW; cv.height = CH;
+  g.imageSmoothingEnabled = false;
+  const M = bakeMundo(suelo, CH);
+  for (let i = 0; i < n; i++) {
+    const t = Math.min(s.dura - 1e-6, i / fps);
+    g.save();
+    g.beginPath(); g.rect(i * CW, 0, CW, CH); g.clip();
+    g.translate(i * CW, 0);
+    drawMundo(g, M, 300, CW, CH, suelo);
+    const O = OG.makeOgro(0); O.dir = 1;
+    s.pon(O, t);
+    const ox = 170;
+    const kx = ox + OG.CUERPO_R + (OG.ATAQUES[OG.GARROTE][5]) + 20;
+    drawRomina(g, SR, kx, suelo, -1, 'idle', 0);
+    drawOgro(g, SO, ox, suelo, 1, poseOgro(O));
+    const activo = s.fases && t >= s.fases[0] && t <= s.fases[1];
+    text(g, t.toFixed(2) + 's', 8, 8, activo ? '#ff5a3c' : '#ffe066', 2);
+    g.restore();
   }
-  c2.putImageData(img, 0, 0);
-  g.save(); g.translate(x, 690); g.scale(0.55,0.55);
-  g.drawImage(cv, 0, 0); g.restore();
-  x += 248;
+} else {
+  // LA HOJA: cada secuencia en una fila, un fotograma cada 0.05 s, a x0.5.
+  // En rojo, la parte ACTIVA del ataque: lo que hace daño.
+  let alto = 380;
+  for (const s of Object.values(SEC)) alto += 30 + Math.ceil(Math.ceil(s.dura / 0.05) / 10) * 150;
+  cv.height = alto;
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = '#241c1a'; g.fillRect(0, 0, cv.width, cv.height);
+  let y = 10;
+  // 1. a tamaño de juego, junto a ella, sobre el campo de verdad
+  text(g, 'A TAMANO DE JUEGO (x1), SOBRE EL CAMPO', 12, y, '#ffe066', 2); y += 24;
+  const M = bakeMundo(300, 330);
+  g.save(); g.beginPath(); g.rect(0, y, 1500, 330); g.clip(); g.translate(0, y);
+  drawMundo(g, M, 0, 1500, 330, 300);
+  const O0 = OG.makeOgro(0);
+  O0.dir = 1;
+  drawOgro(g, SO, 200, 300, 1, poseOgro(O0));
+  drawRomina(g, SR, 560, 300, -1, 'idle', 0);
+  g.restore();
+  y += 340;
+  const PASO = 0.05, K = 0.5, CW = 150;
+  for (const nom of Object.keys(SEC)) {
+    const s = SEC[nom];
+    text(g, nom.toUpperCase() + '  (' + s.dura.toFixed(2) + ' s)', 12, y, '#ffe066', 2);
+    y += 20;
+    const n = Math.min(10, Math.ceil(s.dura / PASO));
+    const filas = Math.ceil(Math.ceil(s.dura / PASO) / 10);
+    for (let i = 0; i * PASO < s.dura; i++) {
+      const t = i * PASO;
+      const cx = 12 + (i % 10) * CW, cy = y + Math.floor(i / 10) * 150;
+      const activo = s.fases && t >= s.fases[0] && t <= s.fases[1];
+      g.fillStyle = activo ? '#4a1e22' : '#2b1f2e';
+      g.fillRect(cx, cy, CW - 4, 146);
+      g.save(); g.beginPath(); g.rect(cx, cy, CW - 4, 146); g.clip();
+      g.translate(cx + 45, cy + 136); g.scale(K, K);
+      const O = OG.makeOgro(0); O.dir = 1;
+      s.pon(O, t);
+      drawOgro(g, SO, 0, 0, 1, poseOgro(O));
+      g.restore();
+      text(g, t.toFixed(2), cx + 3, cy + 3, activo ? '#ff8a6c' : '#b8a888', 1);
+    }
+    y += filas * 150 + 10;
+  }
 }
 </script>

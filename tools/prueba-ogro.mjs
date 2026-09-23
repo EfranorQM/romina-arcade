@@ -280,6 +280,26 @@ console.log('== 12) EL MISMO ATAQUE NO SE REPITE SIN PARAR ==');
   ok(peor <= 3, 'la racha mas larga del mismo ataque es ' + peor + ' (de ' + seq.length + ' ataques)');
 }
 
+console.log('== 13) EL DAÑO LLEGA HASTA DONDE LLEGA EL DIBUJO ==');
+{
+  // El ogro esta pintado a mano (ogro-atlas.js): la punta del garrote en el
+  // fotograma del golpe es lo que ella VE. Si el daño acaba antes, el garrote
+  // le cruza la cabeza sin hacerle nada; si acaba mucho despues, le pega el
+  // aire. Con el alcance viejo (150) pasaba lo primero: 216 contra 301.
+  // Si se vuelve a hornear el ogro a otro tamaño, esto salta.
+  const A = await import(G('ogro-atlas.js'));
+  const [, , w, , ox] = A.FRAMES.garrote[5];       // el garrote y la estocada salen de aqui
+  const punta = ox + w;
+  const RADIO_ELLA = 26;
+  for (const [k, nom] of [[O.GARROTE, 'garrote'], [O.BARRIDO, 'barrido']]) {
+    const og = O.makeOgro(0); og.dir = 1; og.atk = k;
+    const gp = O.golpeOgro(og);
+    const hasta = gp.x + gp.r + RADIO_ELLA;        // lo mas lejos a lo que ella recibe
+    ok(Math.abs(hasta - punta) <= 12,
+       nom + ': el daño llega a ' + f2(hasta) + ' px y la punta dibujada a ' + punta + ' (diferencia <= 12)');
+  }
+}
+
 console.log('');
 console.log(fallos === 0 ? 'TODO OK' : fallos + ' FALLOS');
 process.exit(fallos ? 1 : 0);
