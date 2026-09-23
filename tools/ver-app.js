@@ -46,7 +46,11 @@ const exe = CHROMES.find(p => fs.existsSync(p));
 if (!exe) { console.error('No se encontro Chrome ni Edge.'); process.exit(1); }
 
 const PORT = 9333 + (process.pid % 400);
-const profile = path.join(require('os').tmpdir(), 'romina-cdp-' + process.pid);
+// PERFIL=carpeta reutiliza el perfil de Chrome entre ejecuciones: es cerrar y
+// volver a abrir la app de verdad (proceso nuevo, mismos datos, cache y
+// worker). Recargar la pagina NO lo es: el navegador guarda en memoria como
+// cargo cada fichero, y eso escondia si la cache se servia bien.
+const profile = process.env.PERFIL ? path.resolve(process.env.PERFIL) : path.join(require('os').tmpdir(), 'romina-cdp-' + process.pid);
 
 const chrome = spawn(exe, [
   '--headless=new', '--disable-gpu', '--hide-scrollbars',

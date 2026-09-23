@@ -2,7 +2,16 @@
 //
 //   node tools/servidor-estatico.js android/app/src/main/assets/public 8090
 //   node tools/servidor-estatico.js www 8091 cors
-//   node tools/ver-app.js x.png "espera2500;archivo:tools/emula-telefono.js;js:location.reload();espera4000;archivo:tools/emula-telefono.js;js:location.reload();espera4000;archivo:tools/emula-telefono.js" "http://localhost:8090/"
+//   rm -rf C:/tmp/pt
+//   PERFIL=C:/tmp/pt node tools/ver-app.js x.png "espera2500;archivo:tools/emula-telefono.js;js:location.reload();espera4000;archivo:tools/emula-telefono.js;espera6000" "http://localhost:8090/"
+//   PERFIL=C:/tmp/pt node tools/ver-app.js x.png "espera5000;archivo:tools/emula-telefono.js" "http://localhost:8090/"
+//
+// El paso 2 va en OTRA ejecucion con el mismo PERFIL: es cerrar la app y
+// volver a abrirla. Recargando la pagina, el navegador reusa lo que tiene en
+// memoria de la sesion anterior (con las direcciones viejas) y el paso 2 daba
+// MAL aunque la cache ya estuviera bien. PERFIL con ruta CORTA: con la del
+// scratchpad, la CacheStorage de Chrome falla ("Unexpected internal error").
+// (Para bajar de GitHub de verdad en vez de :8091, cambiar ORIGEN.)
 //
 // POR QUE EXISTE. En el telefono la app vive en https://localhost y las
 // actualizaciones bajan de github.io: DOS origenes. Todas las demas pruebas

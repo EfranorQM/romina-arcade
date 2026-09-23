@@ -409,8 +409,15 @@ con un solo origen no ven lo que pasa entre los dos:
 ```
 node tools/servidor-estatico.js android/app/src/main/assets/public 8090
 node tools/servidor-estatico.js www 8091 cors
-node tools/ver-app.js x.png "espera2500;archivo:tools/emula-telefono.js;js:location.reload();espera4000;archivo:tools/emula-telefono.js;js:location.reload();espera4000;archivo:tools/emula-telefono.js" "http://localhost:8090/"
+rm -rf C:/tmp/pt
+PERFIL=C:/tmp/pt node tools/ver-app.js x.png "espera2500;archivo:tools/emula-telefono.js;js:location.reload();espera4000;archivo:tools/emula-telefono.js;espera6000" "http://localhost:8090/"
+PERFIL=C:/tmp/pt node tools/ver-app.js x.png "espera5000;archivo:tools/emula-telefono.js" "http://localhost:8090/"
 ```
+
+La segunda línea es la app recién actualizada; la tercera, cerrarla y volver a
+abrirla: `PERFIL` hace que `ver-app.js` reutilice el perfil de Chrome (datos,
+caché y worker) en un proceso nuevo. Recargar la página no vale como reinicio:
+el navegador reusa lo que tiene en memoria y esconde si la caché va bien.
 
 Así salió (con la foto del aviso de Romina, el 23-09-2026) que lo descargado
 se guardaba con su dirección de GitHub: el juego actualizado pedía 70 de sus 71
