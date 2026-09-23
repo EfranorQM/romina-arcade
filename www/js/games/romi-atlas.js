@@ -2,12 +2,23 @@
 //
 // Romina, dibujada a mano: "FemaleKnight" de retsuto
 // (retsuto.itch.io/femaleknight), con el pelo y los ojos negros, mirando
-// a la derecha y doblada con Scale2x. 37 colores.
+// a la derecha y doblada con Scale2x. 40 colores.
 //
 // Cada fotograma: [x, y, ancho, alto, ox, oy] -- su rectangulo en
 // img/romina.png y donde cae su esquina respecto a la RAIZ (entre los
 // pies, en el suelo), mirando a la DERECHA.
 export const HOJA_W = 1024, HOJA_H = 1925;
+
+// Lo que el ARMARIO puede teñir, de oscuro a claro: la capa (con el lazo
+// del pecho), la falda, su ribete y la estela del tajo (con sus propios
+// blancos: ver marca_estela en tools/romina-atlas.py).
+export const TINTES = {
+  capa: ['#243c90', '#3060c0', '#4878d8'],
+  falda: ['#84240c', '#9c3018', '#b43c24', '#d83018', '#f04830'],
+  ribete: ['#d87830', '#f09048'],
+  estela: ['#eaeae9', '#f0f0ef', '#fffffe'],
+};
+
 export const FRAMES = {
   // Idle 0, Idle 1, Idle 2, Idle 3, Idle 4, Idle 5, Idle 6, Idle 7, Idle 8
   idle: [

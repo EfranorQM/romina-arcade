@@ -9,7 +9,7 @@
 // (una pose de ~20 numeros sobre piezas rigidas) y, tras muchas rondas de
 // ajuste, sus animaciones seguian sin vida. Lo mismo que el ogro.
 
-import { FRAMES } from './romi-atlas.js';
+import { FRAMES, TINTES } from './romi-atlas.js';
 
 // ---------- La hoja ----------
 // Se pide al importar, no al entrar en la pelea: para cuando ella sale ya esta.
@@ -40,6 +40,46 @@ export const P = {
   oro3: '#ffc060',   // la empuñadura
 };
 
+// ---------- EL ARMARIO: la hoja teñida ----------
+// `t` = { capa, falda, ribete, estela }: los tonos nuevos, de oscuro a claro,
+// en el orden de TINTES (ver tintesDe en caba-partida.js). Se tiñe cambiando
+// COLORES EXACTOS: la hoja tiene 40 y la capa, la falda y la estela tienen los
+// suyos propios (la estela, con blancos que solo usa ella). Cuesta recorrer la
+// hoja una vez (unas decenas de ms), asi que cada traje se tiñe una sola vez y
+// se guarda. Sin traje (o con el de siempre), se dibuja la hoja original.
+const tenidas = new Map();
+let vestida = null;          // la hoja con la que se dibuja (null = la original)
+let pendiente = null;        // un traje pedido antes de que llegara la hoja
+export function vestir(t) {
+  if (!lista()) { pendiente = t; return; }
+  pendiente = null;
+  const clave = JSON.stringify(t);
+  const igual = (a, b) => a.every((c, i) => c.toLowerCase() === b[i].toLowerCase());
+  if (!t || (igual(t.capa, TINTES.capa) && igual(t.falda, TINTES.falda) && igual(t.ribete, TINTES.ribete)
+             && igual(t.estela, ['#eaeaea', '#f0f0f0', '#ffffff']))) { vestida = null; return; }
+  if (!tenidas.has(clave)) tenidas.set(clave, tine(t));
+  vestida = tenidas.get(clave);
+}
+const rgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+function tine(t) {
+  const cv = document.createElement('canvas');
+  cv.width = HOJA.naturalWidth; cv.height = HOJA.naturalHeight;
+  const c = cv.getContext('2d');
+  c.drawImage(HOJA, 0, 0);
+  const img = c.getImageData(0, 0, cv.width, cv.height), d = img.data;
+  const mapa = new Map();
+  for (const parte of ['capa', 'falda', 'ribete', 'estela']) {
+    TINTES[parte].forEach((de, i) => { const [r, g, b] = rgb(de); mapa.set((r << 16) | (g << 8) | b, rgb(t[parte][i])); });
+  }
+  for (let i = 0; i < d.length; i += 4) {
+    if (!d[i + 3]) continue;
+    const n = mapa.get((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+    if (n) { d[i] = n[0]; d[i + 1] = n[1]; d[i + 2] = n[2]; }
+  }
+  c.putImageData(img, 0, 0);
+  return cv;
+}
+
 // La SILUETA BLANCA de la hoja: el destello del golpe recibido. Se hace una
 // vez, cuando la hoja ya ha llegado (antes no hay de donde sacarla).
 let BLANCA = null;
@@ -65,6 +105,8 @@ function blanca() {
 //     donde mira: esquivando hacia atras mira al ogro y se va de espaldas).
 export function drawRomina(g, x, y, dir, pose, frame, rastro = 0, blanco = 0, haciaX = dir) {
   if (!lista()) return;
+  if (pendiente) vestir(pendiente);
+  const hoja = vestida || HOJA;
   const arr = FRAMES[pose] || FRAMES.idle;
   const [sx, sy, w, h, ox, oy] = arr[Math.min(frame, arr.length - 1)];
   const px = Math.round(x), py = Math.round(y);
@@ -73,11 +115,11 @@ export function drawRomina(g, x, y, dir, pose, frame, rastro = 0, blanco = 0, ha
     // tener mas fotogramas.
     for (const [atras, al] of [[38, 0.16], [19, 0.32]]) {
       g.globalAlpha = al * rastro;
-      pinta(g, HOJA, px - haciaX * atras, py, dir, sx, sy, w, h, ox, oy);
+      pinta(g, hoja, px - haciaX * atras, py, dir, sx, sy, w, h, ox, oy);
     }
     g.globalAlpha = 1;
   }
-  pinta(g, HOJA, px, py, dir, sx, sy, w, h, ox, oy);
+  pinta(g, hoja, px, py, dir, sx, sy, w, h, ox, oy);
   const B = blanco > 0 ? blanca() : null;
   if (B) {
     g.globalAlpha = Math.min(1, blanco);

@@ -187,6 +187,55 @@ def empaqueta(frames, ancho=1024):
     return ancho, y + fila, pos
 
 
+# LA ESTELA CON SUS PROPIOS BLANCOS. La media luna del tajo usa los mismos
+# blancos que los brillos de la armadura (#ffffff, #f0f0f0, #eaeaea), asi que
+# teñirla por color teñiria tambien la armadura. Se le quita UNA unidad de
+# azul: a la vista es identica, y en el codigo sus blancos son solo suyos (el
+# armario de caballero.js la tiñe con ellos). Se reconoce por el TAMAÑO:
+# medido en la hoja, las manchas de la estela van de 1978 a 21092 px y los
+# brillos de la armadura no pasan de 561.
+ESTELA = {hexa('ffffff'): hexa('fffffe'), hexa('f0f0f0'): hexa('f0f0ef'), hexa('eaeaea'): hexa('eaeae9')}
+ESTELA_MIN = 1000
+
+# Los colores que el ARMARIO puede cambiar, de oscuro a claro: la capa (y el
+# lazo del pecho, que va a juego), la falda y su ribete.
+CAPA = ['243c90', '3060c0', '4878d8']
+FALDA = ['84240c', '9c3018', 'b43c24', 'd83018', 'f04830']
+RIBETE = ['d87830', 'f09048']
+
+
+def marca_estela(hoja):
+    W, H = hoja.size
+    px = hoja.load()
+    visto = bytearray(W * H)
+    n_manchas = 0
+    for y in range(H):
+        for x in range(W):
+            i = y * W + x
+            if visto[i]:
+                continue
+            r, g, b, a = px[x, y]
+            if not a or (r, g, b) not in ESTELA:
+                continue
+            mancha, pila = [], [(x, y)]
+            visto[i] = 1
+            while pila:
+                cx, cy = pila.pop()
+                mancha.append((cx, cy))
+                for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
+                    if 0 <= nx < W and 0 <= ny < H and not visto[ny * W + nx]:
+                        rr, gg, bb, aa = px[nx, ny]
+                        if aa and (rr, gg, bb) in ESTELA:
+                            visto[ny * W + nx] = 1
+                            pila.append((nx, ny))
+            if len(mancha) >= ESTELA_MIN:
+                n_manchas += 1
+                for cx, cy in mancha:
+                    r, g, b, a = px[cx, cy]
+                    px[cx, cy] = ESTELA[(r, g, b)] + (a,)
+    return n_manchas
+
+
 def indexado(hoja):
     W, H = hoja.size
     datos = hoja.tobytes()
@@ -244,6 +293,7 @@ def main():
     hoja = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     for f, p in zip(unicos, pos):
         hoja.paste(f, p)
+    n_estela = marca_estela(hoja)
     png, ncol = indexado(hoja)
     os.makedirs(os.path.dirname(SALIDA_PNG), exist_ok=True)
     with open(SALIDA_PNG, 'wb') as fh:
@@ -269,6 +319,17 @@ def main():
         '// img/romina.png y donde cae su esquina respecto a la RAIZ (entre los',
         '// pies, en el suelo), mirando a la DERECHA.',
         f'export const HOJA_W = {W}, HOJA_H = {H};',
+        '',
+        '// Lo que el ARMARIO puede teñir, de oscuro a claro: la capa (con el lazo',
+        '// del pecho), la falda, su ribete y la estela del tajo (con sus propios',
+        '// blancos: ver marca_estela en tools/romina-atlas.py).',
+        'export const TINTES = {',
+        '  capa: [' + ', '.join(f"'#{c}'" for c in CAPA) + '],',
+        '  falda: [' + ', '.join(f"'#{c}'" for c in FALDA) + '],',
+        '  ribete: [' + ', '.join(f"'#{c}'" for c in RIBETE) + '],',
+        '  estela: [' + ', '.join("'#%02x%02x%02x'" % c for c in sorted(ESTELA.values(), key=sum)) + '],',
+        '};',
+        '',
         'export const FRAMES = {',
     ]
     js = NL.join(cab) + NL + NL.join(lineas) + NL + '};' + NL
@@ -277,6 +338,7 @@ def main():
     print(f'hoja {W}x{H}, {len(unicos)} fotogramas distintos, {ncol} colores, '
           f'PNG {len(png) / 1024:.0f} KB -> {os.path.relpath(SALIDA_PNG)}')
     print(f'raiz en la celda doblada: ({rx}, {ry}); mide {ry - celda("Idle", 0).getbbox()[1]} px de alto')
+    print(f'estela: {n_estela} manchas con sus propios blancos')
 
     # --- Medidas que el juego necesita ---
     print(NL + 'ALCANCE por fotograma (lo mas adelantado respecto a la raiz):')

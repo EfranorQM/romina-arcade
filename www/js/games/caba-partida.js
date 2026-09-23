@@ -83,6 +83,97 @@ export const FRASES = {
   pierde: [['CASI, CAMPEONA'], ['LA PROXIMA ES TUYA'], ['ESE OGRO TIENE', 'LOS DIAS CONTADOS']],
 };
 
+// ---------- LAS MEDALLAS y EL ARMARIO ----------
+// Motivos para volver: diez medallas con nombre, cada una con un reto que no
+// es solo ganar, y cada una desbloquea una prenda del ARMARIO (un color de
+// capa, de falda o de la estela del tajo). El pelo no se toca: tiene que ser
+// negro, como pidio Anderson.
+//
+// `r` = lo que dejo la pelea (ver cierra() en caballero.js): lo de puntua()
+// mas paredes (veces que se estrello el ogro), usoGuardia, dif, nota y alumna
+// (ya aprendio los cuatro ataques).
+export const MEDALLAS = [
+  { id: 'victoria',   nombre: 'PRIMERA VICTORIA',   pide: 'GANAR UNA PELEA',                 premio: ['capa', 'rosa'],
+    vale: r => r.gano },
+  { id: 'alumna',     nombre: 'ALUMNA APLICADA',    pide: 'APRENDER LOS CUATRO ATAQUES',     premio: ['estela', 'rosa'],
+    vale: r => r.alumna },
+  { id: 'intacta',    nombre: 'SIN UN RASGUÑO',     pide: 'GANAR SIN PERDER VIDA',           premio: ['estela', 'dorada'],
+    vale: r => r.gano && r.vida === r.vidaMax },
+  { id: 'paradas',    nombre: 'CINCO PARADAS',      pide: '5 PARADAS EN UNA PELEA',          premio: ['falda', 'azul'],
+    vale: r => r.paradas >= 5 },
+  { id: 'contras',    nombre: 'TRES CONTRAATAQUES', pide: '3 CONTRAATAQUES EN UNA PELEA',    premio: ['falda', 'morada'],
+    vale: r => r.contras >= 3 },
+  { id: 'pared',      nombre: 'CONTRA LA PARED',    pide: 'ESTRELLARLO 2 VECES EN UNA PELEA', premio: ['capa', 'verde'],
+    vale: r => r.paredes >= 2 },
+  { id: 'singuardia', nombre: 'SIN GUARDIA',        pide: 'GANAR SIN LEVANTAR LA GUARDIA',   premio: ['estela', 'fuego'],
+    vale: r => r.gano && !r.usoGuardia },
+  { id: 'relampago',  nombre: 'RELAMPAGO',          pide: 'GANAR EN MENOS DE UN MINUTO',     premio: ['estela', 'azul'],
+    vale: r => r.gano && r.t < 60 },
+  { id: 'furia',      nombre: 'FURIA DOMADA',       pide: 'GANAR EN FURIA',                  premio: ['capa', 'negra'],
+    vale: r => r.gano && r.dif === 'furia' },
+  { id: 'notaS',      nombre: 'MATRICULA DE HONOR', pide: 'SACAR UNA S',                     premio: ['capa', 'dorada'],
+    vale: r => r.nota === 'S' },
+];
+
+// Las medallas que esta pelea gana (las tenga ya o no).
+export function medallasDe(r) { return MEDALLAS.filter(m => m.vale(r)).map(m => m.id); }
+
+// EL ARMARIO: cada prenda y sus tonos, de oscuro a claro, en el mismo orden
+// que los colores que tiñen (TINTES en romi-atlas.js). La primera de cada
+// lista es la de siempre y no hay que ganarla.
+export const ARMARIO = {
+  capa: [
+    { id: 'azul',   nombre: 'AZUL',   tonos: ['#243c90', '#3060c0', '#4878d8'] },
+    { id: 'rosa',   nombre: 'ROSA',   tonos: ['#8e1446', '#c8286a', '#ec5c98'] },
+    { id: 'verde',  nombre: 'VERDE',  tonos: ['#16502e', '#26804a', '#48b070'] },
+    { id: 'negra',  nombre: 'NEGRA',  tonos: ['#141019', '#282232', '#443c54'] },
+    { id: 'dorada', nombre: 'DORADA', tonos: ['#8a5a10', '#c8901e', '#f0c048'] },
+  ],
+  falda: [
+    { id: 'roja',   nombre: 'ROJA',   tonos: ['#84240c', '#9c3018', '#b43c24', '#d83018', '#f04830'],
+      ribete: ['#d87830', '#f09048'] },
+    { id: 'azul',   nombre: 'AZUL',   tonos: ['#101e52', '#18286a', '#203488', '#2a48ac', '#3a62d0'],
+      ribete: ['#c8a040', '#f0d070'] },
+    { id: 'morada', nombre: 'MORADA', tonos: ['#28104a', '#361662', '#46207c', '#5a2c9c', '#7440c0'],
+      ribete: ['#c8a040', '#f0d070'] },
+  ],
+  estela: [
+    { id: 'blanca', nombre: 'BLANCA',   tonos: ['#eaeaea', '#f0f0f0', '#ffffff'] },
+    { id: 'rosa',   nombre: 'ROSA',     tonos: ['#f070a8', '#ffa0c8', '#ffe0ee'] },
+    { id: 'dorada', nombre: 'DORADA',   tonos: ['#f0c040', '#ffe070', '#fff4c0'] },
+    { id: 'fuego',  nombre: 'DE FUEGO', tonos: ['#f05030', '#ffa040', '#fff0a0'] },
+    { id: 'azul',   nombre: 'AZUL',     tonos: ['#6098f0', '#a0c8ff', '#e0f0ff'] },
+  ],
+};
+export const TRAJE0 = { capa: 'azul', falda: 'roja', estela: 'blanca' };
+export const PARTES = ['capa', 'falda', 'estela'];
+
+// La medalla que desbloquea una prenda (null = la de siempre).
+export function medallaDe(parte, id) {
+  return MEDALLAS.find(m => m.premio[0] === parte && m.premio[1] === id) || null;
+}
+export function prenda(parte, id) { return ARMARIO[parte].find(p => p.id === id) || ARMARIO[parte][0]; }
+export function disponible(parte, id, medallas) {
+  const m = medallaDe(parte, id);
+  return !m || medallas.includes(m.id);
+}
+// Un traje guardado, con lo que ya no valga (una prenda que no existe o que
+// no se ha ganado) vuelto a lo de siempre.
+export function trajeValido(t, medallas) {
+  const out = { ...TRAJE0 };
+  for (const parte of PARTES) {
+    const id = t && t[parte];
+    if (id && ARMARIO[parte].some(p => p.id === id) && disponible(parte, id, medallas)) out[parte] = id;
+  }
+  return out;
+}
+// Los tonos con que se tiñe la hoja para un traje (ver vestir() en
+// romi-sprite.js).
+export function tintesDe(t) {
+  const f = prenda('falda', t.falda);
+  return { capa: prenda('capa', t.capa).tonos, falda: f.tonos, ribete: f.ribete, estela: prenda('estela', t.estela).tonos };
+}
+
 // ---------- EL MAESTRO: la primera pelea enseña ----------
 // Los ataques en el orden en que se aprenden, con el boton que los contesta y
 // el consejo. La primera vez que sale cada uno el mundo va a camara lenta

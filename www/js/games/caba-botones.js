@@ -34,6 +34,9 @@ const CARAS = {
   otra:       ['#b8204e', '#8e1140', '#5a0a28'],
   dificultad: ['#71829c', '#4a586e', '#2c3444'],
   menu:       ['#3a6cc0', '#24478c', '#152c5c'],
+  // el ARMARIO, en la pantalla de elegir, y LISTO, para salir de el
+  armario:    ['#7a48b4', '#533084', '#321b54'],
+  listo:      ['#48b070', '#26804a', '#16502e'],
 };
 // Las caras de las NOTAS del final: oro la S, y luego rosa, azul y gris.
 const NOTAS = {
@@ -209,6 +212,43 @@ const ICONOS = {
   },
 };
 
+// El ARMARIO: un vestido colgado de su percha.
+ICONOS.armario = () => aMano([
+  '.......s.......',
+  '......s.s......',
+  '........s......',
+  '.......s.......',
+  '....wwwwwww....',
+  '....ww...ww....',
+  '.....wwwww.....',
+  '.....wwwww.....',
+  '....wwwwwww....',
+  '...wwwwwwwww...',
+  '...wwwwwwwww...',
+  '..wwwwwwwwwww..',
+  '..wwwwwwwwwww..',
+  '...............',
+  '...............',
+]);
+// LISTO: la marca de hecho.
+ICONOS.listo = () => aMano([
+  '...............',
+  '...............',
+  '...............',
+  '............ww.',
+  '...........www.',
+  '..........www..',
+  '.ww......www...',
+  '.www....www....',
+  '..www..www.....',
+  '...wwwwww......',
+  '....wwww.......',
+  '.....ww........',
+  '...............',
+  '...............',
+  '...............',
+]);
+
 // Un icono dibujado a mano, fila a fila ('.' vacio; el resto, colores de IC).
 function aMano(filas) {
   const R = rejilla(filas.length);
@@ -373,6 +413,69 @@ export function rotulo(g, s, cx, y, color, esc = 2) {
   for (const [dx, dy] of [[-o, 0], [o, 0], [0, -o], [0, o], [o, o]]) text(g, s, x + dx, y + dy, OSC, esc);
   text(g, s, x, y, color, esc);
 }
+
+// ---------- El armario ----------
+// Una MUESTRA de color: un medallon pequeño con la cara del color de la prenda
+// (`caras` = claro, medio, oscuro). {cv, M} como los otros medallones.
+export function muestra(caras, r = 26) { return medallon(r, caras, false); }
+
+// Las MEDALLAS: de oro con su estrella (ganada) o gris con una interrogacion.
+export function horneaMedallas(r = 16) {
+  const hazla = (caras, icono) => {
+    const m = medallon(r, caras, false);
+    pintaRejilla(m.cv.getContext('2d'), icono, m.M + r - 5, m.M + r - 5, 1);
+    return m;
+  };
+  return {
+    oro: hazla(NOTAS.S, aMano([
+      '.....w.....',
+      '....www....',
+      '....www....',
+      'wwwwwwwwwww',
+      '.wwwwwwwww.',
+      '..wwwwwww..',
+      '..wwwwwww..',
+      '.wwww.wwww.',
+      '.www...www.',
+      'ww.......ww',
+      '...........',
+    ])),
+    gris: hazla(NOTAS.C, aMano([
+      '...wwww....',
+      '..w....w...',
+      '.......w...',
+      '......w....',
+      '.....w.....',
+      '.....w.....',
+      '...........',
+      '.....w.....',
+      '...........',
+      '...........',
+      '...........',
+    ])),
+  };
+}
+
+// El CANDADO de lo que todavia no se ha ganado, a x2.
+export function horneaCandado() {
+  const R = aMano([
+    '..ooooo..',
+    '.o.....o.',
+    '.o.....o.',
+    'yyyyyyyyy',
+    'yyyykyyyy',
+    'yyyykyyyy',
+    'yyyyyyyyy',
+    '.........',
+    '.........',
+  ]);
+  const cv = lienzo(R.n * 2, R.n * 2);
+  pintaRejilla(cv.getContext('2d'), R, 0, 0, 2);
+  return cv;
+}
+
+// Un aro de oro para lo elegido (la muestra puesta).
+export function aroElegido(r) { return aro(r, ORO[3], 3); }
 
 // Un PANEL con marco de oro, como los medallones: contorno oscuro, aro de oro
 // (claro arriba e izquierda, oscuro abajo y derecha) y el fondo oscuro. `claro`

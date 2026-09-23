@@ -154,7 +154,58 @@ console.log('== 3) LA PRIMERA PELEA ENSEÑA, Y NO SE ATASCA ==');
   ok(vistos.size === 1 && vistos.has(O.GARROTE), 'con solo el garrotazo permitido, en un minuto el ogro no usa otro');
 }
 
-console.log('== 4) LAS CANCIONES NO LLEVAN NOTAS QUE NO SUENAN ==');
+console.log('== 4) LAS MEDALLAS Y EL ARMARIO ==');
+{
+  const A = await import(G('games/romi-atlas.js'));
+  // Una pelea de base que NO gana ninguna medalla, y lo que cambia cada una.
+  const base = { gano: false, t: 200, vida: 1, vidaMax: 4, paradas: 0, contras: 0, dano: 5, ogroHp: 24,
+                 paredes: 0, usoGuardia: true, dif: 'normal', nota: null, alumna: false };
+  ok(P.medallasDe(base).length === 0, 'una pelea perdida y sin nada especial no gana medallas');
+  const casos = {
+    victoria: { gano: true, nota: 'C' }, alumna: { alumna: true },
+    intacta: { gano: true, vida: 4, nota: 'C' }, paradas: { paradas: 5 }, contras: { contras: 3 },
+    pared: { paredes: 2 }, singuardia: { gano: true, usoGuardia: false, nota: 'C' },
+    relampago: { gano: true, t: 50, nota: 'C' }, furia: { gano: true, dif: 'furia', nota: 'C' },
+    notaS: { gano: true, nota: 'S' },
+  };
+  for (const med of P.MEDALLAS) {
+    const got = P.medallasDe({ ...base, ...casos[med.id] });
+    ok(got.includes(med.id), med.nombre + ' se gana con: ' + med.pide);
+  }
+  ok(!P.medallasDe({ ...base, paradas: 4 }).includes('paradas') && !P.medallasDe({ ...base, gano: true, t: 61 }).includes('relampago'),
+     'y no se regalan (4 paradas no son 5; 61 s no es menos de un minuto)');
+  // Cada prenda que no es la de siempre se gana con UNA medalla, y cada
+  // medalla da UNA prenda que existe: el armario es la lista de medallas.
+  let sinMedalla = [], premios = new Set();
+  for (const parte of P.PARTES) {
+    P.ARMARIO[parte].forEach((pr, i) => {
+      const m = P.medallaDe(parte, pr.id);
+      if (i === 0 ? m : !m) sinMedalla.push(parte + ' ' + pr.id);
+    });
+  }
+  for (const m of P.MEDALLAS) premios.add(m.premio.join('/'));
+  ok(sinMedalla.length === 0, 'las prendas de siempre son gratis y cada otra tiene su medalla' + (sinMedalla.length ? ' -> ' + sinMedalla : ''));
+  ok(premios.size === P.MEDALLAS.length && P.MEDALLAS.every(m => P.ARMARIO[m.premio[0]].some(p => p.id === m.premio[1])),
+     'cada medalla da una prenda distinta, y existe');
+  // Los tonos encajan con los colores que tiñen en la hoja.
+  let malos = [];
+  const hex = /^#[0-9a-f]{6}$/i;
+  for (const parte of P.PARTES) {
+    for (const pr of P.ARMARIO[parte]) {
+      const t = P.tintesDe({ ...P.TRAJE0, [parte]: pr.id });
+      for (const k of ['capa', 'falda', 'ribete', 'estela']) {
+        if (t[k].length !== A.TINTES[k].length || !t[k].every(c => hex.test(c))) malos.push(parte + ' ' + pr.id + ' ' + k);
+      }
+    }
+  }
+  ok(malos.length === 0, 'cada prenda trae tantos tonos como colores tiñe la hoja (capa 3, falda 5, ribete 2, estela 3)' + (malos.length ? ' -> ' + malos : ''));
+  // Un traje guardado con algo que no se ha ganado, o que ya no existe, vuelve a lo de siempre.
+  const t1 = P.trajeValido({ capa: 'dorada', falda: 'azul', estela: 'nada' }, ['paradas']);
+  ok(t1.capa === 'azul' && t1.falda === 'azul' && t1.estela === 'blanca', 'un traje guardado solo conserva lo ganado');
+  ok(JSON.stringify(P.trajeValido(null, [])) === JSON.stringify(P.TRAJE0), 'sin traje guardado, el de siempre');
+}
+
+console.log('== 5) LAS CANCIONES NO LLEVAN NOTAS QUE NO SUENAN ==');
 {
   // El secuenciador ignora en silencio lo que no conoce: una nota mal escrita
   // es un hueco en la musica que nadie ve en el codigo.
