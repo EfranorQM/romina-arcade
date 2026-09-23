@@ -7,7 +7,8 @@ import { particles, updateParticles, drawParticles } from './gfx.js';
 import { GAMES } from './games.js';
 import { Menu } from './menu.js';
 import { drawBoton, tocaBoton, drawPantalla, onInputPantalla, olvidaToques } from './pausa.js';
-import { iniciaUpdate, latido } from './update.js';
+import { iniciaUpdate, latido, versionActual } from './update.js';
+import { supersample } from './core.js';
 
 let g = null;
 const rnd = makeRng(0x1234abcd);
@@ -269,6 +270,49 @@ function esJuego(scene) {
 const STEP = 1000 / 60, MAX_STEPS = 5, MAX_FRAME = 250;
 let acc = 0, prev = 0, raf = 0, frameNo = 0;
 
+// ---------- Si algo revienta ----------
+// En el telefono de ella no hay consola. Una excepcion dejaba la pantalla
+// CONGELADA en el ultimo fotograma pintado y nadie sabia por que (23-09-2026:
+// "cuando le doy al juego Romina se queda congelado en la seleccion"). Ahora
+// se VE: un aviso con el error y el fichero:linea, para poder mandar una foto,
+// y si un juego falla al entrar (o sin parar), se vuelve al menu en vez de
+// quedarse colgado. El ultimo queda tambien en localStorage ('rom.error').
+const fallo = { msg: '', donde: '', t: 0 };
+let fallosSeguidos = 0;
+function apuntaFallo(e, cuando) {
+  const msg = String((e && e.message) || e).toUpperCase().slice(0, 90);
+  // Los dos primeros sitios de la pila (fichero:linea): donde revento y
+  // quien lo llamo.
+  const m = String((e && e.stack) || '').match(/[\w\-]+\.js:\d+/g) || [];
+  const donde = cuando + (sm.cur && sm.cur.meta ? ' ' + sm.cur.meta.id : '') + '  ' + m.slice(0, 2).join(' < ');
+  // Mientras se ve un aviso no se pisa con otro: el que importa es el
+  // PRIMERO (los que vienen detras suelen ser consecuencia suya).
+  if (fallo.t <= 0) {
+    fallo.msg = msg; fallo.donde = donde; fallo.t = 14;
+    try { localStorage.setItem('rom.error', JSON.stringify({ msg, donde, ver: versionActual(), cuando: Date.now() })); } catch (x) {}
+    console.error(e);
+  }
+}
+function alMenu() { if (sm.cur !== Menu) sm.go(Menu, {}); }
+
+// El aviso, encima de todo: en una franja oscura abajo, en dos o tres lineas.
+function dibujaFallo(gg, dt) {
+  if (fallo.t <= 0) return;
+  fallo.t -= dt;
+  gg.save();
+  baseTransform();
+  const esc = (VW >= 1000 ? 2 : 1) * supersample();
+  const alto = VW >= 1000 ? 22 : 11;
+  const lineas = ['ALGO HA FALLADO (v' + versionActual() + ')'];
+  const ancho = Math.floor((VW - 16) / (alto * 0.55));
+  for (let i = 0; i < fallo.msg.length && lineas.length < 3; i += ancho) lineas.push(fallo.msg.slice(i, i + ancho));
+  lineas.push(fallo.donde.slice(0, ancho));
+  const h = lineas.length * alto + 10;
+  gg.globalAlpha = 0.88; gg.fillStyle = '#1a0610'; gg.fillRect(0, VH - h, VW, h); gg.globalAlpha = 1;
+  lineas.forEach((l, i) => text(gg, l, 8, VH - h + 5 + i * alto, i === 0 ? '#ff5c9d' : '#ffffff', esc));
+  gg.restore();
+}
+
 function frame(now) {
   raf = requestAnimationFrame(frame);      // primero: el bucle sobrevive a una excepcion
   frameNo++;
@@ -300,10 +344,13 @@ function frame(now) {
   // giro. Se comprueba DESPUES de sm.flush() mas abajo? No: aqui, porque el
   // valor tiene que ser el mismo para todo el frame, igual que `girando`.
   const pausa = (girando && !(sm.cur && sm.cur.meta.wide)) || Pausa.activa;
+  let roto = false;
   while (acc >= STEP && n < MAX_STEPS) {
-    sm.flush();
+    // Si un juego revienta AL ENTRAR (en su init), se queda a medio montar y
+    // fallaria en cada fotograma: se vuelve al menu.
+    try { sm.flush(); } catch (e) { roto = true; apuntaFallo(e, 'AL ENTRAR'); sm.cur = null; alMenu(); }
     if (!pausa) {
-      if (sm.cur && sm.cur.update) sm.cur.update(s, ctx);
+      try { if (sm.cur && sm.cur.update) sm.cur.update(s, ctx); } catch (e) { roto = true; apuntaFallo(e, 'JUGANDO'); }
       updateParticles(s);
       cam.update(s, rnd);
     }
@@ -367,10 +414,16 @@ function frame(now) {
   // camara hace translate() ENCIMA de el. Sin esto, el temblor se acumularia.
   baseTransform();
   g.save();
-  if (cam.x || cam.y) g.translate(cam.x, cam.y);
-  if (sm.cur && sm.cur.draw) sm.cur.draw(g, ctx, alpha);
-  drawParticles(g);
+  try {
+    if (cam.x || cam.y) g.translate(cam.x, cam.y);
+    if (sm.cur && sm.cur.draw) sm.cur.draw(g, ctx, alpha);
+    drawParticles(g);
+  } catch (e) { roto = true; apuntaFallo(e, 'PINTANDO'); }
   g.restore();
+  // Un juego que falla sin parar (un segundo seguido) tampoco se deja
+  // colgado: al menu, con su aviso.
+  fallosSeguidos = roto ? fallosSeguidos + 1 : 0;
+  if (fallosSeguidos > 60) { fallosSeguidos = 0; alMenu(); }
 
   // El boton de pausa, encima de la escena y de sus particulas -- y por tanto
   // tambien encima del bloom de SURVIVAL, que se aplica dentro de su draw
@@ -384,10 +437,11 @@ function frame(now) {
 
   drawPausa(g);
   drawRotateHint(g);
+  dibujaFallo(g, dt / 1000);
   // Un fotograma entero sin excepcion: la version que corre demuestra que va
-  // (ver latido() en update.js). Va al final a proposito: si update o draw
-  // revientan, no se llega aqui y no cuenta.
-  latido();
+  // (ver latido() en update.js). Un fotograma con un fallo atrapado no cuenta:
+  // si no, una version rota se confirmaria igual.
+  if (!roto) latido();
 }
 
 // ---------- Pantalla de pausa ----------
@@ -607,7 +661,9 @@ function boot() {
       Pausa.entrar('usuario');
       return;
     }
-    if (sm.cur && sm.cur.onInput) sm.cur.onInput(ev, ctx);
+    if (sm.cur && sm.cur.onInput) {
+      try { sm.cur.onInput(ev, ctx); } catch (e) { apuntaFallo(e, 'AL TOCAR'); }
+    }
   });
   // ---------- Salir de la app y volver ----------
   //
