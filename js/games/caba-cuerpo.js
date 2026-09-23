@@ -47,10 +47,17 @@ export const ROLL_INV0 = 0.06, ROLL_INV1 = 0.28;   // invulnerable solo en medio
 // iguales seria el mismo boton tres veces, no un combo.
 //
 //   [ciclo, activa0, activa1, avance, daño, alcance]
+//
+// EL ALCANCE SALE DEL DIBUJO. La caballera pintada a mano (romi-atlas.js)
+// lleva una espada larga, y la estela de cada tajo llega a 144 / 134 / 146 px
+// de sus pies. Con los alcances de la muñeca de antes (74 / 78 / 92) la estela
+// le cruzaba la barriga al ogro y el golpe no contaba. Ahora el daño llega
+// hasta un poco antes del borde de la estela, que es la parte que se desvanece.
+// Lo vigila la seccion 8 de tools/prueba-caballero.mjs.
 export const TAJOS = [
-  [0.26, 0.07, 0.13, 26, 1, 74],   // 1 REVES:   rapido, corto
-  [0.30, 0.09, 0.16, 34, 1, 78],   // 2 DERECHO: cruza al otro lado
-  [0.46, 0.16, 0.28, 58, 2, 92],   // 3 GIRO:    gira entera, largo y fuerte
+  [0.26, 0.07, 0.13, 26, 1, 120],  // 1 REVES:   rapido, de abajo arriba
+  [0.30, 0.09, 0.16, 34, 1, 115],  // 2 DERECHO: de arriba abajo
+  [0.46, 0.16, 0.28, 58, 2, 130],  // 3 REMATE:  se echa atras y cae con todo
 ];
 // Ventana para encadenar: desde que acaba la parte activa hasta un poco
 // despues del final del ciclo. Medido: da 250-300 ms de margen, comodo en un
@@ -62,7 +69,7 @@ export const COMBO_OLVIDO = 0.34;
 
 export const TAJO_T = 0.30;                        // compat: el golpe de en medio
 export const TAJO_A0 = 0.08, TAJO_A1 = 0.15;       // ventana activa (idem)
-export const ALCANCE = 78;             // del centro del cuerpo a la punta de la espada
+export const ALCANCE = 110;            // del centro del cuerpo a la punta de la espada (en guardia)
 const TAJO_FREN = 0.45;                // cuanta velocidad conserva al cortar
 
 // --- Vida ---
@@ -111,9 +118,65 @@ export function makeCaballero(x) {
   };
 }
 
+// --- Repisas y escombros ---
+// `mundo` es opcional: { repisas: [{x0, x1, y}], bloques: [{x0, x1, top}] }.
+// Sin el, el suelo es plano como siempre, y el arnes mide lo mismo que antes.
+//   REPISAS: se atraviesan desde abajo y se aterriza encima (plataformas de un
+//   solo sentido). Asi se sube de un salto sin darse con la cabeza.
+//   BLOQUES (los escombros de la boveda): solidos. Se aterriza encima y cortan
+//   el paso por los lados: hay que saltarlos o subirse.
+export const PIES_R = 16;     // se sigue de pie con el centro hasta 16 px fuera del borde
+export const CUERPO_K = 22;   // medio ancho del cuerpo, para chocar de lado con un bloque
+
+// La superficie en la que aterriza al bajar de yAntes a y en x, o null.
+function aterrizaEn(x, yAntes, y, mundo) {
+  let mejor = y >= SUELO ? SUELO : null;
+  const cruza = (top, x0, x1) => {
+    if (x >= x0 - PIES_R && x <= x1 + PIES_R && yAntes <= top + 0.01 && y >= top &&
+        (mejor === null || top < mejor)) mejor = top;
+  };
+  if (mundo) {
+    for (const p of mundo.repisas || []) cruza(p.y, p.x0, p.x1);
+    for (const b of mundo.bloques || []) cruza(b.top, b.x0, b.x1);
+  }
+  return mejor;
+}
+
+// ¿Tiene algo bajo los pies a esta altura?
+export function apoyada(x, y, mundo) {
+  if (y >= SUELO - 0.01) return true;
+  if (!mundo) return false;
+  for (const p of mundo.repisas || []) if (Math.abs(y - p.y) < 0.5 && x >= p.x0 - PIES_R && x <= p.x1 + PIES_R) return true;
+  for (const b of mundo.bloques || []) if (Math.abs(y - b.top) < 0.5 && x >= b.x0 - PIES_R && x <= b.x1 + PIES_R) return true;
+  return false;
+}
+
+// La superficie mas alta que hay bajo (x, y): para la sombra, que tiene que caer
+// sobre la repisa cuando salta encima de ella, no en el suelo de abajo.
+export function sueloBajo(x, y, mundo) {
+  let s = SUELO;
+  if (mundo) {
+    for (const p of mundo.repisas || []) if (x >= p.x0 - PIES_R && x <= p.x1 + PIES_R && p.y >= y - 0.5 && p.y < s) s = p.y;
+    for (const b of mundo.bloques || []) if (x >= b.x0 - PIES_R && x <= b.x1 + PIES_R && b.top >= y - 0.5 && b.top < s) s = b.top;
+  }
+  return s;
+}
+
+// Los bloques cortan el paso: con los pies por debajo de su techo no se entra.
+function chocaBloques(K, xAntes, mundo) {
+  if (!mundo || !mundo.bloques) return;
+  for (const b of mundo.bloques) {
+    if (K.y <= b.top + 1) continue;                 // va por encima: no choca
+    if (K.x + CUERPO_K > b.x0 && K.x - CUERPO_K < b.x1) {
+      K.x = xAntes <= (b.x0 + b.x1) / 2 ? b.x0 - CUERPO_K : b.x1 + CUERPO_K;
+      K.vx = 0;
+    }
+  }
+}
+
 // Un paso. `inp` = { dx, salta, golpea, rueda }: dx es el stick (-1..1) y los
 // otros tres son FLANCOS (true solo en el frame en que se pulsan).
-export function stepCaballero(K, inp, dt) {
+export function stepCaballero(K, inp, dt, mundo) {
   if (!K.vivo) return;
   K.t += dt; K.animT += dt;
   if (K.iframe > 0) K.iframe -= dt;
@@ -238,26 +301,34 @@ export function stepCaballero(K, inp, dt) {
     }
   }
 
-  // --- Gravedad y suelo ---
+  // --- Gravedad y suelo (o repisa, o escombro) ---
   if (!K.enSuelo) {
+    const yAntes = K.y;
     K.vy += (K.vy < 0 ? GRAV_UP : GRAV_DN) * dt;
     K.y += K.vy * dt;
-    if (K.y >= SUELO) {
+    const s = K.vy >= 0 ? aterrizaEn(K.x, yAntes, K.y, mundo) : null;
+    if (s !== null) {
       // ATERRIZAJE. Se guarda cuanto venia cayendo para que el dibujo pueda
       // amortiguar: caer de un salto entero y bajar un escalon no se ven
       // igual. Dura poco (0.12 s) y NO quita el control -- solo se dibuja.
-      if (!K.enSuelo && K.vy > 300) K.aterriza = 0.12;
-      K.y = SUELO; K.vy = 0; K.enSuelo = true;
+      if (K.vy > 300) K.aterriza = 0.12;
+      K.y = s; K.vy = 0; K.enSuelo = true;
       if (K.st === SALTA) { K.st = QUIETO; K.animT = 0; }
     }
+  } else if (!apoyada(K.x, K.y, mundo)) {
+    // Se le acaba la repisa (o el escombro) bajo los pies: empieza a caer. El
+    // coyote que ya tenia le deja saltar un instante, como al borde del suelo.
+    K.enSuelo = false; K.vy = 0;
   } else {
     K.coyote = COYOTE;
   }
   if (K.coyote > 0 && !K.enSuelo) K.coyote -= dt;
 
+  const xAntes = K.x;
   K.x += K.vx * dt;
   if (K.x < AX0) { K.x = AX0; K.vx = 0; }
   else if (K.x > AX1) { K.x = AX1; K.vx = 0; }
+  chocaBloques(K, xAntes, mundo);
 
   // --- Ciclo del tajo ---
   if (K.st === TAJO) {
@@ -318,12 +389,13 @@ export function invulnerable(K) {
 }
 
 // Devuelve 'bloqueado' si el escudo para el golpe, true si hiere, false si no
-// le entra por invulnerabilidad.
-export function herir(K, sx) {
+// le entra por invulnerabilidad. `desdeArriba`: lo que cae del techo no se
+// para con la guardia (va de frente), solo se esquiva.
+export function herir(K, sx, desdeArriba = false) {
   if (!K.vivo) return false;
   // El escudo para lo que viene DE FRENTE, y solo cuando ya esta arriba.
   // Durante el EMPUJON tambien protege: el escudo va por delante.
-  if ((K.st === BLOQUEA && K.bloqT >= BLOQ_SUBE) || K.st === EMPUJE) {
+  if (!desdeArriba && ((K.st === BLOQUEA && K.bloqT >= BLOQ_SUBE) || K.st === EMPUJE)) {
     const deFrente = (sx - K.x) * K.dir > 0;
     if (deFrente) {
       // PARADA: si el golpe llega en la ventana justo despues de levantar el
@@ -347,10 +419,14 @@ export function herir(K, sx) {
 }
 
 // Que pose y que fotograma toca dibujar. Devuelve [pose, frame].
+//
+// Las poses son las de romi-atlas.js: una caballera PINTADA A MANO (ver
+// tools/romina-atlas.py), no la muñeca por codigo de antes. Cuantos
+// fotogramas tiene cada una lo dice el atlas, y el arnes comprueba contra el
+// que todos se alcanzan jugando y ninguno se sale.
 export function pose(K) {
-  // DOLOR: tres fotogramas en los 0.28 s que dura. MUERTO se queda en el
-  // arqueado, que es donde mas se lee que le ha entrado.
-  if (K.st === MUERTO) return ['hurt', 1];
+  // DOLOR: tres fotogramas en los 0.28 s que dura. MUERTO: de rodillas.
+  if (K.st === MUERTO) return ['dead', 0];
   if (K.st === DOLOR) {
     const u = (K.t - K.hurtIni) / 0.28;
     return ['hurt', u < 0.28 ? 0 : u < 0.62 ? 1 : 2];
@@ -371,31 +447,20 @@ export function pose(K) {
     return ['bash', 2];
   }
   if (K.st === TAJO) {
-    // Cada golpe del combo tiene SU animacion: atk1, atk2, atk3. El fotograma
-    // del filo cae EXACTAMENTE en la ventana en que ese golpe hace daño, para
-    // que el dibujo y el golpe de verdad sean el mismo instante.
     const [ciclo, a0, a1] = TAJOS[K.combo];
-    const nombre = ['atk', 'atk2', 'atk3'][K.combo];
     const t = K.tajoT;
-    if (K.combo === 2) {
-      // El GIRO tiene seis: es mas largo y da una vuelta entera.
-      if (t < a0 * 0.5) return [nombre, 0];
-      if (t < a0) return [nombre, 1];
-      if (t < (a0 + a1) / 2) return [nombre, 2];
-      if (t < a1) return [nombre, 3];
-      if (t < ciclo - 0.08) return [nombre, 4];
-      return [nombre, 5];
-    }
-    if (t < a0) return [nombre, 0];
-    if (t < a1) return [nombre, 1];
-    if (t < a1 + 0.05) return [nombre, 2];
-    if (t < ciclo - 0.03) return [nombre, 3];
-    return [nombre, 4];
+    // EN EL AIRE: su tajo aereo, sea el golpe que sea del combo.
+    if (!K.enSuelo) return ['air', t < a0 ? 0 : t < (a0 + a1) / 2 ? 1 : t < a1 ? 2 : 3];
+    // Cada golpe del combo tiene SU animacion, y cada una reparte sus
+    // fotogramas en tres tramos: la CARGA hasta activa0, el FILO (los dos
+    // fotogramas con la estela) justo en la parte activa, y la VUELTA hasta
+    // el ciclo. Asi la estela se ve EXACTAMENTE cuando el golpe hace daño.
+    const [nombre, carga, filo, vuelta] = [['atk', 2, 2, 2], ['atk2', 3, 2, 3], ['atk3', 6, 2, 3]][K.combo];
+    return [nombre, reparte(t, a0, a1, ciclo, carga, filo, vuelta)];
   }
-  // SALTAR: seis fotogramas mapeados por la VELOCIDAD vertical, no por un
-  // reloj, para que el dibujo sea siempre lo que el cuerpo hace de verdad.
-  // JUMP_V es 860: subiendo fuerte -> despegue, subiendo flojo -> cumbre,
-  // cayendo -> las dos de caida.
+  // SALTAR: fotogramas mapeados por la VELOCIDAD vertical, no por un reloj,
+  // para que el dibujo sea siempre lo que el cuerpo hace de verdad. JUMP_V es
+  // 860: del 1 al 5 sube (en el 4 y el 5 levanta la espada), el 6 y el 7 caen.
   if (!K.enSuelo) {
     const v = K.vy;
     // El 0 es el IMPULSO agachado: los dos primeros frames tras despegar, que
@@ -404,24 +469,32 @@ export function pose(K) {
     // ata aqui no se alcanza NUNCA y es un dibujo tirado. Lo cazo el arnes.)
     if (K.st === SALTA && K.animT < 0.04) return ['jump', 0];
     if (v < -620) return ['jump', 1];    // acaba de despegar
-    if (v < -200) return ['jump', 2];    // subiendo
-    if (v <  160) return ['jump', 3];    // la cumbre: casi parada
-    if (v <  520) return ['jump', 4];    // cayendo
-    return ['jump', 5];                  // buscando el suelo
+    if (v < -420) return ['jump', 2];
+    if (v < -220) return ['jump', 3];
+    if (v <  -40) return ['jump', 4];
+    if (v <  160) return ['jump', 5];    // la cumbre: casi parada
+    if (v <  520) return ['jump', 6];    // cayendo
+    return ['jump', 7];                  // buscando el suelo
   }
   // ATERRIZAJE: se dibuja amortiguando aunque ya tenga el control. Va despues
   // del aire y antes de correr, porque se puede aterrizar andando.
-  if (K.aterriza > 0) return ['jump', 6];
+  if (K.aterriza > 0) return ['jump', 8];
   if (K.st === CORRE) {
     // El ciclo avanza con la DISTANCIA recorrida, no con el reloj: asi los
-    // pies no patinan cuando acelera o frena. Seis fotogramas, y el paso se
-    // reescala para que un ciclo siga midiendo lo mismo en el suelo.
-    // OCHO fotogramas. El factor se reescala con ellos para que un ciclo de
-    // zancada siga midiendo lo mismo en el suelo (0.034 era para 4).
-    const paso = Math.abs(K.x * 0.034 * 2) % 8;
-    return ['run', Math.floor(paso)];
+    // pies no patinan cuando acelera o frena. Medido en el dibujo, el pie
+    // apoyado retrocede ~39 px por fotograma, que a 240 px/s serian 6 por
+    // segundo: parece correr a camara lenta. A 32 px por fotograma (7.5 por
+    // segundo) resbala un poco y se ve correr de verdad.
+    return ['run', Math.floor(Math.abs(K.x) / 32) % 6];
   }
-  // SEIS fotogramas de respirar. Se alarga el paso a 0.30 s para que el ciclo
-  // entero siga durando lo mismo (1.7 s): respirar es lento a proposito.
-  return ['idle', Math.floor(K.animT / 0.30) % 6];
+  // Respirar: nueve fotogramas, un ciclo por segundo.
+  return ['idle', Math.floor(K.animT / 0.11) % 9];
+}
+
+// Reparte los fotogramas de un tajo en sus tres tramos (ver pose()).
+function reparte(t, a0, a1, ciclo, nCarga, nFilo, nVuelta) {
+  if (t < a0) return Math.min(nCarga - 1, Math.floor(t / a0 * nCarga));
+  if (t < a1) return nCarga + Math.min(nFilo - 1, Math.floor((t - a0) / (a1 - a0) * nFilo));
+  const u = (t - a1) / Math.max(1e-6, ciclo - a1);
+  return nCarga + nFilo + Math.min(nVuelta - 1, Math.floor(u * nVuelta));
 }
