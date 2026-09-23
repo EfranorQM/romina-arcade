@@ -14,6 +14,10 @@ const C = await import(pathToFileURL(path.join(here, '..', 'www', 'js', 'games',
 const { makeCaballero, stepCaballero, espadaActiva, invulnerable, herir, pose,
         SUELO, VEL, JUMP_V, ROLL_T, ROLL_CD, TAJO_T, TAJO_A0, TAJO_A1, AX0, AX1, HP0 } = C;
 
+// El atlas es solo datos (sin DOM): de el sale cuantos fotogramas tiene de
+// verdad cada pose, en vez de una tabla aparte que se quedaria vieja.
+const A = await import(pathToFileURL(path.join(here, '..', 'www', 'js', 'games', 'romi-atlas.js')).href);
+
 const DT = 1 / 60;
 const fmt = v => (Math.round(v * 10) / 10).toFixed(1);
 let fallos = 0;
@@ -188,10 +192,11 @@ console.log('== 7) POSES ==');
   ok(vistas.has('idle') && vistas.has('run') && vistas.has('jump') && vistas.has('roll') && vistas.has('atk'),
      'las cinco poses principales se alcanzan jugando');
   // Los fotogramas nunca se salen del array. Se comprueba contra el numero
-  // REAL de poses de cada accion (atk tiene 5, block 3, jump 3...), no contra
-  // un 0..3 fijo: ese tope fijo habria dejado pasar un desbordamiento el dia
-  // que se añadieron fotogramas al tajo.
-  const CUENTA = { idle: 6, run: 8, jump: 7, roll: 4, atk: 5, atk2: 5, atk3: 6, bash: 3, block: 4, hurt: 3 };
+  // REAL de fotogramas de cada pose, sacado del ATLAS (la caballera pintada a
+  // mano), no contra una tabla escrita aqui: la tabla se quedo vieja en cuanto
+  // cambio el dibujo, y un tope fijo deja pasar un desbordamiento.
+  const CUENTA = {};
+  for (const k in A.FRAMES) CUENTA[k] = A.FRAMES[k].length;
   const K2 = makeCaballero(300);
   let malo = null;
   const vistos = {};
@@ -210,7 +215,7 @@ console.log('== 7) POSES ==');
   // sale nunca, es un dibujo que nadie va a ver.
   const fAtk = vistos.atk ? vistos.atk.size : 0;
   console.log(`fotogramas del tajo alcanzados: ${fAtk} de ${CUENTA.atk}`);
-  ok(fAtk === CUENTA.atk, 'los cinco fotogramas del tajo se alcanzan jugando');
+  ok(fAtk === CUENTA.atk, `los ${CUENTA.atk} fotogramas del tajo se alcanzan jugando`);
 
   // TODOS los fotogramas de TODAS las poses tienen que salir jugando. Un
   // dibujo que no se alcanza nunca es trabajo tirado, y al subir run de 4 a 6
@@ -281,12 +286,47 @@ console.log('== 7) POSES ==');
     jugar(K, 25, nada);                                     // el dolor entero
   }
 
+  // GUION 4: un tajo EN EL AIRE (tiene su propia animacion), y la derrota.
+  {
+    const K = makeCaballero(300);
+    jugar(K, 1, { ...nada, salta: true, saltaAbajo: true });
+    jugar(K, 6, { ...nada, saltaAbajo: true });
+    jugar(K, 1, { ...nada, golpea: true, saltaAbajo: true });
+    jugar(K, 20, { ...nada, saltaAbajo: true });            // el tajo aereo entero
+    jugar(K, 40, nada);
+    for (let i = 0; i < HP0; i++) { K.iframe = 0; herir(K, K.x + 60); }
+    anota(K);                                                 // de rodillas
+  }
+
   for (const nombre in CUENTA) {
     const vistas = v3[nombre] ? v3[nombre].size : 0;
     const faltan = [];
     for (let f = 0; f < CUENTA[nombre]; f++) if (!v3[nombre] || !v3[nombre].has(f)) faltan.push(f);
     console.log(`  ${nombre.padEnd(6)} ${vistas}/${CUENTA[nombre]}` + (faltan.length ? '  faltan: ' + faltan.join(',') : ''));
     ok(faltan.length === 0, `todos los fotogramas de ${nombre} se alcanzan jugando`);
+  }
+}
+
+console.log('== 8) EL TAJO LLEGA HASTA DONDE LLEGA LA ESTELA ==');
+{
+  // La caballera lleva espada larga y cada tajo dibuja una estela en media
+  // luna. Si el daño acaba mucho antes que la estela, se ve la estela cruzar
+  // al enemigo y el golpe no cuenta: lo peor que puede sentir quien juega.
+  // Con los alcances de la muñeca de antes (74/78/92) pasaba por 50-70 px.
+  // Se mide el borde delantero de los fotogramas del FILO (los de la estela)
+  // y el alcance tiene que caer en los ultimos 30 px, que son la parte de la
+  // estela que ya se desvanece -- y nunca por delante de ella.
+  const FILO = [['atk', 2, 2], ['atk2', 3, 2], ['atk3', 6, 2]];   // [pose, primero, cuantos]
+  for (let i = 0; i < 3; i++) {
+    const [nom, f0, nf] = FILO[i];
+    let borde = -1e9;
+    for (let f = f0; f < f0 + nf; f++) {
+      const [, , w, , ox] = A.FRAMES[nom][f];
+      borde = Math.max(borde, ox + w);
+    }
+    const alc = C.TAJOS[i][5];
+    ok(alc <= borde && alc >= borde - 30,
+       `${nom}: el daño llega a ${alc} px y la estela dibujada a ${borde} (en sus ultimos 30)`);
   }
 }
 

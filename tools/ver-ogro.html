@@ -6,7 +6,7 @@
        node tools/ver.js tools/ver-ogro.html ogro.png 1500 2200
 
      Con ?s=NOMBRE saca UNA secuencia a tamaño real, un fotograma por celda,
-     para montar un GIF (python tools/gif-ogro.py). Nombres: garrote, pisoton,
+     para montar un GIF (python tools/gif.py ogro:garrote salida.gif). Nombres: garrote, pisoton,
      barrido, embestida, ruge, dolor, pared, parada, jadeo, muere, anda, espera.
        node tools/ver.js "tools/ver-ogro.html?s=garrote" tira.png 9000 470 -->
 <meta charset="utf-8">
@@ -15,17 +15,17 @@
 <script type="module">
 import * as OG from '../www/js/games/ogro-cuerpo.js';
 import { poseOgro, drawOgro, bakeOgro, cargaOgro } from '../www/js/games/ogro-sprite.js';
-import { bakeRomina, drawRomina } from '../www/js/games/romi-anim.js';
+import { drawRomina, cargaRomina } from '../www/js/games/romi-sprite.js';
 import { bakeMundo, drawMundo } from '../www/js/games/caba-mundo.js';
 import { SUELO } from '../www/js/games/caba-cuerpo.js';
 import { text } from '../www/js/font.js';
 
 await cargaOgro();
+await cargaRomina();
 const cv = document.getElementById('c');
 const g = cv.getContext('2d');
 g.imageSmoothingEnabled = false;
 const SO = bakeOgro();
-const SR = bakeRomina();
 
 // Cada secuencia: como montar el ogro en el instante t, y cuanto dura.
 function ataque(k) {
@@ -72,7 +72,7 @@ if (sola) {
     s.pon(O, t);
     const ox = 170;
     const kx = ox + OG.CUERPO_R + (OG.ATAQUES[OG.GARROTE][5]) + 20;
-    drawRomina(g, SR, kx, suelo, -1, 'idle', 0);
+    drawRomina(g, kx, suelo, -1, 'idle', 0);
     drawOgro(g, SO, ox, suelo, 1, poseOgro(O));
     const activo = s.fases && t >= s.fases[0] && t <= s.fases[1];
     text(g, t.toFixed(2) + 's', 8, 8, activo ? '#ff5a3c' : '#ffe066', 2);
@@ -95,7 +95,7 @@ if (sola) {
   const O0 = OG.makeOgro(0);
   O0.dir = 1;
   drawOgro(g, SO, 200, 300, 1, poseOgro(O0));
-  drawRomina(g, SR, 560, 300, -1, 'idle', 0);
+  drawRomina(g, 560, 300, -1, 'idle', 0);
   g.restore();
   y += 340;
   const PASO = 0.05, K = 0.5, CW = 150;

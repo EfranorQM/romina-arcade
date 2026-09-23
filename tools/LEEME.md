@@ -114,7 +114,7 @@ muda o de la pantalla final sin cronometrar nada desde fuera.
 ```
 node tools/prueba-ogro.mjs                             # la pelea medida: 13 secciones
 node tools/ver.js tools/ver-ogro.html ogro.png 1500 5000
-python tools/gif-ogro.py garrote vistas/garrote.gif    # el MOVIMIENTO, a su velocidad
+python tools/gif.py ogro:garrote vistas/garrote.gif     # el MOVIMIENTO, a su velocidad
 python tools/ogro-atlas.py RUTA/PNG/Animation/Troll1   # rehornear la hoja
 ```
 
@@ -134,7 +134,28 @@ alcance de antes, el garrote le cruzaba la cabeza a ella sin hacerle nada.
 
 `ver-ogro.html` enseña cada secuencia fotograma a fotograma (en rojo, la parte
 activa). Con `?s=garrote` saca una sola secuencia a tamaño real, que es lo que
-`gif-ogro.py` convierte en GIF. `vistas/` no va al repo.
+`gif.py` convierte en GIF. `vistas/` no va al repo.
+
+## ROMINA, la caballera
+
+```
+node tools/prueba-caballero.mjs                              # su fisica: 8 secciones
+node tools/ver.js tools/ver-caballera.html caballera.png 1500 4200
+python tools/gif.py caballera:combo vistas/combo.gif         # combo, corre, salto, rodada...
+python tools/romina-atlas.py RUTA/ArmoredHero                # rehornear la hoja
+```
+
+Como el ogro, ya no se dibuja por código: es la "FemaleKnight" de retsuto
+(<https://retsuto.itch.io/femaleknight>, pixel art gratis) con el pelo y los
+ojos recoloreados a negro, espejada para mirar a la derecha y doblada con
+Scale2x. `romina-atlas.py` escribe `www/img/romina.png` y `romi-atlas.js`; el
+pack original **no está en el repo** (su licencia prohíbe redistribuirlo).
+
+La pose la sigue eligiendo `C.pose()` en `caba-cuerpo.js`, sin DOM, y el arnés
+comprueba contra el ATLAS que todos los fotogramas se alcanzan jugando. La
+sección 8 vigila que el daño de cada tajo llegue hasta donde llega su estela
+dibujada. `ver-caballera.html` no elige poses a mano: simula cada acción con la
+física real pulsando botones, como jugando.
 
 ## Ver las carátulas del menú
 

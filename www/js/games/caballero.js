@@ -9,13 +9,15 @@
 // Se juega de LADO. Pulgar izquierdo = mover. Tres botones a la derecha:
 // SALTAR (arriba), TAJO (el grande) y RODAR (el chico).
 
-import { VW, VH, cam, clamp } from '../core.js';
+import { VW, VH, cam } from '../core.js';
 import { burst, particles } from '../gfx.js';
 import { text, textCenter, measure } from '../font.js';
 import { SFX } from '../audio.js';
 import { Stick, Button, vibrate } from '../input.js';
 import * as C from './caba-cuerpo.js';
-import { bakeRomina, drawRomina } from './romi-anim.js';
+import { drawRomina, P as PR } from './romi-sprite.js';
+// La paleta de la Romina de antes se queda para la INTERFAZ (botones, textos,
+// corazones): el rosa es el color del juego en el menu, no el de su ropa.
 import { P as PC } from './romi-art.js';
 import { bakeMundo, drawMundo, P as PM } from './caba-mundo.js';
 import * as OG from './ogro-cuerpo.js';
@@ -36,9 +38,6 @@ export default {
   init(ctx, args) {
     this.ctx = ctx;
     this.K = C.makeCaballero(160);
-    const t0 = performance.now();
-    this.S = bakeRomina();
-    this.msHornear = performance.now() - t0;
     this.W = bakeMundo(SUELO, VH);
 
     this.stick = new Stick(80, 14);
@@ -211,15 +210,24 @@ export default {
     }
 
     // --- ELLA LE PEGA AL OGRO ---
-    if (C.espadaActiva(K) && O.vivo) {
+    // UN golpe por tajo: K.golpeo se pone a 0 al empezar cada tajo y aqui se
+    // marca al acertar. Sin eso cada fotograma de la parte activa volvia a
+    // pegar (y con el hitstop de por medio, un tajo eran cuatro golpes).
+    // Y el daño sale de K.combo (0, 1, 2: que golpe del combo es), NO de
+    // K.tajoId, que cuenta TODOS los tajos de la pelea: con tajoId el segundo
+    // tajo pegaba como el remate y desde el tercero TAJOS[3] no existia y el
+    // update reventaba -- el ogro dejaba de recibir daño y no se podia ganar.
+    if (C.espadaActiva(K) && O.vivo && !K.golpeo) {
       const [px] = C.puntaEspada(K);
       if (OG.espadaTocaOgro(O, px, K.x)) {
-        const dano = C.TAJOS[K.tajoId][4];
+        const dano = C.TAJOS[K.combo][4];
         if (OG.hiereOgro(O, dano, K.dir)) {
-          this.hitstop = (K.tajoId === 2 ? 8 : 5) / 60;
+          K.golpeo = 1;
+          const fuerte = K.combo === 2;
+          this.hitstop = (fuerte ? 8 : 5) / 60;
           this.flashO = 0.1;
-          cam.shake(K.tajoId === 2 ? 4 : 3, 0.12);
-          SFX.corta(); vibrate(K.tajoId === 2 ? 22 : 14);
+          cam.shake(fuerte ? 4 : 3, 0.12);
+          SFX.corta(); vibrate(fuerte ? 22 : 14);
           burst(O.x + K.dir * -30, SUELO - 120, 14,
                 { rnd: Math.random, colors: [POG.pie3, POG.pie2, '#8b1a2b'],
                   speed: 260, life: 0.5, size: 4, grav: 620 });
@@ -265,7 +273,7 @@ export default {
           if (K.hp <= 0) { K.vivo = false; K.st = C.MUERTO; }
           this.hitstop = 7 / 60; cam.shake(5, 0.16); SFX.golpe ? SFX.golpe() : SFX.clang();
           vibrate(34);
-          burst(K.x, SUELO - 90, 12, { rnd: Math.random, colors: [PC.ves2, PC.ves3],
+          burst(K.x, SUELO - 90, 12, { rnd: Math.random, colors: [PR.ves2, PR.ves3],
                                        speed: 240, life: 0.45, size: 4, grav: 500 });
         }
       }
@@ -387,7 +395,9 @@ export default {
       }
       g.globalAlpha = 1;
       const parpadea = O.invul > 0 && O.st !== OG.RUGE && ((O.invul * 16) | 0) & 1;
-      if (!parpadea) drawOgro(g, this.SO, O.x - cx, SUELO, O.dir, po, this.flashO / 0.1);
+      // El destello al 75 %, no al 100: con la media luna blanca del tajo de
+      // ella encima, un ogro blanco entero se leia como una mancha sin forma.
+      if (!parpadea) drawOgro(g, this.SO, O.x - cx, SUELO, O.dir, po, Math.max(0, this.flashO) / 0.1 * 0.75);
     }
 
     // Sombra de Romina. Era un fillRect: un rectangulo negro de 5 px que se
@@ -412,36 +422,13 @@ export default {
     }
     g.globalAlpha = 1;
 
-    // El caballero
+    // Romina. La estela de cada tajo ya viene DIBUJADA en sus fotogramas (la
+    // media luna blanca del pack), asi que la escena ya no pinta el arco que
+    // pintaba para la muñeca de antes: saldrian dos estelas una encima de otra.
     const [p, f] = C.pose(K);
     const parpadea = K.iframe > 0 && (((K.iframe * 14) | 0) & 1);
-    if (!parpadea) drawRomina(g, this.S, K.x - cx, K.y, K.dir, p, f);
-
-    // El arco del tajo: tres medias lunas concentricas que se apagan. Es lo
-    // que hace que el espadazo se VEA, mas que el sprite.
-    if (K.st === C.TAJO && K.tajoT < 0.22) {
-      const u = clamp((K.tajoT - 0.05) / 0.17, 0, 1);
-      const a0 = -1.3 + u * 2.2;              // barre de arriba hacia abajo
-      const ox = K.x - cx + K.dir * 10, oy = K.y - 78;
-      g.save();
-      g.translate(ox, oy);
-      if (K.dir < 0) g.scale(-1, 1);
-      // Tres cintas FINAS y escalonadas, no un abanico macizo: la de fuera es
-      // ancha y tenue (la estela), la de dentro es un filo blanco de 2 px.
-      // Con el ancho de antes el arco se leia como un escudo, no como un corte.
-      for (const [r0, r1, col, al, ar] of [[76, 100, PC.ace3, 0.30, 0.62],
-                                           [70, 88, '#b9e8ff', 0.55, 0.40],
-                                           [74, 80, '#ffffff', 0.95, 0.26]]) {
-        g.globalAlpha = al * (1 - u * 0.75);
-        g.fillStyle = col;
-        g.beginPath();
-        g.arc(0, 0, r1, a0 - ar, a0 + ar);
-        g.arc(0, 0, r0, a0 + ar, a0 - ar, true);
-        g.closePath(); g.fill();
-      }
-      g.globalAlpha = 1;
-      g.restore();
-    }
+    const rastro = K.st === C.RUEDA && C.invulnerable(K) ? 1 : 0;
+    if (!parpadea) drawRomina(g, K.x - cx, K.y, K.dir, p, f, rastro);
 
     this.drawHud(g);
     this.drawControles(g);
@@ -500,7 +487,7 @@ export default {
       const col = this.combo === 3 ? PC.oro3 : PC.ves4;
       g.globalAlpha = Math.min(1, u * 1.4);
       textCenter(g, 'x' + this.combo, VW / 2, 118, col, esc);
-      if (this.combo === 3) textCenter(g, 'GIRO', VW / 2, 164, PC.bla2, 3);
+      if (this.combo === 3) textCenter(g, 'REMATE', VW / 2, 164, PC.bla2, 3);
       g.globalAlpha = 1;
     }
   },
@@ -526,7 +513,7 @@ export default {
     boton(g, this.bEscudo, 32, PC.ace1, PC.ace3, 'ESCUDO', false);
   },
 
-  destroy() { this.S = null; this.W = null; },
+  destroy() { this.W = null; },
 };
 
 function boton(g, b, r, fondo, borde, txt, frio) {

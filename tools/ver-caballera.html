@@ -1,0 +1,124 @@
+<!doctype html>
+<!-- ROMINA (la caballera pintada a mano): cada accion simulada con la FISICA
+     REAL (caba-cuerpo.js) y dibujada con romi-sprite.js. No se eligen poses a
+     mano: se pulsan botones, como jugando, y se dibuja lo que C.pose() dice.
+
+       node tools/ver.js tools/ver-caballera.html caballera.png 1500 4200
+
+     Con ?s=NOMBRE saca UNA accion a tamaño real, un fotograma por celda, para
+     el GIF (python tools/gif.py caballera:combo salida.gif). Acciones: combo,
+     corre, salto, rodada, guardia, dolor, aire, derrota. -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#241c1a}canvas{display:block}</style>
+<canvas id="c" width="1500" height="4200"></canvas>
+<script type="module">
+import * as C from '../www/js/games/caba-cuerpo.js';
+import * as OG from '../www/js/games/ogro-cuerpo.js';
+import { drawRomina, cargaRomina } from '../www/js/games/romi-sprite.js';
+import { poseOgro, drawOgro, bakeOgro, cargaOgro } from '../www/js/games/ogro-sprite.js';
+import { bakeMundo, drawMundo } from '../www/js/games/caba-mundo.js';
+import { text } from '../www/js/font.js';
+
+await cargaRomina();
+await cargaOgro();
+const cv = document.getElementById('c');
+const g = cv.getContext('2d');
+g.imageSmoothingEnabled = false;
+const SO = bakeOgro();
+const DT = 1 / 60;
+const nada = { dx: 0, salta: false, golpea: false, rueda: false, saltaAbajo: false, bloquea: false };
+
+// Cada accion: cuanto dura, que se pulsa en cada paso de 1/60 s y, si hace
+// falta, que le pasa (un golpe que le entra) en un paso concreto.
+const SEC = {
+  // El combo solo encadena mientras el golpe anterior NO ha acabado (tras su
+  // parte activa y antes de su ciclo): a 12 pasos entre pulsaciones, como en
+  // el arnes. Pulsar mas tarde empieza otro combo desde el primero.
+  combo: { dura: 1.25, inp: n => ({ ...nada, golpea: n === 0 || n === 12 || n === 24 }) },
+  corre: { dura: 1.0, inp: () => ({ ...nada, dx: 1 }) },
+  salto: { dura: 0.95, inp: n => ({ ...nada, salta: n === 0, saltaAbajo: n < 20 }) },
+  rodada: { dura: 0.6, inp: n => ({ ...nada, rueda: n === 2 }) },
+  guardia: { dura: 1.3, inp: n => ({ ...nada, bloquea: n < 70, golpea: n === 48 }),
+             evento: (n, K) => { if (n === 20) C.herir(K, K.x + K.dir * 80); } },
+  dolor: { dura: 0.6, inp: () => nada, evento: (n, K) => { if (n === 4) C.herir(K, K.x + K.dir * 80); } },
+  aire: { dura: 0.9, inp: n => ({ ...nada, salta: n === 0, saltaAbajo: n < 20, golpea: n === 10 }) },
+  derrota: { dura: 0.5, inp: () => nada,
+             evento: (n, K) => { if (n === 6) for (let i = 0; i < C.HP0; i++) { K.iframe = 0; C.herir(K, K.x + 80); } } },
+};
+
+// Simula una accion y devuelve, para cada instante pedido, como estaba ella.
+function simula(s, tiempos) {
+  const K = C.makeCaballero(0);
+  const out = [];
+  let n = 0, i = 0;
+  const pasos = Math.ceil(s.dura / DT) + 1;
+  for (; n <= pasos && i < tiempos.length; n++) {
+    while (i < tiempos.length && tiempos[i] <= n * DT + 1e-9) {
+      const [p, f] = C.pose(K);
+      out.push({ x: K.x, y: K.y, dir: K.dir, p, f,
+                 rastro: K.st === C.RUEDA && C.invulnerable(K) ? 1 : 0,
+                 parpadea: K.iframe > 0 && (((K.iframe * 14) | 0) & 1) });
+      i++;
+    }
+    if (s.evento) s.evento(n, K);
+    C.stepCaballero(K, s.inp(n), DT);
+  }
+  return out;
+}
+
+const params = new URLSearchParams(location.search);
+const sola = params.get('s');
+
+if (sola) {
+  // UNA accion a tamaño real, con el ogro de pie delante para la escala.
+  const s = SEC[sola], fps = +(params.get('fps') || 25);
+  const n = Math.ceil(s.dura * fps) + 1;
+  const CW = 620, CH = 470, suelo = 440;
+  cv.width = n * CW; cv.height = CH;
+  g.imageSmoothingEnabled = false;
+  const M = bakeMundo(suelo, CH);
+  const estados = simula(s, Array.from({ length: n }, (_, i) => i / fps));
+  const O = OG.makeOgro(0); O.dir = -1;
+  for (let i = 0; i < n; i++) {
+    const e = estados[i];
+    g.save();
+    g.beginPath(); g.rect(i * CW, 0, CW, CH); g.clip();
+    g.translate(i * CW, 0);
+    drawMundo(g, M, 300, CW, CH, suelo);
+    O.animT = i / fps;
+    drawOgro(g, SO, 520, suelo, -1, poseOgro(O));
+    // Ella arranca en x=140 de la celda; las acciones que avanzan se ven
+    // avanzar (la rodada cruza su distancia de verdad).
+    if (!e.parpadea) drawRomina(g, 140 + e.x, suelo - (C.SUELO - e.y), e.dir, e.p, e.f, e.rastro);
+    text(g, (i / fps).toFixed(2) + 's  ' + e.p + ' ' + e.f, 8, 8, '#ffe066', 2);
+    g.restore();
+  }
+} else {
+  // LA HOJA: cada accion en una fila, un instante cada 0.05 s, a x0.5.
+  let alto = 20;
+  for (const s of Object.values(SEC)) alto += 30 + Math.ceil(Math.ceil(s.dura / 0.05) / 10) * 150;
+  cv.height = alto;
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = '#241c1a'; g.fillRect(0, 0, cv.width, cv.height);
+  let y = 10;
+  const PASO = 0.05, K5 = 0.5, CW = 150;
+  for (const nom of Object.keys(SEC)) {
+    const s = SEC[nom];
+    const n = Math.ceil(s.dura / PASO);
+    text(g, nom.toUpperCase() + '  (' + s.dura.toFixed(2) + ' s)', 12, y, '#ffe066', 2);
+    y += 20;
+    const estados = simula(s, Array.from({ length: n }, (_, i) => i * PASO));
+    for (let i = 0; i < n; i++) {
+      const e = estados[i];
+      const cx = 12 + (i % 10) * CW, cy = y + Math.floor(i / 10) * 150;
+      g.fillStyle = '#2b1f2e'; g.fillRect(cx, cy, CW - 4, 146);
+      g.save(); g.beginPath(); g.rect(cx, cy, CW - 4, 146); g.clip();
+      g.translate(cx + 50, cy + 136); g.scale(K5, K5);
+      if (!e.parpadea) drawRomina(g, 0, -(C.SUELO - e.y), e.dir, e.p, e.f, e.rastro);
+      g.restore();
+      text(g, (i * PASO).toFixed(2) + ' ' + e.p + e.f, cx + 3, cy + 3, '#b8a888', 1);
+    }
+    y += Math.ceil(n / 10) * 150 + 10;
+  }
+}
+</script>
