@@ -16,6 +16,8 @@
 //              consejo (el maestro, en caba-partida.js)
 //   final      el golpe que la acaba, a camara lenta, y su cartel
 //   resultado  la nota, los puntos y el record; OTRA VEZ, DIFICULTAD o MENU
+//   armario    (desde elegir) el traje: colores de capa, falda y estela que se
+//              ganan con las MEDALLAS (ver caba-partida.js)
 // Hasta aqui la pelea empezaba de golpe y se reiniciaba sola a los 3 s: sin
 // principio, sin final y sin record. La dificultad elegida y lo aprendido se
 // guardan (Save.dato), y los puntos van al record del menu.
@@ -33,7 +35,7 @@ import { SFX, SONGS, playMusic } from '../audio.js';
 import { Stick, Button, vibrate } from '../input.js';
 import * as C from './caba-cuerpo.js';
 import * as P from './caba-partida.js';
-import { drawRomina, P as PR } from './romi-sprite.js';
+import { drawRomina, vestir, P as PR } from './romi-sprite.js';
 import * as BT from './caba-botones.js';
 import * as AR from './caba-arena.js';
 import { drawSalon, drawRepisas, drawEscombros, drawSombrasPiedras, drawPiedras, P as PA } from './arena-sprite.js';
@@ -84,9 +86,21 @@ export default {
     this.bOtra = new Button(600, 474, 40, 14);
     this.bDif = new Button(452, 480, 32, 14);
     this.bMenu = new Button(748, 480, 32, 14);
+    // El ARMARIO (en la pantalla de elegir) y LISTO (para salir de el).
+    this.bArmario = new Button(96, 470, 32, 14);
+    this.bListo = new Button(1104, 474, 36, 14);
     // Los medallones, horneados una vez (ver caba-botones.js).
     this.H = BT.hornea({ atacar: this.bAtaca, saltar: this.bSalta, esquivar: this.bEsquiva, guardia: this.bGuardia,
-                         otra: this.bOtra, dificultad: this.bDif, menu: this.bMenu });
+                         otra: this.bOtra, dificultad: this.bDif, menu: this.bMenu,
+                         armario: this.bArmario, listo: this.bListo });
+    // El armario: una muestra por prenda, las medallas y el candado.
+    this.muestras = {};
+    for (const parte of P.PARTES) {
+      for (const pr of P.ARMARIO[parte]) this.muestras[parte + '/' + pr.id] = BT.muestra(carasDe(parte, pr));
+    }
+    this.medallaImg = BT.horneaMedallas();
+    this.candado = BT.horneaCandado();
+    this.aroElegido = BT.aroElegido(26 + 6);
     this.SO = bakeOgro();
 
     // La dificultad de la ultima vez, y lo que ya aprendio (la primera pelea
@@ -94,6 +108,11 @@ export default {
     const d = Save.dato('caba.dif', 'normal');
     this.dif = P.DIFICULTADES[d] ? d : 'normal';
     this.maestro = P.makeMaestro(Save.dato('caba.lecciones', null));
+    // LAS MEDALLAS ganadas y EL TRAJE puesto (solo con prendas ganadas).
+    this.medallas = Save.dato('caba.medallas', []);
+    this.traje = P.trajeValido(Save.dato('caba.traje', null), this.medallas);
+    vestir(P.tintesDe(this.traje));
+    this.armarioNuevo = false;     // hay prendas ganadas que aun no ha visto
 
     this.nueva();
     this.fase = 'elige'; this.faseT = 0;
@@ -110,7 +129,8 @@ export default {
     // hace caer el pisoton (ver caba-arena.js).
     this.A = AR.makeArena();
     this.salta = false; this.golpea = false; this.esquiva = false;
-    this.pulsos = { atacar: 0, saltar: 0, esquivar: 0, guardia: 0, otra: 0, dificultad: 0, menu: 0 };
+    this.pulsos = { atacar: 0, saltar: 0, esquivar: 0, guardia: 0, otra: 0, dificultad: 0, menu: 0, armario: 0, listo: 0 };
+    this.aviso = ''; this.avisoT = 0;
     this.camX = 0;
     this.t = 0; this.hitstop = 0;
     this.msg = ''; this.msgT = 0;
@@ -121,12 +141,14 @@ export default {
     this.grietas = [];        // las marcas que deja el pisoton en el suelo
     // Lo que se cuenta para la nota.
     this.tPelea = 0; this.paradas = 0; this.contras = 0;
+    this.paredes = 0; this.usoGuardia = false;     // para las medallas
     this.golpes = 0; this.saltos = 0; this.esquivas = 0;
     // La pelea que enseña: el consejo que se ve, y si va a camara lenta.
     this.leccion = null; this.leccionT = 0; this.lento = false;
     this.maestro.vistas = {}; this.maestro.actual = null;
     // El final.
     this.gano = false; this.res = null;
+    this.stVisto = undefined; this.atkVisto = undefined;
     this.rugido = false; this.grito = false; this.sonoFinal = false; this.rugioVictoria = false;
   },
 
@@ -143,7 +165,8 @@ export default {
     this.t += dt;
     for (const k in this.pulsos) if (this.pulsos[k] > 0) this.pulsos[k] -= dt / 0.25;
     if (this.destello > 0) this.destello -= dt;
-    if (this.fase === 'elige' || this.fase === 'resultado') { this.quietos(dt); return; }
+    if (this.avisoT > 0) this.avisoT -= dt;
+    if (this.fase === 'elige' || this.fase === 'resultado' || this.fase === 'armario') { this.quietos(dt); return; }
     if (this.fase === 'entrada') { this.entrada(dt); return; }
     // LA PELEA y el FINAL: el mundo, a camara lenta si toca.
     let w = dt;
@@ -227,10 +250,20 @@ export default {
                 dano: O.hpMax - Math.max(0, O.hp), ogroHp: O.hpMax };
     const p = P.puntua(r, this.dif);
     const record = Save.submit('caballero', p.puntos);
+    // LAS MEDALLAS de esta pelea: las que no tenia se guardan y se anuncian.
+    const conseguidas = P.medallasDe({ ...r, nota: p.nota, paredes: this.paredes, usoGuardia: this.usoGuardia,
+                                       dif: this.dif, alumna: !P.lecciona(this.maestro), aprendio: !!O.contra });
+    const nuevas = conseguidas.filter(id => !this.medallas.includes(id));
+    if (nuevas.length) {
+      this.medallas = this.medallas.concat(nuevas);
+      Save.guarda('caba.medallas', this.medallas);
+      this.armarioNuevo = true;
+    }
     // Al romper el record, los mensajitos del arcade; si no, el de la pelea.
     const lista = record ? MENSAJES_RECORD : this.gano ? P.FRASES[p.nota] : P.FRASES.pierde;
-    this.res = { ...r, ...p, record, mejor: Save.best('caballero'),
+    this.res = { ...r, ...p, record, mejor: Save.best('caballero'), nuevas,
                  frase: lista[(Math.random() * lista.length) | 0].join(' ') };
+    this.avisoOido = -1;
     if (record) SFX.record();
     this.selloOido = false;
     this.fase = 'resultado'; this.faseT = 0;
@@ -257,7 +290,8 @@ export default {
     const M = this.maestro;
     const L = P.acaba(M);
     if (L) { this.msg = 'ASI SE HACE!'; this.msgT = 1.2; SFX.acierto(); }
-    if (this.leccion) this.leccionT = Math.min(this.leccionT, 0.9);
+    // (El cartel de lo que el ogro aprendio no se acorta: no es una leccion.)
+    if (this.leccion && this.leccion.atk !== undefined) this.leccionT = Math.min(this.leccionT, 0.9);
     this.O.permitidos = P.permitidos(M);
     this.guardaLecciones();
   },
@@ -286,6 +320,7 @@ export default {
 
     const M = AR.mundo(this.A);
     C.stepCaballero(K, inp, dt, M);
+    if (activo && K.st === C.BLOQUEA) this.usoGuardia = true;
 
     // --- Sonidos y efectos de lo que acaba de pasar ---
     // Cada golpe del combo suena distinto: el tercero (el giro) mas grave y
@@ -321,6 +356,8 @@ export default {
     if (antesSt !== C.ESQUIVA && K.st === C.ESQUIVA) {
       SFX.rodar(); this.esquivas++; vibrate(8);
       P.anota(Mae, 'esquiva');
+      // Para el ogro que aprende: ¿se fue hacia el o lejos de el?
+      if (activo) OG.anotaHabito(this.O, Math.sign(K.esqDir) === Math.sign(this.O.x - K.x) ? 'hacia' : 'atras');
       // el polvo del impulso, del suelo del que despega
       burst(K.x, K.y, 10, { rnd: Math.random, colors: [PA.polvo1, PA.polvo3], speed: 140, life: 0.3, size: 4, grav: 400 });
     }
@@ -333,7 +370,12 @@ export default {
     // ================== EL OGRO ==================
     const O = this.O;
     const ondasAntes = O.ondas.length;
-    const stAntes = O.st, atkAntes = O.atk;
+    // Como estaba el ogro la ULTIMA VEZ QUE SE MIRO, no antes de su paso: el
+    // rugido (y la parada) los pone el golpe de ella, que va DESPUES en este
+    // mismo paso. Con el estado de antes del paso, el cambio no se veia nunca
+    // y ni el aviso de FURIA ni su musica salieron jamas.
+    const stAntes = this.stVisto !== undefined ? this.stVisto : O.st;
+    const atkAntes = this.atkVisto !== undefined ? this.atkVisto : O.atk;
 
     // EL ORDEN IMPORTA: ella se mueve, luego el ogro, y AL FINAL se arbitra
     // quien toca a quien. Con ella esquivando a 640 px/s un frame de desfase
@@ -352,7 +394,10 @@ export default {
     for (const w of O.ondas) {
       if (!w.vivo) continue;
       const lado = Math.sign(w.x - K.x);
-      if (w.lado && lado && lado !== w.lado && SUELO - K.y > OG.ONDA_ALTO) P.anota(Mae, 'salta');
+      if (w.lado && lado && lado !== w.lado && SUELO - K.y > OG.ONDA_ALTO) {
+        P.anota(Mae, 'salta');
+        if (activo) OG.anotaHabito(O, 'salto');
+      }
       if (lado) w.lado = lado;
     }
     if (Mae.actual && O.st !== OG.ATACA && !O.ondas.some(w => w.vivo)) this.acabaAtaque();
@@ -375,9 +420,11 @@ export default {
     for (const gr of this.grietas) gr.t -= dt * 0.08;
     while (this.grietas.length && this.grietas[0].t <= 0) this.grietas.shift();
 
-    // El ogro acaba de quedar ABIERTO: se avisa, porque es CUANDO pegar.
-    if (activo && O.st === OG.ABIERTO && stAntes !== OG.ABIERTO) {
+    // El ogro acaba de quedar ABIERTO: se avisa, porque es CUANDO pegar. (Tras
+    // una parada no: ahi manda el PARADA! y el CONTRA! del boton.)
+    if (activo && O.st === OG.ABIERTO && stAntes !== OG.ABIERTO && O.abiertoPor !== OG.POR_PARADA) {
       this.msg = 'AHORA'; this.msgT = 0.55;
+      if (O.abiertoPor === OG.POR_PARED) this.paredes++;
     }
     if (activo && O.st === OG.RUGE && stAntes !== OG.RUGE) {
       cam.shakeDecay(5, 0.7); vibrate(30);
@@ -386,7 +433,14 @@ export default {
                                     speed: 220, life: 0.6, size: 4, grav: -60 });
       // En su furia, la musica se le acelera con el.
       if (O.fase >= 3) playMusic(SONGS.caballeroFuria);
+      // Y si ha aprendido algo de ella, se anuncia: una contramedida que no
+      // se ve es trampa. El cartel dura lo que el rugido y un poco mas.
+      if (O.contra && P.CONTRAS[O.contra]) {
+        this.leccion = P.CONTRAS[O.contra]; this.leccionT = 4.5;
+        SFX.alarm();
+      }
     }
+    this.stVisto = O.st; this.atkVisto = O.atk;
     // Un paso pesado hace temblar el suelo un poquito. Va con el PIE del
     // dibujo (pisadaOgro), no con un reloj: un temblor que no coincide con la
     // pisada se nota mas que no tener temblor.
@@ -439,7 +493,7 @@ export default {
         // LA PARADA: el garrote rebota y el ogro se queda abierto lo que dura
         // la ocasion de contraatacar (el premio de ella lo pone herir()).
         OG.abrePorParada(O, C.PARADA_PREMIO);
-        this.paradas++; P.anota(Mae, 'para');
+        this.paradas++; P.anota(Mae, 'para'); OG.anotaHabito(O, 'guardia');
         this.hitstop = 9 / 60; cam.shake(4, 0.14); SFX.clang(); vibrate(26);
         this.msg = 'PARADA!'; this.msgT = 0.8;
         this.chispa = 0.25;
@@ -447,7 +501,7 @@ export default {
               { rnd: Math.random, colors: [PC.oro3, PC.bla2, PC.ace4],
                 speed: 320, life: 0.5, size: 4, grav: 120 });
       } else if (r === 'bloqueado') {
-        P.anota(Mae, 'para');
+        P.anota(Mae, 'para'); OG.anotaHabito(O, 'guardia');
         this.hitstop = 4 / 60; cam.shake(2.5, 0.1); SFX.clang(); vibrate(14);
         burst(K.x + K.dir * 40, K.y - 110, 8,
               { rnd: Math.random, colors: [PC.ace3, PC.ace2], speed: 200,
@@ -513,9 +567,41 @@ export default {
   },
 
   onInput(ev, ctx) {
-    // ELEGIR: tocar una de las tres.
+    // EL ARMARIO: tocar una muestra la pone (si esta ganada) o dice como se gana.
+    if (this.fase === 'armario') {
+      if (ev.type !== 'down') return;
+      if (this.bListo.hit(ev)) {
+        this.pulsos.listo = 1; SFX.select();
+        Save.guarda('caba.traje', this.traje);
+        this.fase = 'elige'; this.faseT = 0;
+        return;
+      }
+      for (const m of this.muestrasEnPantalla()) {
+        if (Math.hypot(ev.x - m.x, ev.y - m.y) > 34) continue;
+        const pr = P.prenda(m.parte, m.id);
+        if (P.disponible(m.parte, m.id, this.medallas)) {
+          this.traje = { ...this.traje, [m.parte]: m.id };
+          vestir(P.tintesDe(this.traje));
+          SFX.select(); vibrate(8);
+          this.aviso = NOMBRE_PARTE[m.parte] + ' ' + pr.nombre;
+        } else {
+          const med = P.medallaDe(m.parte, m.id);
+          SFX.blip();
+          this.aviso = 'SE GANA CON ' + med.nombre + ': ' + med.pide;
+        }
+        this.avisoT = 3;
+        return;
+      }
+      return;
+    }
+    // ELEGIR: tocar una de las tres (o el armario).
     if (this.fase === 'elige') {
       if (ev.type !== 'down') return;
+      if (this.bArmario.hit(ev)) {
+        this.pulsos.armario = 1; SFX.select();
+        this.fase = 'armario'; this.faseT = 0; this.aviso = ''; this.avisoT = 0; this.armarioNuevo = false;
+        return;
+      }
       for (let i = 0; i < 3; i++) {
         const c = this.tarjeta(i);
         if (ev.x >= c.x && ev.x <= c.x + c.w && ev.y >= c.y && ev.y <= c.y + c.h) {
@@ -636,7 +722,9 @@ export default {
       const parpadea = O.invul > 0 && O.st !== OG.RUGE && ((O.invul * 16) | 0) & 1;
       // El destello al 75 %, no al 100: con la media luna blanca del tajo de
       // ella encima, un ogro blanco entero se leia como una mancha sin forma.
-      if (!parpadea) drawOgro(g, this.SO, O.x - cx, SUELO, O.dir, po, Math.max(0, this.flashO) / 0.1 * 0.75);
+      // LA FINTA se VE: mientras aguanta el garrote en alto, tiembla.
+      const tiembla = O.reteniendo ? (((this.t * 40) | 0) & 1 ? 2 : -2) : 0;
+      if (!parpadea) drawOgro(g, this.SO, O.x - cx + tiembla, SUELO, O.dir, po, Math.max(0, this.flashO) / 0.1 * 0.75);
     }
 
     // Sombra de Romina. Era un fillRect: un rectangulo negro de 5 px que se
@@ -708,6 +796,7 @@ export default {
     if (this.fase === 'pelea') { this.drawLeccion(g); this.drawControles(g); }
     else if (this.fase === 'final') this.drawFinal(g);
     else if (this.fase === 'elige') this.drawElige(g);
+    else if (this.fase === 'armario') this.drawArmario(g);
     else if (this.fase === 'entrada') this.drawEntrada(g);
     else if (this.fase === 'resultado') this.drawResultado(g);
   },
@@ -832,6 +921,69 @@ export default {
     const mejor = Save.best('caballero');
     if (mejor > 0) BT.rotulo(g, 'MEJOR ' + mejor, VW / 2, 464, '#c8b8ff', 2);
     if (Math.sin(this.t * 4) > -0.3) BT.rotulo(g, 'TOCA UNA PARA EMPEZAR', VW / 2, 494, PC.bla2, 2);
+    // EL ARMARIO, abajo a la izquierda, con cuantas medallas lleva. Si hay
+    // prendas nuevas, late.
+    BT.boton(g, this.H, 'armario', this.bArmario, { pulso: this.pulsos.armario, nombre: 'ARMARIO',
+      brillo: this.armarioNuevo ? 0.55 + 0.45 * Math.sin(this.t * 6) : 0 });
+    text(g, 'MEDALLAS ' + this.medallas.length + '/' + P.MEDALLAS.length, 140, 462, '#ffd76a', 2);
+  },
+
+  // ---------- EL ARMARIO ----------
+  // A la izquierda ella con el traje puesto (respira y, cada poco, da un tajo
+  // para que se vea la estela); a la derecha, una fila de muestras por prenda.
+  // Las que no se han ganado llevan candado, y tocarlas dice que medalla hace
+  // falta: el armario ES la lista de medallas (cada una gana una prenda).
+  muestrasEnPantalla() {
+    const out = [];
+    P.PARTES.forEach((parte, fila) => {
+      P.ARMARIO[parte].forEach((pr, i) => out.push({ parte, id: pr.id, x: 640 + i * 104, y: 132 + fila * 104 }));
+    });
+    return out;
+  },
+
+  drawArmario(g) {
+    velo(g, 0.8);
+    BT.rotulo(g, 'ARMARIO', 230, 18, PC.ves3, 5);     // a un lado: en medio esta la pausa
+    // ELLA, a x2, en su caja.
+    BT.marco(g, 40, 70, 380, 400);
+    g.save();
+    g.beginPath(); g.rect(46, 76, 368, 388); g.clip();
+    const tt = this.faseT % 2.4;
+    const [p, f] = tt < 1.5 ? ['idle', Math.floor(tt / 0.11) % 9] : ['atk3', Math.min(10, Math.floor((tt - 1.5) / 0.07))];
+    g.translate(150, 452); g.scale(2, 2);
+    drawRomina(g, 0, 0, 1, p, f);
+    g.restore();
+    // LAS MUESTRAS
+    BT.marco(g, 440, 70, 720, 330);
+    P.PARTES.forEach((parte, fila) => {
+      const y = 132 + fila * 104;
+      text(g, NOMBRE_PARTE[parte], 464, y - 10, '#ffd76a', 3);
+      text(g, P.prenda(parte, this.traje[parte]).nombre, 464, y + 20, '#e8d8e8', 2);
+    });
+    for (const m of this.muestrasEnPantalla()) {
+      const cv = this.muestras[m.parte + '/' + m.id];
+      g.drawImage(cv.cv, Math.round(m.x - 26 - cv.M), Math.round(m.y - 26 - cv.M));
+      if (this.traje[m.parte] === m.id) {
+        const a = this.aroElegido;
+        g.drawImage(a, Math.round(m.x - a.width / 2), Math.round(m.y - a.height / 2));
+      }
+      if (!P.disponible(m.parte, m.id, this.medallas)) {
+        g.globalAlpha = 0.55; g.fillStyle = '#0d0610';
+        g.fillRect(m.x - 18, m.y - 18, 36, 36);
+        g.globalAlpha = 1;
+        g.drawImage(this.candado, Math.round(m.x - this.candado.width / 2), Math.round(m.y - this.candado.height / 2));
+      }
+    }
+    // Lo que se acaba de tocar, o como se usa.
+    const texto = this.avisoT > 0 ? this.aviso : 'TOCA UN COLOR PARA PONERTELO';
+    BT.rotulo(g, texto, 800, 420, this.avisoT > 0 ? PC.oro3 : '#c8b8ff', 2);
+    // Cuantas lleva, y salir.
+    text(g, 'MEDALLAS ' + this.medallas.length + '/' + P.MEDALLAS.length, 60, 488, '#ffd76a', 2);
+    for (let i = 0; i < P.MEDALLAS.length; i++) {
+      const med = this.medallas.includes(P.MEDALLAS[i].id) ? this.medallaImg.oro : this.medallaImg.gris;
+      g.drawImage(med.cv, 250 + i * 36 - 16 - med.M, 494 - 16 - med.M);
+    }
+    BT.boton(g, this.H, 'listo', this.bListo, { pulso: this.pulsos.listo, nombre: 'LISTO' });
   },
 
   // ---------- LA ENTRADA ----------
@@ -927,6 +1079,24 @@ export default {
       BT.rotulo(g, R.frase, VW / 2, 404, '#5cffd8', 2);
     }
 
+    // LAS MEDALLAS NUEVAS: una tras otra, bajan por la esquina de arriba a la
+    // izquierda con su premio. (En el centro las tapaba el boton de pausa.)
+    const nuevas = R.nuevas || [];
+    for (let i = 0; i < nuevas.length; i++) {
+      const t0 = 1.6 + i * 2.0, u = t - t0;
+      if (u < 0 || u > 2.0) continue;
+      if (this.avisoOido < i) { this.avisoOido = i; SFX.powerup(); vibrate(20); }
+      const baja = Math.min(1, u / 0.25) * Math.min(1, (2.0 - u) / 0.25);
+      const y = Math.round(-76 + 82 * baja);
+      const med = P.MEDALLAS.find(m => m.id === nuevas[i]);
+      const [parte, id] = med.premio;
+      BT.marco(g, 12, y, 440, 70, true);
+      const mi = this.medallaImg.oro;
+      g.drawImage(mi.cv, 30 - mi.M, y + 19 - mi.M);
+      text(g, med.nombre, 76, y + 13, PC.oro3, 3);
+      text(g, 'PREMIO: ' + NOMBRE_PARTE[parte] + ' ' + P.prenda(parte, id).nombre, 76, y + 44, PC.bla2, 2);
+    }
+
     // Los botones, cuando ya se ha visto todo.
     if (t > 0.9) {
       BT.boton(g, this.H, 'dificultad', this.bDif, { pulso: this.pulsos.dificultad, nombre: 'DIFICULTAD' });
@@ -938,6 +1108,16 @@ export default {
 
   destroy() { this.A = null; },
 };
+
+// Como se llama cada parte del traje en pantalla.
+const NOMBRE_PARTE = { capa: 'CAPA', falda: 'FALDA', estela: 'ESTELA' };
+
+// La cara de la muestra de una prenda (claro, medio, oscuro): de la falda, sus
+// tonos de la parte que mas se ve.
+function carasDe(parte, pr) {
+  const t = pr.tonos;
+  return parte === 'falda' ? [t[4], t[3], t[1]] : [t[2], t[1], t[0]];
+}
 
 // Un corazon de pixel: lleno (rojo con brillo) o vacio.
 function corazon(g, hx, hy, lleno) {
