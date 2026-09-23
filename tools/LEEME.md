@@ -191,6 +191,38 @@ rejilla de 15 px que se contornea sola. Dos que no se leían y se rehicieron
 mirando `ver-botones.html`: el arco de ESQUIVAR con trazo de 2 se cerraba en
 una "A" rellena, y la chispa de GUARDIA con base horizontal parecía una corona.
 
+## La partida de ROMINA: dificultad, primera pelea, nota y música
+
+```
+node tools/prueba-caba-partida.mjs                           # dificultades, puntos, maestro y canciones
+python tools/gif.py escena:inicio vistas/inicio.gif          # elegir y la entrada
+python tools/gif.py escena:victoria vistas/victoria.gif      # el remate, el final y la nota
+```
+
+`caba-partida.js` (sin DOM) lleva lo que rodea a la pelea. Hasta aquí la pelea
+empezaba de golpe y se reiniciaba sola a los 3 s: sin principio, sin final y
+sin récord (era el único juego del arcade que no guardaba ninguno).
+
+- **Tres dificultades** (paseo, normal, furia): corazones, margen de la
+  parada, vida del ogro, lo que tarda en AVISAR (solo el aviso: estirar
+  también el golpe haría más difícil esquivar en la fácil) y lo que descansa.
+  El arnés juega las tres con la regla real: en furia el aviso más corto es
+  0,33 s y la guardia se puede levantar en 250 ms.
+- **La nota** (S A B C) sale de los puntos ANTES de la dificultad, para que
+  una S cueste lo mismo en paseo que en furia; los puntos (con el multiplicador
+  de la dificultad) van al récord del menú, con los mensajitos del arcade
+  (`MENSAJES_RECORD`, en `core.js`).
+- **El maestro**: la primera pelea enseña. El ogro solo usa lo aprendido más
+  el siguiente ataque; el primero de cada tipo sale a cámara lenta con su
+  consejo y su botón brillando. Si en tres intentos no lo aprende, se suelta
+  el siguiente igual (sin cámara lenta en las peleas de después). Lo
+  aprendido se guarda con `Save.dato`.
+- **La música**: la marcha de antes (`caballero`) suena al elegir y en la
+  entrada; al A PELEAR entra `caballeroPelea` (Re dórico, cabe en las notas sin
+  sostenidos); en la furia del ogro, `caballeroFuria`; y al final, fanfarria o
+  lamento. El arnés revisa TODAS las canciones del arcade: una nota que el
+  secuenciador no conoce no suena y no avisa.
+
 ## La ARENA de ROMINA: el salón del castillo
 
 ```
@@ -215,7 +247,8 @@ la espada los rompe). La física de ella acepta un `mundo` opcional con repisas 
 bloques: sin él, el suelo es plano y el arnés viejo mide lo mismo que antes.
 
 `ver-escena.html` graba la **escena entera** de verdad (guiones `arena`,
-`parada`, `barrido`, `embestida`): importa `caballero.js`,
+`parada`, `barrido`, `embestida`, que empiezan ya peleando y con todo
+aprendido, e `inicio` y `victoria`, los de la partida): importa `caballero.js`,
 la mueve con un guion de botones (que mira dónde están ella y el ogro, como
 alguien jugando) y la dibuja con su cámara y sus partículas. Ojo con dos
 trampas que salieron al hacer el guion: pulsar SALTA es a la vez el flanco y el

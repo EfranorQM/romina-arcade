@@ -1,5 +1,5 @@
 // ROMINA'S ARCADE — arranque, bucle de tiempo fijo, gestor de escenas y menu.
-import { VW, VH, BASE_VW, BASE_VH, MENU_VW, MENU_VH, setVirtual, setSmooth, setSupersample, baseTransform, requestOrientation, giroNativo, isLandscape, initCanvas, view, makeRng, Save, cam } from './core.js';
+import { VW, VH, BASE_VW, BASE_VH, MENU_VW, MENU_VH, setVirtual, setSmooth, setSupersample, baseTransform, requestOrientation, giroNativo, isLandscape, initCanvas, view, makeRng, Save, cam, MENSAJES_RECORD } from './core.js';
 import { initInput, pointers, toques } from './input.js';
 import { initAudio, unlockAudio, SFX, toggleMute, suspendAudio, resumeAudio, playMusic, stopMusic, SONGS, currentSong } from './audio.js';
 import { text, textCenter, measure } from './font.js';
@@ -244,15 +244,9 @@ const GameOver = {
   },
 };
 
-// Mensajitos al romper record. Cortos: nunca interrumpen la accion.
-const RECORD_MSGS = [
-  ['ERES INCREIBLE', 'ROMINA'],
-  ['NADIE COMO TU'],
-  ['TE AMO', 'CAMPEONA'],
-  ['IMPARABLE'],
-  ['ESA ES MI CHICA'],
-  ['BRUTAL ROMINA'],
-];
+// Mensajitos al romper record: viven en core.js (MENSAJES_RECORD) para que los
+// juegos con su propio final, como ROMINA, digan los mismos.
+const RECORD_MSGS = MENSAJES_RECORD;
 
 // Los juegos necesitan medir el hold en game over.
 const _goUpdate = GameOver.update;

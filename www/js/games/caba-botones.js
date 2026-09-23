@@ -29,6 +29,18 @@ const CARAS = {
   saltar:   ['#3a6cc0', '#24478c', '#152c5c'],
   esquivar: ['#7a48b4', '#533084', '#321b54'],
   guardia:  ['#71829c', '#4a586e', '#2c3444'],
+  // los del resultado: OTRA VEZ del color de ATACAR (es el que se quiere
+  // pulsar), DIFICULTAD de acero y MENU de azul
+  otra:       ['#b8204e', '#8e1140', '#5a0a28'],
+  dificultad: ['#71829c', '#4a586e', '#2c3444'],
+  menu:       ['#3a6cc0', '#24478c', '#152c5c'],
+};
+// Las caras de las NOTAS del final: oro la S, y luego rosa, azul y gris.
+const NOTAS = {
+  S: ['#ffe066', '#e0a820', '#a86a10'],
+  A: ['#ff8fbc', '#ef4a84', '#a8205a'],
+  B: ['#6aa0e8', '#3a6cc0', '#24478c'],
+  C: ['#9aa4b4', '#6a7486', '#4a5262'],
 };
 // Los colores del icono
 const IC = {
@@ -102,8 +114,7 @@ const ICONOS = {
   // segundo, con la punta de dos rayas, no se leia como flecha. Va a mano: un
   // arco de UN pixel y la punta MACIZA, un triangulo apuntando abajo.)
   esquivar() {
-    const R = rejilla(15);
-    const dibujo = [
+    return aMano([
       '...............',
       '...............',
       '.....wwww......',
@@ -119,10 +130,7 @@ const ICONOS = {
       'sss.ss.........',
       '...............',
       '...............',
-    ];
-    dibujo.forEach((fila, y) => [...fila].forEach((c, x) => { if (c !== '.') R.pon(x, y, c); }));
-    R.contorno();
-    return R;
+    ]);
   },
   // La espada de traves parando un golpe que cae: la chispa de oro encima.
   guardia() {
@@ -139,7 +147,75 @@ const ICONOS = {
     R.contorno();
     return R;
   },
+  // OTRA VEZ: la flecha que da la vuelta.
+  otra() {
+    return aMano([
+      '...............',
+      '......www......',
+      '....ww...ww.w..',
+      '...w.......ww..',
+      '..w.......www..',
+      '..w............',
+      '.w.............',
+      '.w.............',
+      '.w.............',
+      '..w.........w..',
+      '..w.........w..',
+      '...w.......w...',
+      '....ww...ww....',
+      '......www......',
+      '...............',
+    ]);
+  },
+  // DIFICULTAD: tres barras que suben, como las de la cobertura.
+  dificultad() {
+    return aMano([
+      '...............',
+      '...............',
+      '...............',
+      '..........yyy..',
+      '..........yyy..',
+      '..........yyy..',
+      '......sss.yyy..',
+      '......sss.yyy..',
+      '......sss.yyy..',
+      '..www.sss.yyy..',
+      '..www.sss.yyy..',
+      '..www.sss.yyy..',
+      '..www.sss.yyy..',
+      '...............',
+      '...............',
+    ]);
+  },
+  // MENU: la estanteria del arcade, cuatro portadas.
+  menu() {
+    return aMano([
+      '...............',
+      '...............',
+      '..wwww...wwww..',
+      '..wwww...wwww..',
+      '..wwww...wwww..',
+      '..wwww...wwww..',
+      '...............',
+      '...............',
+      '...............',
+      '..ssss...ssss..',
+      '..ssss...ssss..',
+      '..ssss...ssss..',
+      '..ssss...ssss..',
+      '...............',
+      '...............',
+    ]);
+  },
 };
+
+// Un icono dibujado a mano, fila a fila ('.' vacio; el resto, colores de IC).
+function aMano(filas) {
+  const R = rejilla(filas.length);
+  filas.forEach((fila, y) => [...fila].forEach((c, x) => { if (c !== '.') R.pon(x, y, c); }));
+  R.contorno();
+  return R;
+}
 
 function pintaRejilla(c, R, x0, y0, esc) {
   for (let y = 0; y < R.n; y++) for (let x = 0; x < R.n; x++) {
@@ -240,6 +316,9 @@ export function hornea(btns) {
       brillo: aro(r + 5, ORO[3], 4),
     };
   }
+  // Las NOTAS del final (S A B C): un medallon grande por nota.
+  H.notas = {};
+  for (const n in NOTAS) H.notas[n] = medallon(64, NOTAS[n], false);
   // El stick: una base de oro fino y un pomo pequeño.
   H.stick = {
     base: aro(60, ORO[2], 3), baseOsc: aro(62, OSC, 2),
@@ -285,11 +364,45 @@ export function boton(g, H, k, b, e) {
   g.globalAlpha = 1;
 }
 
-// Texto con contorno oscuro: se lee sobre la alfombra roja y sobre el muro.
+// Texto con contorno oscuro: se lee sobre la alfombra roja y sobre el muro. El
+// contorno crece con la letra (2 px hasta escala 4, luego la mitad de la
+// escala): con 2 px fijos, un titulo a escala 8 parecia sin contorno.
 export function rotulo(g, s, cx, y, color, esc = 2) {
   const x = Math.round(cx - measure(s, esc) / 2);
-  for (const [dx, dy] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) text(g, s, x + dx, y + dy, OSC, esc);
+  const o = Math.max(2, Math.round(esc / 2));
+  for (const [dx, dy] of [[-o, 0], [o, 0], [0, -o], [0, o], [o, o]]) text(g, s, x + dx, y + dy, OSC, esc);
   text(g, s, x, y, color, esc);
+}
+
+// Un PANEL con marco de oro, como los medallones: contorno oscuro, aro de oro
+// (claro arriba e izquierda, oscuro abajo y derecha) y el fondo oscuro. `claro`
+// lo resalta (la dificultad elegida).
+export function marco(g, x, y, w, h, claro = false, fondo = '#1e1220', alfa = 0.92) {
+  x = Math.round(x); y = Math.round(y);
+  g.globalAlpha = alfa;
+  g.fillStyle = fondo; g.fillRect(x + 6, y + 6, w - 12, h - 12);
+  g.globalAlpha = 1;
+  g.fillStyle = OSC;
+  g.fillRect(x, y, w, 2); g.fillRect(x, y + h - 2, w, 2); g.fillRect(x, y, 2, h); g.fillRect(x + w - 2, y, 2, h);
+  const a = claro ? ORO[3] : ORO[2], b = claro ? ORO[2] : ORO[1];
+  g.fillStyle = a; g.fillRect(x + 2, y + 2, w - 4, 3); g.fillRect(x + 2, y + 2, 3, h - 4);
+  g.fillStyle = b; g.fillRect(x + 2, y + h - 5, w - 4, 3); g.fillRect(x + w - 5, y + 2, 3, h - 4);
+  g.fillStyle = OSC;
+  g.fillRect(x + 5, y + 5, w - 10, 1); g.fillRect(x + 5, y + h - 6, w - 10, 1);
+  g.fillRect(x + 5, y + 5, 1, h - 10); g.fillRect(x + w - 6, y + 5, 1, h - 10);
+}
+
+// La NOTA del final: su medallon y la letra encima, a escala `esc` (el golpe
+// de sello del resultado la trae grande y la deja en 1).
+export function nota(g, H, n, cx, cy, esc = 1) {
+  const m = H.notas[n];
+  if (!m) return;
+  g.save();
+  g.translate(Math.round(cx), Math.round(cy));
+  if (esc !== 1) g.scale(esc, esc);
+  g.drawImage(m.cv, -m.cv.width / 2, -m.cv.height / 2);
+  rotulo(g, n, 0, -42, '#fff8e0', 12);
+  g.restore();
 }
 
 // El stick: la base de oro donde se apoyo el pulgar y el pomo donde esta.

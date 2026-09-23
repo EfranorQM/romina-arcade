@@ -202,7 +202,18 @@ export const circle = (ax, ay, ar, bx, by, br) => {
 export const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 export const lerp = (a, b, t) => a + (b - a) * t;
 
-// ---------- Persistencia: solo records y mute. Nunca lanza excepcion. ----------
+// Mensajitos al romper record. Cortos: nunca interrumpen la accion. Los usan
+// el fin de partida del arcade (main.js) y los juegos con final propio.
+export const MENSAJES_RECORD = [
+  ['ERES INCREIBLE', 'ROMINA'],
+  ['NADIE COMO TU'],
+  ['TE AMO', 'CAMPEONA'],
+  ['IMPARABLE'],
+  ['ESA ES MI CHICA'],
+  ['BRUTAL ROMINA'],
+];
+
+// ---------- Persistencia: records, mute y datos sueltos. Nunca lanza excepcion. ----------
 const KEY = 'romina_arcade_v1';
 let saveData = { scores: {}, mute: false };
 try {
@@ -222,6 +233,14 @@ export const Save = {
   },
   get muted() { return saveData.mute; },
   toggleMute() { saveData.mute = !saveData.mute; persist(); return saveData.mute; },
+  // Datos sueltos de cada juego que no son un record: la dificultad elegida,
+  // lo que ya aprendio. Van en el mismo guardado, bajo `datos`, asi que un
+  // guardado viejo (sin ese campo) sigue sirviendo tal cual.
+  dato(clave, def) {
+    const d = saveData.datos;
+    return d && Object.prototype.hasOwnProperty.call(d, clave) ? d[clave] : def;
+  },
+  guarda(clave, v) { (saveData.datos = saveData.datos || {})[clave] = v; persist(); },
 };
 
 // ---------- Camara / screen shake ----------

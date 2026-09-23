@@ -83,11 +83,21 @@ export const POR_FIN = 'fin', POR_PARADA = 'parada', POR_PARED = 'pared';
 export const FASE2 = 0.66, FASE3 = 0.33;
 export const RUGE_T = 1.20;
 
-export function makeOgro(x) {
+// `o` es la DIFICULTAD (ver caba-partida.js); sin ella, el ogro de siempre:
+//   hp          su vida
+//   ritmoCarga  lo rapido que corre el reloj del AVISO (>1 avisa menos). Solo
+//               la carga: estirar tambien la parte activa haria MAS dificil
+//               esquivar en la dificultad facil, al reves de lo que se busca.
+//   pausa       cuanto descansa entre ataques (>1 descansa mas)
+//   permitidos  que ataques puede elegir (null = todos): la primera pelea los
+//               va soltando de uno en uno, segun ella aprende a contestarlos.
+export function makeOgro(x, o = {}) {
+  const hpMax = o.hp || HP0;
   return {
     x, y: SUELO, vx: 0, dir: -1,
     st: ESPERA, t: 0, animT: 0,
-    hp: HP0, fase: 1, invul: 0,
+    hp: hpMax, hpMax, fase: 1, invul: 0,
+    ritmoCarga: o.ritmoCarga || 1, pausa: o.pausa || 1, permitidos: o.permitidos || null,
     atk: -1, atkT: 0, golpeo: 0,
     abiertoT: 0, abiertoPor: POR_FIN, esperaT: 0.6,
     ondas: [],
@@ -178,21 +188,21 @@ export function stepOgro(O, K, dt, rnd) {
   // que el cambio de fase se LEA en vez de pasar en silencio.
   if (O.st === RUGE) {
     O.vx = 0;
-    if (O.t >= RUGE_T) { O.st = ESPERA; O.t = 0; O.esperaT = 0.3; }
+    if (O.t >= RUGE_T) { O.st = ESPERA; O.t = 0; O.esperaT = 0.3 * O.pausa; }
     return;
   }
 
   if (O.st === DOLOR) {
     O.vx *= 0.82;
     O.x += O.vx * dt;
-    if (O.t >= 0.24) { O.st = ESPERA; O.t = 0; O.esperaT = 0.18; }
+    if (O.t >= 0.24) { O.st = ESPERA; O.t = 0; O.esperaT = 0.18 * O.pausa; }
     return;
   }
 
   // ABIERTO: la ventana de castigo. No hace nada, y se deja pegar.
   if (O.st === ABIERTO) {
     O.vx *= 0.8; O.x += O.vx * dt;
-    if (O.t >= O.abiertoT) { O.st = ESPERA; O.t = 0; O.esperaT = 0.25; }
+    if (O.t >= O.abiertoT) { O.st = ESPERA; O.t = 0; O.esperaT = 0.25 * O.pausa; }
     return;
   }
 
@@ -237,6 +247,8 @@ function elige(O, ad, rnd) {
   // En furia pisa mas: sube la presion sin tocar los tiempos, que son los que
   // hacen justo o injusto al jefe.
   if (O.fase >= 3) pesos[PISOTON] += 2;
+  // Los que todavia no le toca usar (la primera pelea, que enseña).
+  if (O.permitidos) for (let i = 0; i < 4; i++) if (!O.permitidos.includes(i)) pesos[i] = 0;
   // El castigo a la repeticion.
   if (O.repes >= 1 && O.ultimo >= 0) pesos[O.ultimo] = Math.max(0, pesos[O.ultimo] - 3);
 
@@ -250,7 +262,8 @@ function elige(O, ad, rnd) {
 function pasoAtaque(O, K, dt) {
   const a = ATAQUES[O.atk];
   const ciclo = a[0], a0 = a[1], a1 = a[2], avance = a[3];
-  O.atkT += dt;
+  // El aviso corre al ritmo de la dificultad; el golpe, siempre igual.
+  O.atkT += dt * (O.atkT < a0 ? O.ritmoCarga : 1);
 
   // El avance del cuerpo durante la parte activa: es lo que hace que un
   // garrotazo se sienta lanzado y no plantado.
@@ -299,7 +312,7 @@ export function hiereOgro(O, dano, dirGolpe) {
   if (O.hp <= 0) { O.hp = 0; O.vivo = false; O.st = MUERTO; O.t = 0; return true; }
 
   // El cambio de FASE: ruge, se hace invulnerable un momento y sigue.
-  const fr = O.hp / HP0;
+  const fr = O.hp / O.hpMax;
   const faseNueva = fr <= FASE3 ? 3 : fr <= FASE2 ? 2 : 1;
   if (faseNueva > O.fase) {
     O.fase = faseNueva;

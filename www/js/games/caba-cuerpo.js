@@ -130,15 +130,19 @@ export const PARADA_PREMIO = 0.8;
 // TAJOS: [ciclo, activa0, activa1, avance, daño, alcance].
 export const CONTRA = [0.42, 0.10, 0.22, 46, 3, 130];
 
-export function makeCaballero(x) {
+// `o` es la DIFICULTAD (ver caba-partida.js): hp, sus corazones, y paradaVent,
+// cuanto dura la ventana de la parada. Sin ella, la de siempre.
+export function makeCaballero(x, o = {}) {
+  const hpMax = o.hp || HP0;
   return {
+    hpMax, paradaVent: o.paradaVent || PARADA_VENT,
     x, y: SUELO, vx: 0, vy: 0, dir: 1,
     st: QUIETO, t: 0,
     enSuelo: true, coyote: 0, buffer: 0, cortable: 0, aterriza: 0,
     esqT: 0, esqCd: 0, esqDir: 1,
     bloqT: 0, bloqHit: 0, parada: 0,
     tajoT: 0, tajoId: 0, golpeo: 0, combo: 0, comboOlvido: 0, contra: 0,
-    hp: HP0, iframe: 0, hurtT: 0, hurtIni: 0, muereT: 0,
+    hp: hpMax, iframe: 0, hurtT: 0, hurtIni: 0, muereT: 0,
     animT: 0, frame: 0,
     vivo: true,
   };
@@ -434,7 +438,7 @@ export function herir(K, sx, tipo = 'garrote', dano = 1) {
     // PARADA: si el golpe llega en la ventana justo despues de levantar la
     // guardia, no es un bloqueo cualquiera -- rebota al ogro y le deja
     // abierto. Es lo que premia LEER el ataque en vez de taparse siempre.
-    if (K.bloqT < BLOQ_SUBE + PARADA_VENT) {
+    if (K.bloqT < BLOQ_SUBE + K.paradaVent) {
       K.parada = PARADA_PREMIO; K.bloqHit = 0.22; K.vx = -K.dir * 40;
       return 'parada';
     }

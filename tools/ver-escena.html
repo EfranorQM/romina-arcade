@@ -12,7 +12,10 @@
      Guiones: arena (sube a la repisa, el pisoton pasa por debajo, caen los
      cascotes y baja a pegarle), parada (para el garrotazo y CONTRAATACA),
      barrido (lo esquiva hacia atras) y embestida (la esquiva atravesandolo y
-     el ogro se estrella contra la pared). -->
+     el ogro se estrella contra la pared). Esos empiezan YA peleando y con las
+     lecciones aprendidas (sin consejos ni camara lenta). Y dos de la partida:
+     inicio (elegir la dificultad y la entrada) y victoria (el remate, el
+     final a camara lenta y la nota). -->
 <meta charset="utf-8">
 <style>body{margin:0;background:#000}canvas{display:block}</style>
 <canvas id="tira"></canvas>
@@ -25,6 +28,7 @@ import { cargaOgro } from '../www/js/games/ogro-sprite.js';
 import { cargaArena } from '../www/js/games/arena-sprite.js';
 import * as OG from '../www/js/games/ogro-cuerpo.js';
 import * as AR from '../www/js/games/caba-arena.js';
+import * as P from '../www/js/games/caba-partida.js';
 
 await Promise.all([cargaRomina(), cargaOgro(), cargaArena()]);
 const DT = 1 / 60;
@@ -99,7 +103,27 @@ const GUIONES = {
     if (n > 60 && n < 72) E.stick.dx = -1;             // se da la vuelta hacia el
     if (n === 78 || n === 90 || n === 104) pulsa(E, 'golpea', 'atacar');
   },
+
+  // EL INICIO: la pantalla de elegir, un toque en NORMAL y la entrada entera.
+  inicio(n, E, m) {
+    if (n === 72) E.onInput({ type: 'down', x: 600, y: 300, id: 1 });
+  },
+
+  // LA VICTORIA: al ogro le quedan 3; el combo entero lo tumba, y se ve el
+  // final a camara lenta y la nota.
+  victoria(n, E, m) {
+    suelta(E);
+    // (Ya en su tercera fase: si no, el primer tajo le hace cruzarla, ruge
+    // invulnerable 1.2 s y el resto del combo no cuenta.)
+    if (n === 0) { coloca(E, 700, 1, 830, -1); E.O.hp = 3; E.O.fase = 3; }
+    // A ritmo de pulgar: con pulsaciones sueltas, la congelacion de cada golpe
+    // hacia que la segunda llegara antes de poder encadenar y no contaba.
+    if (n >= 10 && n <= 130 && n % 14 === 10) pulsa(E, 'golpea', 'atacar');
+  },
 };
+// Los guiones de la partida arrancan en la pantalla de elegir; el resto, ya
+// peleando y con todo aprendido.
+const DE_PARTIDA = ['inicio'];
 
 // Lo que el pulgar suelta cada paso (los flancos duran un frame).
 function suelta(E) { E.salta = false; E.golpea = false; E.esquiva = false; E.stick.dx = 0; }
@@ -120,6 +144,12 @@ const lienzo = document.createElement('canvas');
 const g = initCanvas(lienzo);
 setVirtual(1200, 540);
 escena.init({}, {});
+const nombre = params.get('s') || 'arena';
+if (!DE_PARTIDA.includes(nombre)) {
+  escena.maestro = P.makeMaestro({ aprendidas: [0, 1, 2, 3], pasadas: [] });
+  escena.comenzar();
+  escena.empiezaPelea();
+}
 // En filas de COLS: un lienzo de Chrome no pasa de 32767 px por lado, y 130
 // fotogramas de 720 en fila son 93600 (salia en blanco).
 const COLS = 10;

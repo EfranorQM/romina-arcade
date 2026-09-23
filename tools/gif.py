@@ -36,7 +36,8 @@ FPS = 25
 PAGINA = {'ogro': ('tools/ver-ogro.html', 620, 470), 'caballera': ('tools/ver-caballera.html', 620, 470),
           'escena': ('tools/ver-escena.html', 720, 324)}
 DURA = {
-    'escena': {'arena': 5.2, 'parada': 2.2, 'barrido': 1.8, 'embestida': 2.6},
+    'escena': {'arena': 5.2, 'parada': 2.2, 'barrido': 1.8, 'embestida': 2.6,
+               'inicio': 4.6, 'victoria': 6.6},
     'ogro': {'garrote': 0.95, 'pisoton': 1.45, 'barrido': 0.88, 'embestida': 1.30,
              'ruge': 1.2, 'dolor': 0.24, 'pared': 1.25, 'parada': 0.55, 'jadeo': 0.55,
              'muere': 1.2, 'anda': 1.2, 'espera': 1.0},
