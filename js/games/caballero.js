@@ -939,6 +939,12 @@ export default {
       BT.marco(g, c.x, c.y, c.w, c.h, sel);
       BT.rotulo(g, nombre, c.x + c.w / 2, c.y + 14, sel ? PC.oro3 : '#8a7a98', 3);
     }
+    // NUEVO, sobre la pestaña de la aventura, hasta que la juegue una vez: la
+    // primera vez que se publico, no la encontro.
+    if (!Save.dato('caba.aventuraVista', false) && Math.sin(this.t * 6) > -0.4) {
+      const c = this.pestana('aventura');
+      BT.rotulo(g, 'NUEVO!', c.x - 76, c.y + 14, '#5cffd8', 3);
+    }
     for (let i = 0; i < 3; i++) {
       const key = P.ORDEN[i], D = P.DIFICULTADES[key], c = this.tarjeta(i);
       const sel = key === this.dif;

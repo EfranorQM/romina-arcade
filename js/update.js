@@ -45,7 +45,7 @@ const LS = {
 
 // La version que trae el APK de fabrica. La reescribe tools/publica.mjs en
 // cada publicacion, para que el numero que se ve en el menu sea el de verdad.
-export const VERSION_APK = '1.0.18';
+export const VERSION_APK = '1.0.19';
 
 // Que version se esta usando ahora mismo.
 export function versionActual() {
@@ -70,14 +70,30 @@ export async function iniciaUpdate() {
   // pedido. Hacerlo aqui llegaba tarde -- la actualizacion se descargaba,
   // decia "AL DIA", y seguia ejecutando el codigo viejo.
   //
-  // Aqui solo queda CONFIRMAR que la version estrenada funciona. Si el juego
-  // casca antes de los 20 s, este temporizador no llega a saltar, la marca
-  // 'sosp' se queda puesta y el proximo arranque la revierte sola.
+  // Aqui solo quedaria CONFIRMAR que la version estrenada funciona, y eso ya
+  // no lo hace un reloj: lo hace latido(), abajo.
+}
+
+// ---------- La confirmacion: el juego tiene que DEMOSTRAR que va ----------
+// Cada fotograma que main.js pinta ENTERO (sin excepcion en update ni en
+// draw) es un latido. A los LATIDOS_OK, la version estrenada queda confirmada.
+//
+// ANTES ERA UN RELOJ DE 20 s, y fallaba al reves: si ella cerraba la app antes
+// de los 20 s, o Android la dormia en segundo plano (los temporizadores se
+// paran y luego mata el proceso), el siguiente arranque la daba por rota y
+// volvia a la version del APK -- la v1.0.8, con el ROMINA de pruebas, sin
+// ogro ni aventura. Le paso el 23-09-2026 con la v1.0.18: "solo me aparece el
+// mapa". Una version rota de verdad no llega a pintar dos segundos: se queda
+// en negro, o el bucle revienta en cada fotograma y no suma latidos.
+const LATIDOS_OK = 120;          // 2 s de juego en primer plano
+let latidos = 0;
+export function latido() {
+  if (latidos < 0) return;
+  if (++latidos < LATIDOS_OK) return;
+  latidos = -1;
   if (LS.sosp) {
-    setTimeout(() => {
-      console.log('[update] la version', LS.sosp, 'va bien: confirmada');
-      LS.sosp = null;
-    }, 20000);
+    console.log('[update] la version', LS.sosp, 'va bien: confirmada');
+    LS.sosp = null;
   }
 }
 
