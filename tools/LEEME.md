@@ -223,6 +223,29 @@ sin récord (era el único juego del arcade que no guardaba ninguno).
   lamento. El arnés revisa TODAS las canciones del arcade: una nota que el
   secuenciador no conoce no suena y no avisa.
 
+## Medallas, armario y el ogro que aprende (ROMINA)
+
+```
+node tools/prueba-ogro.mjs                                   # sección 14: el ogro que aprende
+node tools/prueba-caba-partida.mjs                           # sección 4: medallas y armario
+```
+
+- **Once medallas**, cada una con un reto que no es solo ganar, y cada una
+  gana UNA prenda del **armario** (capa, falda o estela): el armario es la
+  lista de medallas. Se tiñe la hoja cambiando colores exactos; la estela
+  tiene blancos propios desde el horneado (`marca_estela` en
+  `romina-atlas.py`), porque compartía los de la armadura. El pelo no se toca.
+- **El ogro que aprende**: la escena le cuenta las costumbres de ella
+  (`anotaHabito`: guardia, salto, esquiva hacia atrás o a través) y al entrar
+  en su furia elige UNA contramedida contra la más repetida (finta, doble
+  pisotón, persecución o vuelta rápida), que se ANUNCIA con un cartel. Cada
+  una tiene su respuesta medida en el arnés. Solo aprende cuando ella ya no
+  tiene nada que aprender.
+- Al probarlo salió un fallo viejo: el aviso de FURIA y su música no salían
+  nunca. La escena comparaba el estado del ogro de antes y después de SU paso,
+  y el rugido lo pone el golpe de ella, que va después en el mismo paso. Ahora
+  compara con el último estado que vio (`stVisto`).
+
 ## La ARENA de ROMINA: el salón del castillo
 
 ```

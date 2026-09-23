@@ -369,6 +369,122 @@ console.log('== 13) EL DAÑO LLEGA HASTA DONDE LLEGA EL DIBUJO ==');
   }
 }
 
+console.log('== 14) EL OGRO QUE APRENDE: CADA CONTRAMEDIDA TIENE RESPUESTA ==');
+{
+  // Elegir: la costumbre mas repetida, y solo si es costumbre.
+  const og = O.makeOgro(600);
+  ok(O.eligeContra(og) === null, 'sin costumbres, no hay contramedida');
+  O.anotaHabito(og, 'guardia'); O.anotaHabito(og, 'guardia');
+  ok(O.eligeContra(og) === null, 'dos veces no es una costumbre');
+  O.anotaHabito(og, 'guardia'); O.anotaHabito(og, 'salto');
+  ok(O.eligeContra(og) === 'finta', 'tres guardias: el ogro FINGE el garrotazo');
+  for (let i = 0; i < 3; i++) O.anotaHabito(og, 'salto');
+  ok(O.eligeContra(og) === 'doble', 'mas saltos que guardias: PISA DOS VECES');
+  // Aprende al entrar en furia... y no en la primera pelea, que enseña.
+  const furia = (o) => { const g = O.makeOgro(600, o); for (let i = 0; i < 3; i++) O.anotaHabito(g, 'atras');
+    for (let i = 0; i < 40 && g.fase < 3; i++) { g.invul = 0; if (g.st === O.RUGE) g.st = O.ESPERA; O.hiereOgro(g, 1, 1); } return g; };
+  ok(furia({}).contra === 'acoso', 'al entrar en furia, contra quien huye hacia atras: la PERSIGUE');
+  ok(furia({ permitidos: [O.GARROTE] }).contra === null, 'en la primera pelea (la que enseña) no aprende');
+
+  // Un ataque ya preparado contra ella, con la regla real (como la seccion 6).
+  function juega(og, K, resp, hasta = 3) {
+    const r = { pierde: 0, parada: 0 };
+    for (let n = 0; n * DT < hasta; n++) {
+      C.stepCaballero(K, resp(n * DT), DT);
+      O.stepOgro(og, K, DT, () => 0.99);
+      O.empujaCuerpo(og, K);
+      const g = O.golpeaA(og, K);
+      if (!g) continue;
+      const hp = K.hp, res = C.herir(K, g.x, g.tipo, g.dano);
+      if (K.hp < hp) r.pierde++;
+      if (res === 'parada') { r.parada++; O.abrePorParada(og, C.PARADA_PREMIO); }
+    }
+    return r;
+  }
+  const pulsa = (tp, que) => t => ({ ...nada, ...(Math.abs(t - tp) < DT / 2 ? que : {}) });
+  const mantiene = (tp) => t => ({ ...nada, bloquea: t >= tp });
+  const ventana = (hazlo, hasta) => {
+    const salva = [];
+    for (let k = 0; k * DT <= hasta; k++) if (hazlo(k * DT).pierde === 0) salva.push(k * DT);
+    return salva.length ? (salva[salva.length - 1] - salva[0] + DT) * 1000 : 0;
+  };
+
+  // LA FINTA: el garrote se aguanta en alto 0.35 s mas.
+  const finta = (resp) => {
+    const og = O.makeOgro(500); og.dir = 1; og.contra = 'finta';
+    og.st = O.ATACA; og.atk = O.GARROTE; og.atkT = 0; og.golpeo = 0; og.retener = 0.35;
+    const K = C.makeCaballero(650); K.dir = -1;
+    return juega(og, K, resp, 1.6);
+  };
+  // La guardia levantada a la hora de un garrotazo normal (0.20 s antes del golpe).
+  const aSuHora = finta(mantiene(O.ATAQUES[O.GARROTE][1] - 0.20));
+  ok(aSuHora.pierde === 0 && aSuHora.parada === 0, 'finta: la guardia a su hora de siempre la PARA, pero sin parada (no le quita vida)');
+  let conParada = false;
+  for (let k = 0; k * DT < 1.2 && !conParada; k++) if (finta(mantiene(k * DT)).parada) conParada = true;
+  ok(conParada, 'y esperando al golpe de verdad, la PARADA sigue saliendo');
+  const vf = ventana(tp => finta(mantiene(tp)), 0.42 + 0.35);
+  ok(vf >= 250, 'la guardia contra la finta salva pulsando en ' + vf.toFixed(0) + ' ms');
+
+  // EL DOBLE PISOTON: se saltan las dos ondas. Ella salta cuando la onda le
+  // llega a D px (como haria un pulgar mirando la onda); se buscan las D que
+  // salvan de las DOS, y tiene que haber un margen de verdad.
+  const doble = (D) => {
+    const og = O.makeOgro(500); og.dir = 1; og.contra = 'doble';
+    og.st = O.ATACA; og.atk = O.PISOTON; og.atkT = 0; og.golpeo = 0;
+    const K = C.makeCaballero(800); K.dir = -1;
+    let pierde = 0, ondas = 0;
+    for (let n = 0; n * DT < 3; n++) {
+      const cerca = og.ondas.some(w => w.vivo && w.rec >= O.ONDA_CIEGA && (w.x - K.x) * w.dir < 0 && Math.abs(w.x - K.x) <= D);
+      C.stepCaballero(K, { ...nada, salta: cerca && K.enSuelo, saltaAbajo: true }, DT);
+      O.stepOgro(og, K, DT, () => 0.99);
+      if (og.ondas.length > ondas) ondas = og.ondas.length;
+      const w = O.ondaGolpea(og, K);
+      if (w) { const hp = K.hp; C.herir(K, w.x, 'onda'); if (K.hp < hp) pierde++; }
+    }
+    return { pierde, ondas };
+  };
+  const buenas = [];
+  for (let D = 20; D <= 300; D += 5) if (doble(D).pierde === 0) buenas.push(D);
+  const margen = buenas.length ? buenas[buenas.length - 1] - buenas[0] + 5 : 0;
+  ok(doble(100).ondas === 4, 'el doble pisoton suelta dos parejas de ondas');
+  ok(margen >= 100, 'doble: saltando cuando la onda esta a entre ' + (buenas[0] || '-') + ' y ' + (buenas[buenas.length - 1] || '-') +
+     ' px se libran las DOS (' + margen + ' px de margen, ' + (margen / O.ONDA_V * 1000).toFixed(0) + ' ms)');
+
+  // LA PERSECUCION: con ella lejos, embiste mucho mas.
+  const embiste = (contra) => {
+    let emb = 0, tot = 0;
+    const rnd = semilla(31);
+    for (let i = 0; i < 400; i++) {
+      const og = O.makeOgro(500); og.contra = contra; og.esperaT = 0;
+      const K = C.makeCaballero(500 + O.CUERPO_R + 350);
+      O.stepOgro(og, K, DT, rnd);
+      if (og.st === O.ATACA) { tot++; if (og.atk === O.EMBESTIDA) emb++; }
+    }
+    return tot ? emb / tot : 0;
+  };
+  const sin = embiste(null), con = embiste('acoso');
+  ok(con >= 0.6 && con > sin + 0.2, 'acoso: con ella lejos embiste el ' + Math.round(con * 100) + '% de las veces (sin aprender, el ' + Math.round(sin * 100) + '%)');
+
+  // LA VUELTA RAPIDA: si se le queda a la espalda, se gira y suelta un
+  // garrotazo con aviso corto (pero nunca de menos de 0.30 s), que se para.
+  const giro = (resp) => {
+    const og = O.makeOgro(500); og.contra = 'giro'; og.dir = 1; og.st = O.ESPERA; og.esperaT = 0.6;
+    const K = C.makeCaballero(380); K.dir = 1;      // a su espalda, mirandole
+    const r = juega(og, K, resp, 1.5);
+    r.og = og;
+    return r;
+  };
+  const g0 = giro(() => nada);
+  ok(g0.og.ultimo === O.GARROTE && g0.pierde > 0, 'giro: con ella a la espalda, se da la vuelta y el garrotazo le da (control)');
+  const og5 = O.makeOgro(500); og5.contra = 'giro'; og5.dir = 1; og5.st = O.ESPERA; og5.esperaT = 0.6;
+  O.stepOgro(og5, C.makeCaballero(380), DT, () => 0.99);
+  const aviso = O.ATAQUES[O.GARROTE][1] / (og5.ritmoCarga * og5.prisa);
+  ok(og5.st === O.ATACA && og5.dir === -1 && aviso >= 0.30 && aviso < O.ATAQUES[O.GARROTE][1],
+     'se gira al momento y avisa en ' + aviso.toFixed(2) + ' s (menos que el normal, nunca menos de 0.30)');
+  const vg = ventana(tp => giro(mantiene(tp)), 0.4);
+  ok(vg >= 200, 'y la guardia lo para pulsando en ' + vg.toFixed(0) + ' ms');
+}
+
 console.log('');
 console.log(fallos === 0 ? 'TODO OK' : fallos + ' FALLOS');
 process.exit(fallos ? 1 : 0);

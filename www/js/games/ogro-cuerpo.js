@@ -98,6 +98,11 @@ export function makeOgro(x, o = {}) {
     st: ESPERA, t: 0, animT: 0,
     hp: hpMax, hpMax, fase: 1, invul: 0,
     ritmoCarga: o.ritmoCarga || 1, pausa: o.pausa || 1, permitidos: o.permitidos || null,
+    // EL OGRO QUE APRENDE (ver abajo): lo que ella suele hacer, la contramedida
+    // que eligio y lo que la contramedida le hace a cada ataque. Solo aprende
+    // cuando ya no hay nada que enseñarle a ella (la primera pelea, no).
+    aprende: o.aprende !== undefined ? o.aprende : !o.permitidos,
+    habitos: {}, contra: null, prisa: 1, retener: 0, reteniendo: false, doble: false, giro: false,
     atk: -1, atkT: 0, golpeo: 0,
     abiertoT: 0, abiertoPor: POR_FIN, esperaT: 0.6,
     ondas: [],
@@ -211,15 +216,23 @@ export function stepOgro(O, K, dt, rnd) {
   // ESPERA / ANDA: decide.
   const d = K.x - O.x;
   const ad = Math.abs(d);
+  // LA VUELTA RAPIDA (contramedida 'giro'): si ella se le ha quedado a la
+  // espalda, no descansa: se da la vuelta y suelta un garrotazo rapido.
+  const detras = O.dir !== (d < 0 ? -1 : 1);
+  if (O.contra === 'giro' && detras && ad < CUERPO_R + 220 && O.esperaT > 0) { O.esperaT = 0; O.giro = true; }
   O.dir = d < 0 ? -1 : 1;
 
   if (O.esperaT > 0) { O.esperaT -= dt; O.vx = 0; O.st = ESPERA; return; }
 
-  const elegido = elige(O, ad, R);
+  const elegido = O.giro ? GARROTE : elige(O, ad, R);
   if (elegido >= 0) {
     O.st = ATACA; O.atk = elegido; O.atkT = 0; O.golpeo = 0; O.animT = 0;
     O.repes = (elegido === O.ultimo) ? O.repes + 1 : 0;
     O.ultimo = elegido;
+    // Lo que la contramedida le hace a este ataque.
+    O.prisa = O.giro ? prisaPara(O, GARROTE, AVISO_RAPIDO) : 1;
+    O.retener = (O.contra === 'finta' && elegido === GARROTE && !O.giro && R() < 0.6) ? FINTA_T[0] + R() * (FINTA_T[1] - FINTA_T[0]) : 0;
+    O.giro = false; O.doble = false;
     return;
   }
 
@@ -247,6 +260,9 @@ function elige(O, ad, rnd) {
   // En furia pisa mas: sube la presion sin tocar los tiempos, que son los que
   // hacen justo o injusto al jefe.
   if (O.fase >= 3) pesos[PISOTON] += 2;
+  // LA PERSECUCION (contramedida 'acoso'): si ella suele irse hacia atras,
+  // cuando la tiene lejos la embiste.
+  if (O.contra === 'acoso' && !cerca) pesos[EMBESTIDA] += 8;
   // Los que todavia no le toca usar (la primera pelea, que enseña).
   if (O.permitidos) for (let i = 0; i < 4; i++) if (!O.permitidos.includes(i)) pesos[i] = 0;
   // El castigo a la repeticion.
@@ -262,8 +278,17 @@ function elige(O, ad, rnd) {
 function pasoAtaque(O, K, dt) {
   const a = ATAQUES[O.atk];
   const ciclo = a[0], a0 = a[1], a1 = a[2], avance = a[3];
-  // El aviso corre al ritmo de la dificultad; el golpe, siempre igual.
-  O.atkT += dt * (O.atkT < a0 ? O.ritmoCarga : 1);
+  // LA FINTA (contramedida 'finta'): con el garrote en alto, lo aguanta un
+  // momento antes de soltarlo. Quien levanta la guardia a su hora de siempre
+  // la tiene arriba de mas cuando llega el golpe: lo para, pero sin PARADA.
+  if (O.retener > 0 && O.atkT >= a0 * 0.8 && O.atkT < a0) {
+    O.retener -= dt; O.reteniendo = true;
+    return;
+  }
+  O.reteniendo = false;
+  // El aviso corre al ritmo de la dificultad (y de la prisa); el golpe,
+  // siempre igual.
+  O.atkT += dt * (O.atkT < a0 ? O.ritmoCarga * O.prisa : 1);
 
   // El avance del cuerpo durante la parte activa: es lo que hace que un
   // garrotazo se sienta lanzado y no plantado.
@@ -288,6 +313,15 @@ function pasoAtaque(O, K, dt) {
   if (O.atk === PISOTON && !O.golpeo && O.atkT >= a0) {
     O.golpeo = 1;
     for (const s of [-1, 1]) O.ondas.push({ x: O.x + s * 20, dir: s, rec: 0, vivo: true });
+  }
+  // EL DOBLE PISOTON (contramedida 'doble'): en cuanto acaba de pisar, vuelve
+  // a pisar, sin la recuperacion. La segunda onda sale cuando ella esta
+  // cayendo de saltar la primera. Solo uno de mas: luego si descansa.
+  if (O.atk === PISOTON && O.contra === 'doble' && !O.doble && O.atkT >= a1 + 0.12) {
+    O.doble = true;
+    O.atkT = 0; O.golpeo = 0; O.animT = 0;
+    O.prisa = prisaPara(O, PISOTON, AVISO_DOBLE);
+    return;
   }
 
   if (O.atkT >= ciclo) {
@@ -317,6 +351,8 @@ export function hiereOgro(O, dano, dirGolpe) {
   if (faseNueva > O.fase) {
     O.fase = faseNueva;
     O.st = RUGE; O.t = 0; O.invul = RUGE_T; O.atk = -1; O.vx = 0;
+    // En su FURIA, contrarresta lo que ella mas ha hecho.
+    if (faseNueva >= 3 && O.aprende && !O.contra) O.contra = eligeContra(O);
     return true;
   }
 
@@ -327,6 +363,36 @@ export function hiereOgro(O, dano, dirGolpe) {
     O.st = DOLOR; O.t = 0; O.vx = dirGolpe * 150;
   }
   return true;
+}
+
+// ---------- EL OGRO QUE APRENDE ----------
+// Durante la pelea cuenta lo que ella suele hacer (la escena le avisa con
+// anotaHabito), y al entrar en su FURIA (fase 3) elige UNA contramedida contra
+// su costumbre mas repetida. Es la idea de LA MASA (contadores -> contramedida
+// VISIBLE, no una evolucion a ciegas): la escena la anuncia con un cartel y
+// cada una tiene su respuesta, medida en la seccion 14 de tools/prueba-ogro.mjs.
+//   guardia (para los garrotazos)  -> 'finta':  aguanta el garrote en alto
+//   salto (salta las ondas)        -> 'doble':  pisa dos veces seguidas
+//   atras (esquiva hacia atras)    -> 'acoso':  cuando esta lejos, la embiste
+//   hacia (lo atraviesa)           -> 'giro':   se da la vuelta rapido
+export const HABITO_CONTRA = { guardia: 'finta', salto: 'doble', atras: 'acoso', hacia: 'giro' };
+export const HABITO_MIN = 3;          // menos de 3 veces no es una costumbre
+export const FINTA_T = [0.25, 0.45];  // lo que aguanta el garrote en alto
+// Los avisos de las contramedidas rapidas: nunca por debajo de lo que tarda en
+// reaccionar un pulgar (0.30 s, igual que los del jefe).
+const AVISO_RAPIDO = 0.32, AVISO_DOBLE = 0.40, AVISO_MIN = 0.30;
+
+export function anotaHabito(O, h) { O.habitos[h] = (O.habitos[h] || 0) + 1; }
+export function eligeContra(O) {
+  let mejor = null, n = HABITO_MIN - 1;
+  for (const h in HABITO_CONTRA) if ((O.habitos[h] || 0) > n) { n = O.habitos[h]; mejor = h; }
+  return mejor ? HABITO_CONTRA[mejor] : null;
+}
+// Cuanto hay que acelerar el aviso de un ataque para que dure `objetivo` s
+// (nunca menos de AVISO_MIN, ni mas lento que el suyo).
+function prisaPara(O, atk, objetivo) {
+  const aviso = ATAQUES[atk][1] / O.ritmoCarga;
+  return Math.max(1, aviso / Math.max(AVISO_MIN, objetivo));
 }
 
 // Que le esta pegando el ogro a ella en este instante: el garrote (con el

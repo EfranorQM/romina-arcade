@@ -129,6 +129,13 @@ console.log('== 3) LA PRIMERA PELEA ENSEÑA, Y NO SE ATASCA ==');
   ok(P.permitidos(M).includes(O.BARRIDO), 'sin aprender el pisoton en ' + P.INTENTOS + ' intentos, suelta el barrido igual');
   ok(P.empieza(M, O.PISOTON) !== null, 'pero el consejo del pisoton sigue saliendo');
   P.acaba(M);
+  // Los intentos se cuentan ENTRE peleas: un ataque que sale una vez por
+  // pelea tambien se suelta, a la tercera pelea.
+  let Mx = P.makeMaestro(null);
+  P.empieza(Mx, O.GARROTE); P.acaba(Mx);                                  // pelea 1
+  Mx = P.makeMaestro(P.paraGuardar(Mx)); P.empieza(Mx, O.GARROTE); P.acaba(Mx);   // pelea 2
+  Mx = P.makeMaestro(P.paraGuardar(Mx)); P.empieza(Mx, O.GARROTE); P.acaba(Mx);   // pelea 3
+  ok(P.permitidos(Mx).includes(O.PISOTON), 'un ataque que sale una vez por pelea se suelta igual a la tercera pelea');
   // Y en la pelea siguiente ya no frena el juego: el consejo sale sin camara lenta.
   const M3 = P.makeMaestro(P.paraGuardar(M));
   const e3 = P.empieza(M3, O.PISOTON);
@@ -159,14 +166,14 @@ console.log('== 4) LAS MEDALLAS Y EL ARMARIO ==');
   const A = await import(G('games/romi-atlas.js'));
   // Una pelea de base que NO gana ninguna medalla, y lo que cambia cada una.
   const base = { gano: false, t: 200, vida: 1, vidaMax: 4, paradas: 0, contras: 0, dano: 5, ogroHp: 24,
-                 paredes: 0, usoGuardia: true, dif: 'normal', nota: null, alumna: false };
+                 paredes: 0, usoGuardia: true, dif: 'normal', nota: null, alumna: false, aprendio: false };
   ok(P.medallasDe(base).length === 0, 'una pelea perdida y sin nada especial no gana medallas');
   const casos = {
     victoria: { gano: true, nota: 'C' }, alumna: { alumna: true },
     intacta: { gano: true, vida: 4, nota: 'C' }, paradas: { paradas: 5 }, contras: { contras: 3 },
     pared: { paredes: 2 }, singuardia: { gano: true, usoGuardia: false, nota: 'C' },
     relampago: { gano: true, t: 50, nota: 'C' }, furia: { gano: true, dif: 'furia', nota: 'C' },
-    notaS: { gano: true, nota: 'S' },
+    notaS: { gano: true, nota: 'S' }, lista: { gano: true, aprendio: true, nota: 'C' },
   };
   for (const med of P.MEDALLAS) {
     const got = P.medallasDe({ ...base, ...casos[med.id] });

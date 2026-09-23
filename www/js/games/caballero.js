@@ -148,6 +148,7 @@ export default {
     this.maestro.vistas = {}; this.maestro.actual = null;
     // El final.
     this.gano = false; this.res = null;
+    this.stVisto = undefined; this.atkVisto = undefined;
     this.rugido = false; this.grito = false; this.sonoFinal = false; this.rugioVictoria = false;
   },
 
@@ -251,7 +252,7 @@ export default {
     const record = Save.submit('caballero', p.puntos);
     // LAS MEDALLAS de esta pelea: las que no tenia se guardan y se anuncian.
     const conseguidas = P.medallasDe({ ...r, nota: p.nota, paredes: this.paredes, usoGuardia: this.usoGuardia,
-                                       dif: this.dif, alumna: !P.lecciona(this.maestro) });
+                                       dif: this.dif, alumna: !P.lecciona(this.maestro), aprendio: !!O.contra });
     const nuevas = conseguidas.filter(id => !this.medallas.includes(id));
     if (nuevas.length) {
       this.medallas = this.medallas.concat(nuevas);
@@ -289,7 +290,8 @@ export default {
     const M = this.maestro;
     const L = P.acaba(M);
     if (L) { this.msg = 'ASI SE HACE!'; this.msgT = 1.2; SFX.acierto(); }
-    if (this.leccion) this.leccionT = Math.min(this.leccionT, 0.9);
+    // (El cartel de lo que el ogro aprendio no se acorta: no es una leccion.)
+    if (this.leccion && this.leccion.atk !== undefined) this.leccionT = Math.min(this.leccionT, 0.9);
     this.O.permitidos = P.permitidos(M);
     this.guardaLecciones();
   },
@@ -354,6 +356,8 @@ export default {
     if (antesSt !== C.ESQUIVA && K.st === C.ESQUIVA) {
       SFX.rodar(); this.esquivas++; vibrate(8);
       P.anota(Mae, 'esquiva');
+      // Para el ogro que aprende: ¿se fue hacia el o lejos de el?
+      if (activo) OG.anotaHabito(this.O, Math.sign(K.esqDir) === Math.sign(this.O.x - K.x) ? 'hacia' : 'atras');
       // el polvo del impulso, del suelo del que despega
       burst(K.x, K.y, 10, { rnd: Math.random, colors: [PA.polvo1, PA.polvo3], speed: 140, life: 0.3, size: 4, grav: 400 });
     }
@@ -366,7 +370,12 @@ export default {
     // ================== EL OGRO ==================
     const O = this.O;
     const ondasAntes = O.ondas.length;
-    const stAntes = O.st, atkAntes = O.atk;
+    // Como estaba el ogro la ULTIMA VEZ QUE SE MIRO, no antes de su paso: el
+    // rugido (y la parada) los pone el golpe de ella, que va DESPUES en este
+    // mismo paso. Con el estado de antes del paso, el cambio no se veia nunca
+    // y ni el aviso de FURIA ni su musica salieron jamas.
+    const stAntes = this.stVisto !== undefined ? this.stVisto : O.st;
+    const atkAntes = this.atkVisto !== undefined ? this.atkVisto : O.atk;
 
     // EL ORDEN IMPORTA: ella se mueve, luego el ogro, y AL FINAL se arbitra
     // quien toca a quien. Con ella esquivando a 640 px/s un frame de desfase
@@ -385,7 +394,10 @@ export default {
     for (const w of O.ondas) {
       if (!w.vivo) continue;
       const lado = Math.sign(w.x - K.x);
-      if (w.lado && lado && lado !== w.lado && SUELO - K.y > OG.ONDA_ALTO) P.anota(Mae, 'salta');
+      if (w.lado && lado && lado !== w.lado && SUELO - K.y > OG.ONDA_ALTO) {
+        P.anota(Mae, 'salta');
+        if (activo) OG.anotaHabito(O, 'salto');
+      }
       if (lado) w.lado = lado;
     }
     if (Mae.actual && O.st !== OG.ATACA && !O.ondas.some(w => w.vivo)) this.acabaAtaque();
@@ -408,8 +420,9 @@ export default {
     for (const gr of this.grietas) gr.t -= dt * 0.08;
     while (this.grietas.length && this.grietas[0].t <= 0) this.grietas.shift();
 
-    // El ogro acaba de quedar ABIERTO: se avisa, porque es CUANDO pegar.
-    if (activo && O.st === OG.ABIERTO && stAntes !== OG.ABIERTO) {
+    // El ogro acaba de quedar ABIERTO: se avisa, porque es CUANDO pegar. (Tras
+    // una parada no: ahi manda el PARADA! y el CONTRA! del boton.)
+    if (activo && O.st === OG.ABIERTO && stAntes !== OG.ABIERTO && O.abiertoPor !== OG.POR_PARADA) {
       this.msg = 'AHORA'; this.msgT = 0.55;
       if (O.abiertoPor === OG.POR_PARED) this.paredes++;
     }
@@ -420,7 +433,14 @@ export default {
                                     speed: 220, life: 0.6, size: 4, grav: -60 });
       // En su furia, la musica se le acelera con el.
       if (O.fase >= 3) playMusic(SONGS.caballeroFuria);
+      // Y si ha aprendido algo de ella, se anuncia: una contramedida que no
+      // se ve es trampa. El cartel dura lo que el rugido y un poco mas.
+      if (O.contra && P.CONTRAS[O.contra]) {
+        this.leccion = P.CONTRAS[O.contra]; this.leccionT = 4.5;
+        SFX.alarm();
+      }
     }
+    this.stVisto = O.st; this.atkVisto = O.atk;
     // Un paso pesado hace temblar el suelo un poquito. Va con el PIE del
     // dibujo (pisadaOgro), no con un reloj: un temblor que no coincide con la
     // pisada se nota mas que no tener temblor.
@@ -473,7 +493,7 @@ export default {
         // LA PARADA: el garrote rebota y el ogro se queda abierto lo que dura
         // la ocasion de contraatacar (el premio de ella lo pone herir()).
         OG.abrePorParada(O, C.PARADA_PREMIO);
-        this.paradas++; P.anota(Mae, 'para');
+        this.paradas++; P.anota(Mae, 'para'); OG.anotaHabito(O, 'guardia');
         this.hitstop = 9 / 60; cam.shake(4, 0.14); SFX.clang(); vibrate(26);
         this.msg = 'PARADA!'; this.msgT = 0.8;
         this.chispa = 0.25;
@@ -481,7 +501,7 @@ export default {
               { rnd: Math.random, colors: [PC.oro3, PC.bla2, PC.ace4],
                 speed: 320, life: 0.5, size: 4, grav: 120 });
       } else if (r === 'bloqueado') {
-        P.anota(Mae, 'para');
+        P.anota(Mae, 'para'); OG.anotaHabito(O, 'guardia');
         this.hitstop = 4 / 60; cam.shake(2.5, 0.1); SFX.clang(); vibrate(14);
         burst(K.x + K.dir * 40, K.y - 110, 8,
               { rnd: Math.random, colors: [PC.ace3, PC.ace2], speed: 200,
@@ -702,7 +722,9 @@ export default {
       const parpadea = O.invul > 0 && O.st !== OG.RUGE && ((O.invul * 16) | 0) & 1;
       // El destello al 75 %, no al 100: con la media luna blanca del tajo de
       // ella encima, un ogro blanco entero se leia como una mancha sin forma.
-      if (!parpadea) drawOgro(g, this.SO, O.x - cx, SUELO, O.dir, po, Math.max(0, this.flashO) / 0.1 * 0.75);
+      // LA FINTA se VE: mientras aguanta el garrote en alto, tiembla.
+      const tiembla = O.reteniendo ? (((this.t * 40) | 0) & 1 ? 2 : -2) : 0;
+      if (!parpadea) drawOgro(g, this.SO, O.x - cx + tiembla, SUELO, O.dir, po, Math.max(0, this.flashO) / 0.1 * 0.75);
     }
 
     // Sombra de Romina. Era un fillRect: un rectangulo negro de 5 px que se
