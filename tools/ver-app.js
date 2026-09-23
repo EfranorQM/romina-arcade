@@ -263,11 +263,16 @@ async function drag(cdp, x1, y1, x2, y2, steps, stepMs) {
   }
 
   // Errores de la pagina: sin esto un fallo de JS pasa por "pantalla negra".
+  // (Tambien los console.error: desde que main.js atrapa los fallos de las
+  // escenas para enseñarlos en pantalla, ya no llegan como excepcion.)
   const errs = cdp.events.filter(e =>
     e.method === 'Log.entryAdded' && e.params.entry.level === 'error'
-    || e.method === 'Runtime.exceptionThrown');
+    || e.method === 'Runtime.exceptionThrown'
+    || e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error');
   for (const e of errs) {
     const t = e.params.entry ? e.params.entry.text
+      : e.method === 'Runtime.consoleAPICalled'
+        ? e.params.args.map(a => a.description || a.value).join(' ')
       : (e.params.exceptionDetails && (e.params.exceptionDetails.text + ' ' +
          ((e.params.exceptionDetails.exception || {}).description || '')));
     console.error('ERROR EN LA PAGINA: ' + t);

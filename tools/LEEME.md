@@ -402,6 +402,15 @@ al APK, la v1.0.8, con el ROMINA de pruebas: "solo me aparece el mapa". Ahora:
 El APK de Romina lleva dentro la v1.0.8: si todo lo demás falla, es a lo que
 vuelve. Recompilarlo lo pondría al día, pero hay que reinstalarlo a mano.
 
+**Cuando algo revienta en el teléfono.** Allí no hay consola: una excepción
+dejaba la pantalla congelada en el último fotograma. Ahora `main.js` atrapa los
+fallos de las escenas (al entrar, jugando, pintando y al tocar), pinta abajo un
+aviso con la versión, el error y los dos primeros `fichero.js:línea` de la
+pila, y si el juego falla al entrar o sin parar, vuelve al menú. El primero se
+guarda en `localStorage['rom.error']`. Con una foto del aviso basta para saber
+qué arreglar. Como ya no llegan como excepción, `ver-app.js` cuenta también los
+`console.error`, y `prueba-juegos.js` mira `rom.error`.
+
 ## Ver las carátulas del menú
 
 ```

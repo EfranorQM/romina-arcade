@@ -52,6 +52,8 @@
     probados: st.parte.length,
     de: A.GAMES.length,
     detalle: st.parte,
-    errores: st.errores,
+    // main.js atrapa los fallos de las escenas (para enseñarlos en pantalla)
+    // y apunta el primero en rom.error: tambien cuenta.
+    errores: st.errores.concat(localStorage.getItem('rom.error') ? [localStorage.getItem('rom.error')] : []),
   };
 })()
