@@ -104,7 +104,7 @@ const leeDelApk = (n) => {
   const b = fs.readFileSync(tmp); fs.unlinkSync(tmp); return b;
 };
 let iguales = 0, distintos = [];
-for (const f of ['js/update.js', 'sw.js', 'js/main.js', 'js/menu.js', 'js/games/romi-anim.js']) {
+for (const f of ['js/update.js', 'sw.js', 'js/main.js', 'js/menu.js', 'js/games/caballero.js']) {
   const dentro = leeDelApk('assets/public/' + f);
   const fuera = fs.readFileSync(path.join(raiz, 'www', f));
   if (sha(dentro) === sha(fuera)) iguales++; else distintos.push(f);

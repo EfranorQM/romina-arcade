@@ -15,13 +15,19 @@ import { SFX } from '../audio.js';
 import { Stick, Button, vibrate } from '../input.js';
 import * as C from './caba-cuerpo.js';
 import { drawRomina, P as PR } from './romi-sprite.js';
-// La paleta de la Romina de antes se queda para la INTERFAZ (botones, textos,
-// corazones): el rosa es el color del juego en el menu, no el de su ropa.
-import { P as PC } from './romi-art.js';
 import * as AR from './caba-arena.js';
 import { drawSalon, drawRepisas, drawEscombros, drawSombrasPiedras, drawPiedras, P as PA } from './arena-sprite.js';
 import * as OG from './ogro-cuerpo.js';
 import { bakeOgro, drawOgro, poseOgro, pisadaOgro, vueloOgro, P as POG } from './ogro-sprite.js';
+
+// La paleta de la INTERFAZ (botones, textos, corazones, chispas del acero).
+// Es la de la Romina de antes, que se borro con su codigo: el rosa se quedo
+// porque es el color del juego en el menu, no el de su ropa.
+const PC = {
+  ves1: '#8e1140', ves2: '#c41c5a', ves3: '#ef4a84', ves4: '#ff8fbc',
+  bla2: '#fff4fa', oro3: '#ffe066',
+  ace1: '#4a5570', ace2: '#8a97b8', ace3: '#d4dcf0', ace4: '#ffffff',
+};
 
 const SUELO = C.SUELO;
 
@@ -29,7 +35,8 @@ export default {
   meta: {
     id: 'caballero', title: 'ROMINA', tag: 'CONTRA EL OGRO',
     colors: ['#ef4a84', '#ffe066'],
-    // Apaisado y GRANDE: 1200x540 para que Romina quepa a 128x180 con detalle.
+    // Apaisado y GRANDE: 1200x540. Ella y el salon son pixel art pintado a x2;
+    // el ogro es un dibujo pintado a mano, reducido y puesto a 1:1.
     // Sin meta.smooth: es pixel art, tiene que quedar nitido.
     vw: 1200, vh: 540, wide: true,
     pausaY: 2,
