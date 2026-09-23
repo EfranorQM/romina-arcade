@@ -335,6 +335,16 @@ export const SONGS = {
     { wave:'pulse', duty:0.5, pattern:'c.e.g.x...g.x...a.x.z...f.a.x.y.', vol:0.07 },
     { wave:'noise', pattern:'h...h...h...h.h.', vol:0.04 },
   ]},
+  // EL BOSQUE (la aventura de ROMINA): Fa lidio, el modo que suena a
+  // encantado (el Si natural sobre el Fa es la nota magica) y que cabe entero
+  // en el secuenciador. Fa, Sol, Mi menor y La menor, con el bajo a paso de
+  // caminante y el arpegio tocando el Si en el primer compas. Mas lenta que la
+  // pelea: aqui se anda, y se pelea de vez en cuando.
+  caballeroBosque: { bpm: 120, tracks: [
+    { wave:'tri',   pattern:'F...c...F...c...G...d...G...d...E...b...E...b...A...e...A...e...', vol:0.15 },
+    { wave:'pulse', duty:0.25, pattern:'f.a.x.b.x.a.f.c.g.b.y.b.y.b.g.d.e.g.b.z.b.g.e.g.a.x.z.x.a.x.z.y.', vol:0.06 },
+    { wave:'noise', pattern:'h...h.h.h...h.h.', vol:0.04 },
+  ]},
   // DERROTA: La menor, lenta y con huecos. Triste pero no pesada: tiene que
   // dar ganas de volver a intentarlo, no de dejarlo.
   caballeroDerrota: { bpm: 84, tracks: [
@@ -400,4 +410,7 @@ export const SFX = {
   tajo:     () => sfx({ type: 'noise', f0: 2400, f1: 300, dur: 0.09, vol: 0.30 }),
   muda:     () => { sfx({ type: 'tri', f0: 160, f1: 45, dur: 0.8, vol: 0.4 }); sfx({ type: 'noise', f0: 900, f1: 80, dur: 0.6, vol: 0.28 }); },
   crece:    () => { [330, 440, 660].forEach((f, i) => setTimeout(() => sfx({ type: 'pulse', duty: 0.25, f0: f, f1: f * 1.25, dur: 0.08, vol: 0.2 }), i * 60)); },
+  // LA AVENTURA de ROMINA: el lobo que se alza y caer a un foso
+  grune:    () => sfx({ type: 'saw', f0: 130, f1: 70, dur: 0.30, vol: 0.30 }),
+  cae:      () => sfx({ type: 'tri', f0: 700, f1: 110, dur: 0.6, vol: 0.30 }),
 };

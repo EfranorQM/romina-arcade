@@ -42,6 +42,12 @@ export function opcionesOgro(dif, permitidos) {
   const D = DIFICULTADES[dif];
   return { hp: D.ogroHp, ritmoCarga: D.ritmoCarga, pausa: D.pausa, permitidos };
 }
+// Y los enemigos de la AVENTURA (caba-enemigos.js), con los mismos numeros
+// que el ogro: el ritmo acorta sus avisos y la pausa, lo que descansan.
+export function opcionesBosque(dif) {
+  const D = DIFICULTADES[dif] || DIFICULTADES.normal;
+  return { ritmo: D.ritmoCarga, pausa: D.pausa };
+}
 
 // ---------- Los puntos y la nota ----------
 // `r` = lo que dejo la pelea: { gano, t (s de pelea), vida, vidaMax, paradas,

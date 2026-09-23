@@ -41,6 +41,9 @@ import * as AR from './caba-arena.js';
 import { drawSalon, drawRepisas, drawEscombros, drawSombrasPiedras, drawPiedras, P as PA } from './arena-sprite.js';
 import * as OG from './ogro-cuerpo.js';
 import { bakeOgro, drawOgro, poseOgro, pisadaOgro, vueloOgro, P as POG } from './ogro-sprite.js';
+import * as AV from './caba-aventura.js';
+import * as NV from './caba-nivel.js';
+import { drawBosque } from './bosque-sprite.js';
 
 // La paleta de la INTERFAZ (botones, textos, corazones, chispas del acero).
 // Es la de la Romina de antes, que se borro con su codigo: el rosa se quedo
@@ -113,6 +116,11 @@ export default {
     this.traje = P.trajeValido(Save.dato('caba.traje', null), this.medallas);
     vestir(P.tintesDe(this.traje));
     this.armarioNuevo = false;     // hay prendas ganadas que aun no ha visto
+    // EL MODO: la AVENTURA (niveles que avanzan, caba-aventura.js) o la pelea
+    // contra el ogro. Se recuerda, como la dificultad.
+    this.modo = Save.dato('caba.modo', 'pelea') === 'aventura' ? 'aventura' : 'pelea';
+    this.vistaBosque = NV.makeNivel(NV.BOSQUE);
+    this.av = null;
 
     this.nueva();
     this.fase = 'elige'; this.faseT = 0;
@@ -166,6 +174,7 @@ export default {
     for (const k in this.pulsos) if (this.pulsos[k] > 0) this.pulsos[k] -= dt / 0.25;
     if (this.destello > 0) this.destello -= dt;
     if (this.avisoT > 0) this.avisoT -= dt;
+    if (this.fase === 'aventura') { AV.update(this, dt); return; }
     if (this.fase === 'elige' || this.fase === 'resultado' || this.fase === 'armario') { this.quietos(dt); return; }
     if (this.fase === 'entrada') { this.entrada(dt); return; }
     // LA PELEA y el FINAL: el mundo, a camara lenta si toca.
@@ -567,6 +576,7 @@ export default {
   },
 
   onInput(ev, ctx) {
+    if (this.fase === 'aventura') { AV.input(this, ev); return; }
     // EL ARMARIO: tocar una muestra la pone (si esta ganada) o dice como se gana.
     if (this.fase === 'armario') {
       if (ev.type !== 'down') return;
@@ -602,13 +612,22 @@ export default {
         this.fase = 'armario'; this.faseT = 0; this.aviso = ''; this.avisoT = 0; this.armarioNuevo = false;
         return;
       }
+      // Las pestanas: AVENTURA o EL OGRO.
+      for (const m of ['aventura', 'pelea']) {
+        const c = this.pestana(m);
+        if (ev.x >= c.x && ev.x <= c.x + c.w && ev.y >= c.y && ev.y <= c.y + c.h) {
+          if (this.modo !== m) { this.modo = m; Save.guarda('caba.modo', m); SFX.select(); vibrate(8); }
+          return;
+        }
+      }
       for (let i = 0; i < 3; i++) {
         const c = this.tarjeta(i);
         if (ev.x >= c.x && ev.x <= c.x + c.w && ev.y >= c.y && ev.y <= c.y + c.h) {
           this.dif = P.ORDEN[i];
           Save.guarda('caba.dif', this.dif);
           SFX.select(); vibrate(10);
-          this.comenzar();
+          if (this.modo === 'aventura') AV.empieza(this);
+          else this.comenzar();
           return;
         }
       }
@@ -629,10 +648,13 @@ export default {
       } else if (this.bMenu.hit(ev)) { SFX.blip(); this.ctx.toMenu(); }
       return;
     }
-    if (this.fase !== 'pelea') {
-      if (ev.type !== 'down') { this.stick.up(ev); this.bSalta.up(ev); this.bAtaca.up(ev); this.bEsquiva.up(ev); this.bGuardia.up(ev); }
-      return;
-    }
+    if (this.fase !== 'pelea') { this.sueltaMandos(ev); return; }
+    this.mandos(ev);
+  },
+
+  // LOS MANDOS de la pelea, que son tambien los de la aventura: el stick a la
+  // izquierda y los cuatro botones a la derecha.
+  mandos(ev) {
     if (ev.type === 'down') {
       if (this.bEsquiva.down(ev)) { this.esquiva = true; this.pulsos.esquivar = 1; return; }
       if (this.bGuardia.down(ev)) { this.pulsos.guardia = 1; return; }
@@ -645,6 +667,10 @@ export default {
       this.stick.up(ev); this.bSalta.up(ev); this.bAtaca.up(ev); this.bEsquiva.up(ev); this.bGuardia.up(ev);
     }
   },
+  // Fuera de juego solo se sueltan (un dedo que se levanta no se queda pegado).
+  sueltaMandos(ev) {
+    if (ev.type !== 'down') { this.stick.up(ev); this.bSalta.up(ev); this.bAtaca.up(ev); this.bEsquiva.up(ev); this.bGuardia.up(ev); }
+  },
 
   // Le entra un golpe de verdad (el ogro o un cascote): congelacion, temblor,
   // sonido y la sangre en el rojo de su falda.
@@ -656,6 +682,13 @@ export default {
   },
 
   draw(g, ctx) {
+    if (this.fase === 'aventura') { AV.draw(this, g); return; }
+    // Eligiendo la AVENTURA, detras se ve el bosque y no el salon.
+    if (this.modo === 'aventura' && (this.fase === 'elige' || this.fase === 'armario')) {
+      drawBosque(g, this.vistaBosque, 0, VW, ALTO, this.t);
+      if (this.fase === 'elige') this.drawElige(g); else this.drawArmario(g);
+      return;
+    }
     const K = this.K, cx = this.camX;
     // EL SALON y sus repisas (ver caba-arena.js y arena-sprite.js).
     drawSalon(g, this.t);
@@ -892,15 +925,20 @@ export default {
     }
   },
 
-  // ---------- ELEGIR LA DIFICULTAD ----------
+  // ---------- ELEGIR EL MODO Y LA DIFICULTAD ----------
   tarjeta(i) { return { x: 90 + i * 350, y: 196, w: 320, h: 226 }; },
+  pestana(m) { return m === 'aventura' ? { x: 270, y: 124, w: 320, h: 52 } : { x: 610, y: 124, w: 320, h: 52 }; },
 
   drawElige(g) {
     velo(g, 0.55);
     // El titulo, debajo del boton de pausa del arcade.
     BT.rotulo(g, 'ROMINA', VW / 2, 56, PC.ves3, 9);
-    BT.rotulo(g, 'CONTRA EL OGRO', VW / 2, 128, PC.oro3, 3);
-    BT.rotulo(g, 'ELIGE TU PELEA', VW / 2, 164, PC.bla2, 2);
+    // Las pestanas del modo: la elegida, con su marco encendido.
+    for (const [m, nombre] of [['aventura', 'AVENTURA'], ['pelea', 'CONTRA EL OGRO']]) {
+      const c = this.pestana(m), sel = this.modo === m;
+      BT.marco(g, c.x, c.y, c.w, c.h, sel);
+      BT.rotulo(g, nombre, c.x + c.w / 2, c.y + 14, sel ? PC.oro3 : '#8a7a98', 3);
+    }
     for (let i = 0; i < 3; i++) {
       const key = P.ORDEN[i], D = P.DIFICULTADES[key], c = this.tarjeta(i);
       const sel = key === this.dif;
@@ -910,16 +948,30 @@ export default {
       // sus corazones
       const ancho = D.corazones * 28 - 6;
       for (let k = 0; k < D.corazones; k++) corazon(g, Math.round(mx - ancho / 2 + k * 28), c.y + 74, true);
-      textCenter(g, D.lema, mx, c.y + 118, '#e8d8e8', 2);
-      textCenter(g, 'PUNTOS x' + D.mult, mx, c.y + 150, '#c8b8ff', 2);
+      if (this.modo === 'aventura') {
+        // En la aventura no hay puntos: el lema del bosque y la mejor nota.
+        textCenter(g, LEMA_BOSQUE[key], mx, c.y + 118, '#e8d8e8', 2);
+        const B = Save.dato('caba.bosque', null), nota = B && B.notas && B.notas[key];
+        textCenter(g, nota ? 'MEJOR NOTA ' + nota : 'SIN NOTA AUN', mx, c.y + 150, nota ? '#ffd76a' : '#8a7ab8', 2);
+      } else {
+        textCenter(g, D.lema, mx, c.y + 118, '#e8d8e8', 2);
+        textCenter(g, 'PUNTOS x' + D.mult, mx, c.y + 150, '#c8b8ff', 2);
+      }
       if (sel) textCenter(g, 'LA DE LA ULTIMA VEZ', mx, c.y + 190, '#b8801f', 2);
     }
-    // Si todavia le queda que aprender, se le dice: la primera pelea enseña.
-    if (P.lecciona(this.maestro)) {
-      BT.rotulo(g, 'EL OGRO TE IRA ENSEÑANDO SUS ATAQUES UNO A UNO', VW / 2, 438, '#9fe0c0', 2);
+    if (this.modo === 'aventura') {
+      // La aventura: que nivel es, y su mejor tiempo.
+      BT.rotulo(g, NV.BOSQUE.nombre + ': LLEGA AL ARBOL DEL FINAL', VW / 2, 438, '#c8e8a0', 2);
+      const B = Save.dato('caba.bosque', null);
+      if (B && B.mejorT) BT.rotulo(g, 'MEJOR TIEMPO ' + reloj(B.mejorT), VW / 2, 464, '#c8b8ff', 2);
+    } else {
+      // Si todavia le queda que aprender, se le dice: la primera pelea enseña.
+      if (P.lecciona(this.maestro)) {
+        BT.rotulo(g, 'EL OGRO TE IRA ENSEÑANDO SUS ATAQUES UNO A UNO', VW / 2, 438, '#9fe0c0', 2);
+      }
+      const mejor = Save.best('caballero');
+      if (mejor > 0) BT.rotulo(g, 'MEJOR ' + mejor, VW / 2, 464, '#c8b8ff', 2);
     }
-    const mejor = Save.best('caballero');
-    if (mejor > 0) BT.rotulo(g, 'MEJOR ' + mejor, VW / 2, 464, '#c8b8ff', 2);
     if (Math.sin(this.t * 4) > -0.3) BT.rotulo(g, 'TOCA UNA PARA EMPEZAR', VW / 2, 494, PC.bla2, 2);
     // EL ARMARIO, abajo a la izquierda, con cuantas medallas lleva. Si hay
     // prendas nuevas, late.
@@ -1106,11 +1158,14 @@ export default {
     }
   },
 
-  destroy() { this.A = null; },
+  destroy() { this.A = null; this.av = null; },
 };
 
 // Como se llama cada parte del traje en pantalla.
 const NOMBRE_PARTE = { capa: 'CAPA', falda: 'FALDA', estela: 'ESTELA' };
+// Lo que dice cada dificultad en la AVENTURA (en la pelea es su lema, que
+// habla del ogro).
+const LEMA_BOSQUE = { paseo: 'EL BOSQUE CON CALMA', normal: 'EL BOSQUE DE VERDAD', furia: 'EL BOSQUE NO PERDONA' };
 
 // La cara de la muestra de una prenda (claro, medio, oscuro): de la falda, sus
 // tonos de la parte que mas se ve.
