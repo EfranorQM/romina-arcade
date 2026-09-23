@@ -64,7 +64,7 @@ const GUIONES = [];
 // GARROTE -- el que se PARA. El aviso es el garrote subiendo por encima de la
 // cabeza, y el fotograma que MAS se aguanta es el 3: el garrote atras del
 // todo, el cuerpo enroscado. Cae justo en la ventana en que ella tiene que
-// levantar el escudo (pulsar entre 0.15 y 0.30 s para que la parada llegue a
+// levantar la guardia (pulsar entre 0.15 y 0.30 s para que la parada llegue a
 // los 0.42), asi que lo que se ve es lo que hay que leer.
 GUIONES[OG.GARROTE] = [
   ['garrote', 0, CARGA, 0.12],
@@ -97,7 +97,7 @@ GUIONES[OG.PISOTON] = [
   ['salto', 9, VUELTA, 1],
 ];
 
-// BARRIDO -- el que se RUEDA. Su aviso tiene que ser DISTINTO del garrote de
+// BARRIDO -- el que se ESQUIVA. Su aviso tiene que ser DISTINTO del garrote de
 // un vistazo: alli el garrote sube; aqui APUNTA con el garrote en horizontal,
 // a la altura del pecho, se echa atras y sale en ESTOCADA. Vertical contra
 // horizontal es lo que se distingue antes, incluso con el rabillo del ojo. Y
@@ -168,7 +168,7 @@ export function poseOgro(O) {
       return po;
     }
     if (por === OG.POR_PARADA) {
-      // Le han parado el garrote: rebota del escudo, se le va el cuerpo atras.
+      // Le han parado el garrote: rebota de la espada, se le va el cuerpo atras.
       po.f = O.t < 0.06 ? 1 : O.t < 0.16 ? 2 : O.t < 0.34 ? 3 : O.t < 0.45 ? 4 : 5;
       return po;
     }

@@ -118,9 +118,9 @@ export function stepArena(A, K, O, dt, espada) {
     // salta justo debajo, la piedra la encuentra en el aire.
     if (!p.fuera && K.vivo && Math.abs(K.x - p.x) < T.ancho / 2 + CUERPO_K - 6 &&
         p.y > K.y - 170 && p.y - T.alto < K.y) {
-      const r = herir(K, p.x, true);
+      const r = herir(K, p.x, 'piedra');
       if (r === true) { ev.push({ tipo: 'golpea', x: p.x, y: p.y }); p.fuera = true; continue; }
-      // invulnerable (rodando o recien golpeada): la piedra sigue su camino
+      // invulnerable (esquivando o recien golpeada): la piedra sigue su camino
     }
     // ¿Y al ogro? Si se ha metido debajo, le duele: es la forma de usar la
     // arena contra el.

@@ -301,13 +301,46 @@ export const SONGS = {
     { wave:'noise', pattern:'H.hHH.hHH.hHH.hH', vol:0.06 },
   ]},
 
-  // EL CABALLERO: Mi menor, marcha lenta de campo de batalla. El bajo pisa en
-  // blancas como un tambor de guerra y el arpegio baja: es un sitio donde ya
-  // se perdio una batalla, no una carga heroica.
+  // EL CABALLERO (ROMINA): Mi menor, marcha lenta de campo de batalla. El bajo
+  // pisa en blancas como un tambor de guerra y el arpegio baja. Era la de la
+  // pelea; ahora es la de ANTES: suena al elegir la dificultad y en la entrada,
+  // y al gritar A PELEAR entra el tema de pelea (caballeroPelea).
   caballero: { bpm: 96, tracks: [
     { wave:'tri',   pattern:'E.......E.......C.......G.......', vol:0.17 },
     { wave:'pulse', duty:0.5, pattern:'e...b...g...e...c...g...d...g...', vol:0.055 },
     { wave:'noise', pattern:'H.......H...h...H.......H...hh..', vol:0.055 },
+  ]},
+
+  // LA PELEA DE ROMINA: Re dorico (Re menor con el Si natural), el modo
+  // medieval por excelencia, y cabe entero en las notas del secuenciador, que
+  // no tiene sostenidos. Cuatro compases: Re menor, Do, Sol y La menor, con el
+  // bajo en corcheas como un galope y el arpegio subiendo en cada acorde.
+  caballeroPelea: { bpm: 144, tracks: [
+    { wave:'tri',   pattern:'D.D.D.D.D.D.D.D.C.C.C.C.C.C.C.C.G.G.G.G.G.G.G.G.A.A.A.A.A.A.A.A.', vol:0.16 },
+    { wave:'pulse', duty:0.25, pattern:'d.f.a.y.a.f.d.f.c.e.g.x.g.e.c.e.g.b.y.b.g.b.y.b.a.x.z.x.a.x.z.x.', vol:0.065 },
+    { wave:'noise', pattern:'h.H.H.h.h.H.HhhH', vol:0.05 },
+  ]},
+  // La FURIA del ogro (su tercera fase): el mismo tema, mas rapido, el bajo
+  // saltando de octava y el arpegio en semicorcheas. Es el mismo sitio, pero
+  // ahora aprieta.
+  caballeroFuria: { bpm: 166, tracks: [
+    { wave:'tri',   pattern:'D.d.D.d.D.d.D.d.C.c.C.c.C.c.C.c.G.g.G.g.G.g.G.g.A.a.A.a.A.a.A.a.', vol:0.17 },
+    { wave:'pulse', duty:0.125, pattern:'dfayafdfdfayafdfcegxgececegxgecegbybgbgbgbybgbgbaxzxaxaxaxzxaxax', vol:0.06 },
+    { wave:'noise', pattern:'H.hHH.hHH.hHH.hH', vol:0.06 },
+  ]},
+  // VICTORIA: fanfarria en Do mayor, lo unico del juego en modo mayor. Suena
+  // mientras se ve la nota.
+  caballeroVictoria: { bpm: 116, tracks: [
+    { wave:'tri',   pattern:'C.......G.......A.......F...G...', vol:0.15 },
+    { wave:'pulse', duty:0.5, pattern:'c.e.g.x...g.x...a.x.z...f.a.x.y.', vol:0.07 },
+    { wave:'noise', pattern:'h...h...h...h.h.', vol:0.04 },
+  ]},
+  // DERROTA: La menor, lenta y con huecos. Triste pero no pesada: tiene que
+  // dar ganas de volver a intentarlo, no de dejarlo.
+  caballeroDerrota: { bpm: 84, tracks: [
+    { wave:'tri',   pattern:'A.......F.......D.......E.......', vol:0.14 },
+    { wave:'pulse', duty:0.5, pattern:'a...e...x...a...f...a...x...b...', vol:0.05 },
+    { wave:'noise', pattern:'h...............', vol:0.025 },
   ]},
 
   // LA MASA: Re menor a tempo medio, un duelo. El bajo pisa en negras y deja
