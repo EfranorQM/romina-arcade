@@ -1,0 +1,104 @@
+<!doctype html>
+<!-- LA ESCENA REAL de ROMINA, grabada fotograma a fotograma.
+
+     No es una imitacion: importa caballero.js tal cual, la mueve con un GUION
+     de botones (el stick y los cuatro botones, como un pulgar) a 60 pasos por
+     segundo, y la dibuja con su camara y sus particulas igual que el bucle de
+     main.js. Cada fotograma va a una celda de la tira, que tools/gif.py
+     convierte en GIF:
+
+       python tools/gif.py escena:arena vistas/arena.gif
+
+     Guiones: arena (sube a la repisa, el pisoton pasa por debajo, caen los
+     cascotes y baja a pegarle). -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#000}canvas{display:block}</style>
+<canvas id="tira"></canvas>
+<script type="module">
+import { initCanvas, setVirtual, cam } from '../www/js/core.js';
+import { updateParticles, drawParticles } from '../www/js/gfx.js';
+import escena from '../www/js/games/caballero.js';
+import { cargaRomina } from '../www/js/games/romi-sprite.js';
+import { cargaOgro } from '../www/js/games/ogro-sprite.js';
+import { cargaArena } from '../www/js/games/arena-sprite.js';
+import * as OG from '../www/js/games/ogro-cuerpo.js';
+import * as AR from '../www/js/games/caba-arena.js';
+
+await Promise.all([cargaRomina(), cargaOgro(), cargaArena()]);
+const DT = 1 / 60;
+
+// Un guion: que se pulsa en cada paso. Mira el estado de la escena (donde
+// estan ella y el ogro) en vez de ir a ciegas por el reloj, como haria alguien
+// jugando.
+const GUIONES = {
+  arena(n, E, m) {
+    const K = E.K, O = E.O, R = AR.REPISAS[0];
+    E.salta = false; E.golpea = false; E.rueda = false;
+    if (n === 0) { O.esperaT = 99; }                  // el ogro espera a su señal
+    if (m.fase === 0) {
+      // 1. corre hacia la repisa izquierda y salta ANTES de llegar: en el aire
+      // conserva la carrerilla (240 px/s), y hasta caer a la altura de la
+      // repisa avanza unos 95 px. Saltando justo debajo se pasaba de largo.
+      const meta = R.x0 + 8 + 95 - 70;
+      E.stick.dx = K.x < meta ? 1 : 0;
+      // Pulsar SALTA en el juego es a la vez el flanco (salta) y el boton
+      // apretado (bSalta.pressed): sin lo segundo el salto se corta en el
+      // mismo paso y se queda en 43 px, que no llegan a la repisa (88).
+      if (K.x >= meta && K.enSuelo) { E.salta = true; E.bSalta.pressed = true; m.fase = 1; m.salto = n; }
+    } else if (m.fase === 1) {
+      E.stick.dx = 0;
+      E.bSalta.pressed = n - m.salto < 20;             // salto completo
+      if (K.enSuelo && K.y < 400) { m.fase = 2; m.arriba = n; }
+    } else if (m.fase === 2) {
+      // 2. arriba de la repisa: el ogro pisotea
+      if (n - m.arriba === 10) { O.esperaT = 0; O.st = OG.ATACA; O.atk = OG.PISOTON; O.atkT = 0; O.golpeo = 0; O.animT = 0; }
+      if (n - m.arriba > 150) m.fase = 3;
+    } else if (m.fase === 3) {
+      // 3. baja y va a por el
+      E.stick.dx = O.x > K.x ? 1 : -1;
+      if (Math.abs(O.x - K.x) < 190 && K.enSuelo) { E.stick.dx = 0; m.fase = 4; m.combo = n; }
+    } else {
+      E.stick.dx = 0;
+      const k = n - m.combo;
+      if (k === 0 || k === 12 || k === 24) E.golpea = true;
+    }
+  },
+};
+
+const params = new URLSearchParams(location.search);
+const guion = GUIONES[params.get('s') || 'arena'];
+const fps = +(params.get('fps') || 25), dura = +(params.get('dura') || 5.2), esc = +(params.get('escala') || 0.6);
+
+const lienzo = document.createElement('canvas');
+const g = initCanvas(lienzo);
+setVirtual(1200, 540);
+escena.init({}, {});
+// En filas de COLS: un lienzo de Chrome no pasa de 32767 px por lado, y 130
+// fotogramas de 720 en fila son 93600 (salia en blanco).
+const COLS = 10;
+const CW = Math.round(1200 * esc), CH = Math.round(540 * esc), n = Math.ceil(dura * fps);
+const tira = document.getElementById('tira');
+tira.width = Math.min(n, COLS) * CW; tira.height = Math.ceil(n / COLS) * CH;
+const t2 = tira.getContext('2d');
+t2.imageSmoothingEnabled = true;          // reducir la tira suaviza; el juego sigue nitido
+const memoria = { fase: 0 };
+let paso = 0;
+for (let i = 0; i < n; i++) {
+  while (paso * DT < i / fps) {
+    guion(paso, escena, memoria);
+    escena.update(DT, {});
+    updateParticles(DT);
+    cam.update(DT, Math.random);
+    paso++;
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.imageSmoothingEnabled = false;
+  g.save();
+  if (cam.x || cam.y) g.translate(cam.x, cam.y);
+  escena.draw(g, {}, 1);
+  drawParticles(g);
+  g.restore();
+  t2.drawImage(lienzo, 0, 0, 1200, 540, (i % COLS) * CW, Math.floor(i / COLS) * CH, CW, CH);
+}
+document.title = 'listo ' + n;
+</script>

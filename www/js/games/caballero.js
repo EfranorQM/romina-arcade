@@ -1,15 +1,14 @@
-// EL CABALLERO - campo de pruebas.
+// ROMINA - la pelea contra el ogro, en el salon del castillo.
 //
-// AVISO: esto TODAVIA NO ES EL JUEGO. Es el patio donde se prueba lo unico que
-// decide si el juego vale la pena -- como se siente correr, saltar, rodar y
-// cortar en horizontal. No hay jefe, no hay vidas que perder, no se puede
-// morir: hay muñecos de paja que se parten para sentir el impacto de la
-// espada, y ya. El jefe entra cuando esto se sienta bien.
+// Se juega de LADO. Pulgar izquierdo = mover. Cuatro botones a la derecha:
+// SALTA, TAJO (el grande), RUEDA y ESCUDO (la guardia, que se mantiene).
 //
-// Se juega de LADO. Pulgar izquierdo = mover. Tres botones a la derecha:
-// SALTAR (arriba), TAJO (el grande) y RODAR (el chico).
+// Aqui solo se arbitra: la fisica de ella esta en caba-cuerpo.js, la del ogro
+// en ogro-cuerpo.js y la de la arena (repisas, cascotes, escombros) en
+// caba-arena.js, las tres sin DOM y con su arnes en tools/. Lo que se ve sale
+// de romi-sprite.js, ogro-sprite.js y arena-sprite.js.
 
-import { VW, VH, cam } from '../core.js';
+import { VW, cam } from '../core.js';
 import { burst, particles } from '../gfx.js';
 import { text, textCenter, measure } from '../font.js';
 import { SFX } from '../audio.js';
@@ -19,7 +18,8 @@ import { drawRomina, P as PR } from './romi-sprite.js';
 // La paleta de la Romina de antes se queda para la INTERFAZ (botones, textos,
 // corazones): el rosa es el color del juego en el menu, no el de su ropa.
 import { P as PC } from './romi-art.js';
-import { bakeMundo, drawMundo, P as PM } from './caba-mundo.js';
+import * as AR from './caba-arena.js';
+import { drawSalon, drawRepisas, drawEscombros, drawSombrasPiedras, drawPiedras, P as PA } from './arena-sprite.js';
 import * as OG from './ogro-cuerpo.js';
 import { bakeOgro, drawOgro, poseOgro, pisadaOgro, vueloOgro, P as POG } from './ogro-sprite.js';
 
@@ -27,7 +27,7 @@ const SUELO = C.SUELO;
 
 export default {
   meta: {
-    id: 'caballero', title: 'ROMINA', tag: 'PRUEBA DE MOVIMIENTO',
+    id: 'caballero', title: 'ROMINA', tag: 'CONTRA EL OGRO',
     colors: ['#ef4a84', '#ffe066'],
     // Apaisado y GRANDE: 1200x540 para que Romina quepa a 128x180 con detalle.
     // Sin meta.smooth: es pixel art, tiene que quedar nitido.
@@ -38,7 +38,9 @@ export default {
   init(ctx, args) {
     this.ctx = ctx;
     this.K = C.makeCaballero(160);
-    this.W = bakeMundo(SUELO, VH);
+    // LA ARENA: el salon del castillo, con sus repisas, y los cascotes que
+    // hace caer el pisoton (ver caba-arena.js).
+    this.A = AR.makeArena();
 
     this.stick = new Stick(80, 14);
     // Los tres botones, en triangulo en la esquina de abajo a la derecha. Los
@@ -60,11 +62,8 @@ export default {
     this.msg = ''; this.msgT = 0;
     this.combo = 0; this.comboT = 0;
 
-    // EL OGRO. Los muñecos de paja se quedan como decorado del fondo (ya no
-    // son el objetivo): ahora hay un jefe de verdad.
-    this.pajas = [];
-    for (let i = 0; i < 3; i++) this.pajas.push({ x: 180 + i * 130, roto: 0, t: 0 });
-
+    // EL OGRO. (Los muñecos de paja del patio de pruebas se fueron con el
+    // salon: en una pelea de jefe solo estorbaban la vista.)
     this.O = OG.makeOgro(880);
     this.SO = bakeOgro();
     this.flashO = 0;          // el destello blanco del ogro al recibir un tajo
@@ -91,7 +90,8 @@ export default {
     const antesEsc = K.escId, antesParada = K.parada;
     this.salta = false; this.golpea = false; this.rueda = false;
 
-    C.stepCaballero(K, inp, dt);
+    const M = AR.mundo(this.A);
+    C.stepCaballero(K, inp, dt, M);
 
     // --- Sonidos y efectos de lo que acaba de pasar ---
     // Cada golpe del combo suena distinto: el tercero (el giro) mas grave y
@@ -108,58 +108,32 @@ export default {
     // El EMPUJON de escudo
     if (K.escId !== antesEsc) {
       SFX.clang(); vibrate(14); cam.shake(2, 0.08);
-      burst(K.x + K.dir * 40, SUELO - 70, 7, { rnd: Math.random, colors: [PC.ace3, PC.oro3], speed: 170, life: 0.3, size: 4, grav: 180 });
+      burst(K.x + K.dir * 40, K.y - 70, 7, { rnd: Math.random, colors: [PC.ace3, PC.oro3], speed: 170, life: 0.3, size: 4, grav: 180 });
       this.msg = 'EMPUJON'; this.msgT = 0.6;
     }
     // La PARADA perfecta: destello de oro y el aviso
     if (K.parada > 0 && antesParada <= 0) {
       SFX.clang(); vibrate(22); cam.shake(4, 0.14); this.hitstop = 7 / 60;
-      burst(K.x + K.dir * 34, SUELO - 74, 18, { rnd: Math.random, colors: [PC.oro3, PC.bla2, PC.ace4], speed: 300, life: 0.5, size: 4, grav: 60 });
+      burst(K.x + K.dir * 34, K.y - 74, 18, { rnd: Math.random, colors: [PC.oro3, PC.bla2, PC.ace4], speed: 300, life: 0.5, size: 4, grav: 60 });
       this.msg = 'PARADA!'; this.msgT = 0.9;
     }
+    // El polvo sale de DONDE PISA (el suelo, una repisa o un escombro), no
+    // siempre de la linea del suelo.
     if (!antesSuelo && K.enSuelo) {
       // Aterrizaje: polvo y un temblor chiquito
-      burst(K.x, SUELO, 9, { rnd: Math.random, colors: [PM.sue1, PM.sue2], speed: 120, life: 0.32, size: 4, grav: 520 });
+      burst(K.x, K.y, 9, { rnd: Math.random, colors: [PA.polvo1, PA.polvo2], speed: 120, life: 0.32, size: 4, grav: 520 });
       SFX.aterriza(); cam.shake(1.5, 0.08);
     }
     if (antesSt !== C.SALTA && K.st === C.SALTA) { SFX.salto(); this.saltos++; vibrate(6); }
     if (antesSt !== C.RUEDA && K.st === C.RUEDA) {
       SFX.rodar(); this.rodadas++; vibrate(8);
-      burst(K.x, SUELO, 8, { rnd: Math.random, colors: [PM.sue1, PM.sue3], speed: 100, life: 0.28, size: 4, grav: 400 });
+      burst(K.x, K.y, 8, { rnd: Math.random, colors: [PA.polvo1, PA.polvo3], speed: 100, life: 0.28, size: 4, grav: 400 });
     }
     // Polvo al correr
     if (K.st === C.CORRE && K.enSuelo && ((this.t * 12) | 0) % 3 === 0) {
-      burst(K.x - K.dir * 14, SUELO, 1, { rnd: Math.random, colors: [PM.sue2], speed: 44, life: 0.24, size: 3, grav: 240 });
-    }
-
-    // --- La espada contra los muñecos ---
-    if (C.espadaActiva(K)) {
-      const [px, py] = C.puntaEspada(K);
-      for (const p of this.pajas) {
-        if (p.roto > 0) continue;
-        if (Math.abs(p.x - px) < 34 && Math.abs(p.x - K.x) < C.ALCANCE + 20) {
-          p.roto = 2.0;
-          this.hitstop = 5 / 60;
-          cam.shake(3, 0.12);
-          SFX.corta(); vibrate(16);
-          burst(p.x, SUELO - 40, 16, { rnd: Math.random, colors: [PM.hueso, PM.hier2, PM.sue1], speed: 260, life: 0.5, size: 4, grav: 560 });
-          this.msg = 'CORTADO'; this.msgT = 0.7;
-        }
-      }
-    }
-    // El EMPUJON no corta, pero tumba el muñeco de un golpe de escudo.
-    if (C.escudoActivo(K)) {
-      const [ex, ey] = C.puntaEscudo(K);
-      for (const p of this.pajas) {
-        if (p.roto > 0) continue;
-        if (Math.abs(p.x - ex) < 40) {
-          p.roto = 1.4; this.hitstop = 4 / 60; cam.shake(2.5, 0.1);
-          burst(p.x, SUELO - 50, 10, { rnd: Math.random, colors: [PM.hueso, PM.sue1], speed: 200, life: 0.4, size: 4, grav: 520 });
-        }
-      }
+      burst(K.x - K.dir * 14, K.y, 1, { rnd: Math.random, colors: [PA.polvo2], speed: 44, life: 0.24, size: 3, grav: 240 });
     }
     if (this.comboT > 0) this.comboT -= dt;
-    for (const p of this.pajas) if (p.roto > 0) { p.roto -= dt; if (p.roto <= 0) p.t = 0; }
 
     // ================== EL OGRO ==================
     const O = this.O;
@@ -174,15 +148,17 @@ export default {
     // barriga y todas las distancias dejan de significar nada.
     OG.empujaCuerpo(O, K);
 
-    // El pisoton acaba de nacer: temblor, polvo y una grieta en el suelo.
+    // El pisoton acaba de nacer: temblor, polvo, una grieta en el suelo... y
+    // la boveda suelta cascotes. En furia, uno mas.
     if (O.ondas.length > ondasAntes) {
       cam.shakeDecay(7, 0.55); vibrate(28);
       SFX.aterriza();
       this.hitstop = 5 / 60;
-      burst(O.x, SUELO, 22, { rnd: Math.random, colors: [PM.sue1, PM.sue2, PM.hueso],
+      burst(O.x, SUELO, 22, { rnd: Math.random, colors: [PA.polvo1, PA.polvo2, PA.alfom1],
                               speed: 320, life: 0.7, size: 5, grav: 900 });
       this.grietas.push({ x: O.x, w: 70, t: 1 });
       if (this.grietas.length > 6) this.grietas.shift();
+      AR.sueltaPiedras(this.A, O, K, Math.random, O.fase >= 3 ? 3 : 2);
     }
     // Las grietas se borran despacio: quedan como memoria de la pelea.
     for (const gr of this.grietas) gr.t -= dt * 0.08;
@@ -205,7 +181,7 @@ export default {
     if (O.st === OG.ANDA && pisada !== this._paso) {
       this._paso = pisada;
       cam.shakeDecay(1.2, 0.08);
-      burst(O.x, SUELO, 3, { rnd: Math.random, colors: [PM.sue2], speed: 60,
+      burst(O.x, SUELO, 3, { rnd: Math.random, colors: [PA.polvo2], speed: 60,
                              life: 0.3, size: 3, grav: 300 });
     }
 
@@ -258,12 +234,12 @@ export default {
           O.abiertoPor = OG.POR_PARADA;
           this.hitstop = 9 / 60; cam.shake(4, 0.14); SFX.clang(); vibrate(26);
           this.msg = 'PARADA!'; this.msgT = 0.8;
-          burst(K.x + K.dir * 30, SUELO - 90, 14,
+          burst(K.x + K.dir * 30, K.y - 90, 14,
                 { rnd: Math.random, colors: [PC.ace4, PC.ace3, PC.oro3],
                   speed: 300, life: 0.45, size: 4, grav: 200 });
         } else if (r === 'bloqueado') {
           this.hitstop = 4 / 60; cam.shake(2.5, 0.1); SFX.clang(); vibrate(14);
-          burst(K.x + K.dir * 26, SUELO - 80, 8,
+          burst(K.x + K.dir * 26, K.y - 80, 8,
                 { rnd: Math.random, colors: [PC.ace3, PC.ace2], speed: 200,
                   life: 0.35, size: 3, grav: 300 });
         } else if (r === true) {
@@ -271,11 +247,37 @@ export default {
           for (let i = 1; i < dano; i++) if (K.hp > 0) { K.hp--; }
           if (K.hp < 0) K.hp = 0;
           if (K.hp <= 0) { K.vivo = false; K.st = C.MUERTO; }
-          this.hitstop = 7 / 60; cam.shake(5, 0.16); SFX.golpe ? SFX.golpe() : SFX.clang();
-          vibrate(34);
-          burst(K.x, SUELO - 90, 12, { rnd: Math.random, colors: [PR.ves2, PR.ves3],
-                                       speed: 240, life: 0.45, size: 4, grav: 500 });
+          this.duele(K);
         }
+      }
+    }
+
+    // --- LA ARENA: cascotes que caen, escombros que revientan ---
+    // La espada va como TRAMO (del cuerpo a la punta): rompe el escombro que
+    // cruce, igual que al ogro.
+    let espada = null;
+    if (C.espadaActiva(K)) { const [px] = C.puntaEspada(K); espada = [Math.min(K.x, px), Math.max(K.x, px)]; }
+    for (const e of AR.stepArena(this.A, K, O, dt, espada)) {
+      if (e.tipo === 'impacto') {
+        cam.shake(3, 0.12); vibrate(10); SFX.aterriza();
+        burst(e.x, SUELO, 16, { rnd: Math.random, colors: [PA.polvo1, PA.polvo2, PA.polvo3],
+                                speed: 260, life: 0.55, size: 4, grav: 800 });
+      } else if (e.tipo === 'golpea') {
+        this.duele(K);
+        burst(e.x, e.y, 18, { rnd: Math.random, colors: [PA.polvo1, PA.polvo2, PA.polvo3],
+                              speed: 300, life: 0.5, size: 5, grav: 800 });
+      } else if (e.tipo === 'ogro') {
+        this.flashO = 0.1; this.hitstop = 6 / 60; cam.shake(4, 0.14); SFX.corta(); vibrate(18);
+        this.msg = 'CASCOTAZO'; this.msgT = 0.8;
+        burst(e.x, e.y, 18, { rnd: Math.random, colors: [PA.polvo1, PA.polvo2, PA.polvo3],
+                              speed: 300, life: 0.5, size: 5, grav: 800 });
+      } else if (e.tipo === 'rompe') {
+        cam.shake(1.5, 0.08); SFX.clang();
+        burst(e.x, e.y, 14, { rnd: Math.random, colors: [PA.polvo1, PA.polvo2, PA.polvo3],
+                              speed: 240, life: 0.5, size: 5, grav: 800 });
+      } else if (e.tipo === 'onda') {
+        burst(e.x, SUELO, 10, { rnd: Math.random, colors: [PA.polvo1, PA.polvo2],
+                                speed: 200, life: 0.4, size: 4, grav: 600 });
       }
     }
 
@@ -289,6 +291,7 @@ export default {
       if (this.finT > 3) {
         this.K = C.makeCaballero(260);
         this.O = OG.makeOgro(880);
+        this.A = AR.makeArena();
         this.grietas.length = 0;
         this.fin = 0; this.finT = 0;
       }
@@ -316,52 +319,45 @@ export default {
     }
   },
 
+  // Le entra un golpe de verdad (el ogro o un cascote): congelacion, temblor,
+  // sonido y la sangre en el rojo de su falda.
+  duele(K) {
+    this.hitstop = 7 / 60; cam.shake(5, 0.16); SFX.golpe ? SFX.golpe() : SFX.clang();
+    vibrate(34);
+    burst(K.x, K.y - 90, 12, { rnd: Math.random, colors: [PR.ves2, PR.ves3],
+                               speed: 240, life: 0.45, size: 4, grav: 500 });
+  },
+
   draw(g, ctx) {
     const K = this.K, cx = this.camX;
-    drawMundo(g, this.W, cx, VW, VH, SUELO);
+    // EL SALON y sus repisas (ver caba-arena.js y arena-sprite.js).
+    drawSalon(g, this.t);
+    drawRepisas(g);
 
-    // Muñecos de paja
-    for (const p of this.pajas) {
-      const x = Math.round(p.x - cx);
-      if (x < -20 || x > VW + 20) continue;
-      if (p.roto > 0) {
-        // Partido: el poste queda, la paja en el suelo
-        g.fillStyle = PM.hier; g.fillRect(x - 3, SUELO - 24, 6, 24);
-        g.fillStyle = PM.hueso; g.fillRect(x - 14, SUELO - 6, 28, 6);
-      } else {
-        // Un muñeco de entrenamiento: poste, brazos en cruz, torso de paja
-        // atado con cuerda y un yelmo viejo encima.
-        g.fillStyle = PM.hier; g.fillRect(x - 3, SUELO - 108, 6, 108);
-        g.fillStyle = PM.hier; g.fillRect(x - 34, SUELO - 82, 70, 6);   // los brazos
-        g.fillStyle = PM.hueso; g.fillRect(x - 18, SUELO - 90, 42, 52); // la paja
-        g.fillStyle = PM.hier2; g.fillRect(x - 18, SUELO - 72, 42, 4);   // cuerdas
-        g.fillStyle = PM.hier2; g.fillRect(x - 18, SUELO - 54, 42, 4);
-        g.fillStyle = PM.sue2; g.fillRect(x - 18, SUELO - 90, 42, 4);
-        // El yelmo
-        g.fillStyle = PM.hier; g.fillRect(x - 18, SUELO - 118, 38, 30);
-        g.fillStyle = PM.sue4; g.fillRect(x - 12, SUELO - 108, 26, 8);   // la ranura
-        g.fillStyle = PM.hier2; g.fillRect(x - 18, SUELO - 118, 38, 4);
-      }
-    }
-
-    // LAS GRIETAS que deja el pisoton. Van pintadas SOBRE el suelo ya
-    // horneado, sin rehornear la tira: son un array y se dibujan encima.
+    // LAS GRIETAS que deja el pisoton, en la alfombra. Se borran despacio:
+    // quedan como memoria de la pelea.
     for (const gr of this.grietas) {
       const gx = Math.round(gr.x - cx);
       g.globalAlpha = Math.min(0.85, gr.t);
-      g.fillStyle = PM.sue4;
+      g.fillStyle = PA.grieta;
       for (let i = -3; i <= 3; i++) {
         const w = Math.round((1 - Math.abs(i) / 4) * gr.w * 0.22);
         g.fillRect(gx + i * 11 - (w >> 1), SUELO - 1 + ((i * 7) % 3), w, 3);
       }
-      g.fillStyle = PM.sue3;
+      g.fillStyle = PA.alfom2;
       g.fillRect(gx - gr.w / 2, SUELO + 2, gr.w, 2);
       g.globalAlpha = 1;
     }
 
-    // LAS ONDAS del pisoton. Una cresta de seis rectangulos: a 34 px de alto
-    // son silueta de verdad, no un detalle. Se ven viajar porque a 620 px/s
-    // avanzan 10 px por fotograma.
+    // LOS ESCOMBROS y la sombra de lo que va a caer: en el suelo, por detras
+    // de ellos dos.
+    drawEscombros(g, this.A);
+    drawSombrasPiedras(g, this.A);
+
+    // LAS ONDAS del pisoton: una cresta de polvo y piedra que barre la
+    // alfombra. A 34 px de alto son silueta de verdad, no un detalle, y se ven
+    // viajar porque a 620 px/s avanzan 10 px por fotograma. (Antes eran del
+    // verde del ogro: una onda de su color parecia parte de el, no del suelo.)
     for (const w of this.O.ondas) {
       if (!w.vivo) continue;
       const wx = Math.round(w.x - cx);
@@ -369,11 +365,13 @@ export default {
       for (let i = 0; i < alturas.length; i++) {
         const h = alturas[i];
         const bx = wx + (i - 2.5) * 10 * w.dir;
-        g.fillStyle = i === 3 ? POG.pie3 : i < 3 ? POG.pie2 : POG.pie1;
+        g.fillStyle = i === 3 ? PA.polvo1 : i < 3 ? PA.polvo2 : PA.polvo3;
         g.fillRect(Math.round(bx - 5), SUELO - h, 10, h);
+        g.fillStyle = PA.grieta;
+        g.fillRect(Math.round(bx - 5), SUELO - h, 10, 2);
       }
       // el polvo que levanta por delante
-      g.fillStyle = PM.sue2;
+      g.fillStyle = PA.polvo2;
       g.fillRect(wx + 26 * w.dir, SUELO - 8, 8, 8);
     }
 
@@ -406,8 +404,11 @@ export default {
     // enteros, sin antialias, para que sea pixel art como el resto.
     //
     // Se encoge Y se aclara con la altura: es lo que hace leer a que altura
-    // esta en el aire, que es informacion util al saltar.
-    const altura = SUELO - K.y;
+    // esta en el aire, que es informacion util al saltar. Cae sobre lo que
+    // tenga DEBAJO (el suelo, una repisa o un escombro): con la sombra siempre
+    // en el suelo, al saltar sobre una repisa parecia que flotaba en el vacio.
+    const bajo = C.sueloBajo(K.x, K.y, AR.mundo(this.A));
+    const altura = bajo - K.y;
     const sw = Math.max(13, 30 - altura * 0.075);   // semiancho
     const sh = Math.max(2.5, 7 - altura * 0.018);   // semialto
     const sx0 = K.x - cx;
@@ -418,7 +419,7 @@ export default {
       const u = dy / sh;
       if (u * u > 1) continue;
       const w = sw * Math.sqrt(1 - u * u);
-      g.fillRect(Math.round(sx0 - w), SUELO - 2 + dy, Math.round(w * 2), 1);
+      g.fillRect(Math.round(sx0 - w), bajo - 2 + dy, Math.round(w * 2), 1);
     }
     g.globalAlpha = 1;
 
@@ -429,6 +430,9 @@ export default {
     const parpadea = K.iframe > 0 && (((K.iframe * 14) | 0) & 1);
     const rastro = K.st === C.RUEDA && C.invulnerable(K) ? 1 : 0;
     if (!parpadea) drawRomina(g, K.x - cx, K.y, K.dir, p, f, rastro);
+
+    // Lo que cae de la boveda, por delante de todo: le cae ENCIMA.
+    drawPiedras(g, this.A, this.t);
 
     this.drawHud(g);
     this.drawControles(g);
@@ -513,7 +517,7 @@ export default {
     boton(g, this.bEscudo, 32, PC.ace1, PC.ace3, 'ESCUDO', false);
   },
 
-  destroy() { this.W = null; },
+  destroy() { this.A = null; },
 };
 
 function boton(g, b, r, fondo, borde, txt, frio) {

@@ -16,11 +16,12 @@ import * as C from '../www/js/games/caba-cuerpo.js';
 import * as OG from '../www/js/games/ogro-cuerpo.js';
 import { drawRomina, cargaRomina } from '../www/js/games/romi-sprite.js';
 import { poseOgro, drawOgro, bakeOgro, cargaOgro } from '../www/js/games/ogro-sprite.js';
-import { bakeMundo, drawMundo } from '../www/js/games/caba-mundo.js';
+import { drawSalon, cargaArena } from '../www/js/games/arena-sprite.js';
 import { text } from '../www/js/font.js';
 
 await cargaRomina();
 await cargaOgro();
+await cargaArena();
 const cv = document.getElementById('c');
 const g = cv.getContext('2d');
 g.imageSmoothingEnabled = false;
@@ -76,7 +77,6 @@ if (sola) {
   const CW = 620, CH = 470, suelo = 440;
   cv.width = n * CW; cv.height = CH;
   g.imageSmoothingEnabled = false;
-  const M = bakeMundo(suelo, CH);
   const estados = simula(s, Array.from({ length: n }, (_, i) => i / fps));
   const O = OG.makeOgro(0); O.dir = -1;
   for (let i = 0; i < n; i++) {
@@ -84,7 +84,7 @@ if (sola) {
     g.save();
     g.beginPath(); g.rect(i * CW, 0, CW, CH); g.clip();
     g.translate(i * CW, 0);
-    drawMundo(g, M, 300, CW, CH, suelo);
+    g.save(); g.translate(-240, suelo - 452); drawSalon(g, i / fps); g.restore();
     O.animT = i / fps;
     drawOgro(g, SO, 520, suelo, -1, poseOgro(O));
     // Ella arranca en x=140 de la celda; las acciones que avanzan se ven

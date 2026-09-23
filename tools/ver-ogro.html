@@ -16,11 +16,12 @@
 import * as OG from '../www/js/games/ogro-cuerpo.js';
 import { poseOgro, drawOgro, bakeOgro, cargaOgro } from '../www/js/games/ogro-sprite.js';
 import { drawRomina, cargaRomina } from '../www/js/games/romi-sprite.js';
-import { bakeMundo, drawMundo } from '../www/js/games/caba-mundo.js';
+import { drawSalon, cargaArena } from '../www/js/games/arena-sprite.js';
 import { SUELO } from '../www/js/games/caba-cuerpo.js';
 import { text } from '../www/js/font.js';
 
 await cargaOgro();
+await cargaArena();
 await cargaRomina();
 const cv = document.getElementById('c');
 const g = cv.getContext('2d');
@@ -61,13 +62,12 @@ if (sola) {
   const CW = 620, CH = 470, suelo = 440;
   cv.width = n * CW; cv.height = CH;
   g.imageSmoothingEnabled = false;
-  const M = bakeMundo(suelo, CH);
   for (let i = 0; i < n; i++) {
     const t = Math.min(s.dura - 1e-6, i / fps);
     g.save();
     g.beginPath(); g.rect(i * CW, 0, CW, CH); g.clip();
     g.translate(i * CW, 0);
-    drawMundo(g, M, 300, CW, CH, suelo);
+    g.save(); g.translate(-240, suelo - 452); drawSalon(g, i / fps); g.restore();
     const O = OG.makeOgro(0); O.dir = 1;
     s.pon(O, t);
     const ox = 170;
@@ -89,9 +89,8 @@ if (sola) {
   let y = 10;
   // 1. a tamaño de juego, junto a ella, sobre el campo de verdad
   text(g, 'A TAMANO DE JUEGO (x1), SOBRE EL CAMPO', 12, y, '#ffe066', 2); y += 24;
-  const M = bakeMundo(300, 330);
   g.save(); g.beginPath(); g.rect(0, y, 1500, 330); g.clip(); g.translate(0, y);
-  drawMundo(g, M, 0, 1500, 330, 300);
+  g.save(); g.translate(0, 300 - 452); drawSalon(g, 0); g.restore();
   const O0 = OG.makeOgro(0);
   O0.dir = 1;
   drawOgro(g, SO, 200, 300, 1, poseOgro(O0));

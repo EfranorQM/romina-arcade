@@ -157,6 +157,36 @@ sección 8 vigila que el daño de cada tajo llegue hasta donde llega su estela
 dibujada. `ver-caballera.html` no elige poses a mano: simula cada acción con la
 física real pulsando botones, como jugando.
 
+## La ARENA de ROMINA: el salón del castillo
+
+```
+node tools/prueba-arena.mjs                                  # repisas, cascotes, escombros
+python tools/gif.py escena:arena vistas/arena.gif            # la ESCENA REAL grabada
+python tools/arena-atlas.py RUTA/PNG/Battleground2/Bright    # rehornear el salón
+```
+
+El salón es el campo de batalla 2 de "Free Pixel Art Fantasy Game
+Battlegrounds" de CraftPix (<https://free-game-assets.itch.io/free-pixel-art-fantasy-game-battlegrounds>),
+a x2 como ella y alargado de 960 a 1200 repitiendo sus propios periodos (la
+pared cada 120 px, las bóvedas cada 240, el suelo cada 48). Se eligió entre los
+cuatro del pack poniendo al troll delante: en la hierba y en el bosque el verde
+se funde; contra la alfombra roja se lee. La repisa y los cascotes se pintan
+con el grano de la piedra de la propia bóveda.
+
+`caba-arena.js` (sin DOM) lleva lo que cambia la pelea: dos **repisas** a 88 px
+(arriba no llegan las ondas, pero sí el garrote), los **cascotes** que suelta el
+pisotón (avisan 1.19 s; si el ogro se mete debajo, le duelen a él) y los
+**escombros** que dejan (cortan el paso, paran las ondas, el ogro los revienta,
+la espada los rompe). La física de ella acepta un `mundo` opcional con repisas y
+bloques: sin él, el suelo es plano y el arnés viejo mide lo mismo que antes.
+
+`ver-escena.html` graba la **escena entera** de verdad: importa `caballero.js`,
+la mueve con un guion de botones (que mira dónde están ella y el ogro, como
+alguien jugando) y la dibuja con su cámara y sus partículas. Ojo con dos
+trampas que salieron al hacer el guion: pulsar SALTA es a la vez el flanco y el
+botón apretado (sin lo segundo el salto se corta en el acto), y en el aire se
+conserva la carrerilla (saltando justo debajo de la repisa se pasa de largo).
+
 ## Ver las carátulas del menú
 
 ```

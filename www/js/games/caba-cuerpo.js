@@ -118,9 +118,65 @@ export function makeCaballero(x) {
   };
 }
 
+// --- Repisas y escombros ---
+// `mundo` es opcional: { repisas: [{x0, x1, y}], bloques: [{x0, x1, top}] }.
+// Sin el, el suelo es plano como siempre, y el arnes mide lo mismo que antes.
+//   REPISAS: se atraviesan desde abajo y se aterriza encima (plataformas de un
+//   solo sentido). Asi se sube de un salto sin darse con la cabeza.
+//   BLOQUES (los escombros de la boveda): solidos. Se aterriza encima y cortan
+//   el paso por los lados: hay que saltarlos o subirse.
+export const PIES_R = 16;     // se sigue de pie con el centro hasta 16 px fuera del borde
+export const CUERPO_K = 22;   // medio ancho del cuerpo, para chocar de lado con un bloque
+
+// La superficie en la que aterriza al bajar de yAntes a y en x, o null.
+function aterrizaEn(x, yAntes, y, mundo) {
+  let mejor = y >= SUELO ? SUELO : null;
+  const cruza = (top, x0, x1) => {
+    if (x >= x0 - PIES_R && x <= x1 + PIES_R && yAntes <= top + 0.01 && y >= top &&
+        (mejor === null || top < mejor)) mejor = top;
+  };
+  if (mundo) {
+    for (const p of mundo.repisas || []) cruza(p.y, p.x0, p.x1);
+    for (const b of mundo.bloques || []) cruza(b.top, b.x0, b.x1);
+  }
+  return mejor;
+}
+
+// ¿Tiene algo bajo los pies a esta altura?
+export function apoyada(x, y, mundo) {
+  if (y >= SUELO - 0.01) return true;
+  if (!mundo) return false;
+  for (const p of mundo.repisas || []) if (Math.abs(y - p.y) < 0.5 && x >= p.x0 - PIES_R && x <= p.x1 + PIES_R) return true;
+  for (const b of mundo.bloques || []) if (Math.abs(y - b.top) < 0.5 && x >= b.x0 - PIES_R && x <= b.x1 + PIES_R) return true;
+  return false;
+}
+
+// La superficie mas alta que hay bajo (x, y): para la sombra, que tiene que caer
+// sobre la repisa cuando salta encima de ella, no en el suelo de abajo.
+export function sueloBajo(x, y, mundo) {
+  let s = SUELO;
+  if (mundo) {
+    for (const p of mundo.repisas || []) if (x >= p.x0 - PIES_R && x <= p.x1 + PIES_R && p.y >= y - 0.5 && p.y < s) s = p.y;
+    for (const b of mundo.bloques || []) if (x >= b.x0 - PIES_R && x <= b.x1 + PIES_R && b.top >= y - 0.5 && b.top < s) s = b.top;
+  }
+  return s;
+}
+
+// Los bloques cortan el paso: con los pies por debajo de su techo no se entra.
+function chocaBloques(K, xAntes, mundo) {
+  if (!mundo || !mundo.bloques) return;
+  for (const b of mundo.bloques) {
+    if (K.y <= b.top + 1) continue;                 // va por encima: no choca
+    if (K.x + CUERPO_K > b.x0 && K.x - CUERPO_K < b.x1) {
+      K.x = xAntes <= (b.x0 + b.x1) / 2 ? b.x0 - CUERPO_K : b.x1 + CUERPO_K;
+      K.vx = 0;
+    }
+  }
+}
+
 // Un paso. `inp` = { dx, salta, golpea, rueda }: dx es el stick (-1..1) y los
 // otros tres son FLANCOS (true solo en el frame en que se pulsan).
-export function stepCaballero(K, inp, dt) {
+export function stepCaballero(K, inp, dt, mundo) {
   if (!K.vivo) return;
   K.t += dt; K.animT += dt;
   if (K.iframe > 0) K.iframe -= dt;
@@ -245,26 +301,34 @@ export function stepCaballero(K, inp, dt) {
     }
   }
 
-  // --- Gravedad y suelo ---
+  // --- Gravedad y suelo (o repisa, o escombro) ---
   if (!K.enSuelo) {
+    const yAntes = K.y;
     K.vy += (K.vy < 0 ? GRAV_UP : GRAV_DN) * dt;
     K.y += K.vy * dt;
-    if (K.y >= SUELO) {
+    const s = K.vy >= 0 ? aterrizaEn(K.x, yAntes, K.y, mundo) : null;
+    if (s !== null) {
       // ATERRIZAJE. Se guarda cuanto venia cayendo para que el dibujo pueda
       // amortiguar: caer de un salto entero y bajar un escalon no se ven
       // igual. Dura poco (0.12 s) y NO quita el control -- solo se dibuja.
-      if (!K.enSuelo && K.vy > 300) K.aterriza = 0.12;
-      K.y = SUELO; K.vy = 0; K.enSuelo = true;
+      if (K.vy > 300) K.aterriza = 0.12;
+      K.y = s; K.vy = 0; K.enSuelo = true;
       if (K.st === SALTA) { K.st = QUIETO; K.animT = 0; }
     }
+  } else if (!apoyada(K.x, K.y, mundo)) {
+    // Se le acaba la repisa (o el escombro) bajo los pies: empieza a caer. El
+    // coyote que ya tenia le deja saltar un instante, como al borde del suelo.
+    K.enSuelo = false; K.vy = 0;
   } else {
     K.coyote = COYOTE;
   }
   if (K.coyote > 0 && !K.enSuelo) K.coyote -= dt;
 
+  const xAntes = K.x;
   K.x += K.vx * dt;
   if (K.x < AX0) { K.x = AX0; K.vx = 0; }
   else if (K.x > AX1) { K.x = AX1; K.vx = 0; }
+  chocaBloques(K, xAntes, mundo);
 
   // --- Ciclo del tajo ---
   if (K.st === TAJO) {
@@ -325,12 +389,13 @@ export function invulnerable(K) {
 }
 
 // Devuelve 'bloqueado' si el escudo para el golpe, true si hiere, false si no
-// le entra por invulnerabilidad.
-export function herir(K, sx) {
+// le entra por invulnerabilidad. `desdeArriba`: lo que cae del techo no se
+// para con la guardia (va de frente), solo se esquiva.
+export function herir(K, sx, desdeArriba = false) {
   if (!K.vivo) return false;
   // El escudo para lo que viene DE FRENTE, y solo cuando ya esta arriba.
   // Durante el EMPUJON tambien protege: el escudo va por delante.
-  if ((K.st === BLOQUEA && K.bloqT >= BLOQ_SUBE) || K.st === EMPUJE) {
+  if (!desdeArriba && ((K.st === BLOQUEA && K.bloqT >= BLOQ_SUBE) || K.st === EMPUJE)) {
     const deFrente = (sx - K.x) * K.dir > 0;
     if (deFrente) {
       // PARADA: si el golpe llega en la ventana justo despues de levantar el
