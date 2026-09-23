@@ -43,7 +43,7 @@ export function empieza(S, desdeHoguera = false) {
   N.camara(L, S.K, VW, 0, true);
   S.av = {
     N: L, fase: 'entrada', faseT: 0, t: 0, tJuego: 0,
-    golpes: 0, caidas: 0, desdeHoguera, gano: false, res: null, funde: 0,
+    golpes: 0, caidas: 0, desdeHoguera, gano: false, acabada: false, res: null, funde: 0,
     msg: '', msgT: 0, hitstop: 0, chispa: 0, chispaX: 0, chispaY: 0,
   };
   S.salta = false; S.golpea = false; S.esquiva = false;
@@ -70,7 +70,11 @@ export function update(S, dt) {
         camara(S, 0, true);
         A.fase = 'juego'; A.faseT = 0; A.funde = 1;
         A.msg = 'CUIDADO CON LOS FOSOS'; A.msgT = 1.4;
-      } else termina(S, false);
+      } else {
+        // Era el ultimo corazon: del negro vuelve el bosque, con su cartel.
+        A.funde = 1;
+        termina(S, false);
+      }
     }
     return;
   }
@@ -141,6 +145,9 @@ function juego(S, dt) {
       SFX.aterriza(); cam.shake(2, 0.1);
       burst(ex, e.y, 14, { rnd: Math.random, colors: [PB.madera2, PB.hoja1, PB.hoja2], speed: 220, life: 0.5, size: 4, grav: 800 });
     } else if (e.tipo === 'cae') {
+      // Una caida solo cuenta jugando: con la partida ya acabada, pasar a
+      // 'cae' deshacia el final (ver stepNivel, 'Caer a un foso').
+      if (!activo) continue;
       A.caidas++;
       SFX.cae ? SFX.cae() : SFX.hurt(); vibrate(40);
       A.fase = 'cae'; A.faseT = 0;
@@ -226,7 +233,9 @@ function duele(S) {
 
 function termina(S, gano) {
   const A = S.av;
-  if (A.fase === 'final' || A.fase === 'resultado') return;
+  // Una partida se acaba UNA vez (la musica, la nota, el resultado).
+  if (A.acabada) return;
+  A.acabada = true;
   A.fase = 'final'; A.faseT = 0; A.gano = gano;
   if (gano) { S.K.iframe = 1e9; SFX.record(); vibrate(30); playMusic(SONGS.caballeroVictoria); }
   else { playMusic(SONGS.caballeroDerrota); }
