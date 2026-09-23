@@ -402,6 +402,25 @@ al APK, la v1.0.8, con el ROMINA de pruebas: "solo me aparece el mapa". Ahora:
 El APK de Romina lleva dentro la v1.0.8: si todo lo demás falla, es a lo que
 vuelve. Recompilarlo lo pondría al día, pero hay que reinstalarlo a mano.
 
+**Emular el teléfono: dos orígenes.** En el teléfono la app vive en
+`https://localhost` y las actualizaciones bajan de `github.io`. Las pruebas
+con un solo origen no ven lo que pasa entre los dos:
+
+```
+node tools/servidor-estatico.js android/app/src/main/assets/public 8090
+node tools/servidor-estatico.js www 8091 cors
+node tools/ver-app.js x.png "espera2500;archivo:tools/emula-telefono.js;js:location.reload();espera4000;archivo:tools/emula-telefono.js;js:location.reload();espera4000;archivo:tools/emula-telefono.js" "http://localhost:8090/"
+```
+
+Así salió (con la foto del aviso de Romina, el 23-09-2026) que lo descargado
+se guardaba con su dirección de GitHub: el juego actualizado pedía 70 de sus 71
+ficheros directamente a GitHub (sin internet no arrancaba) y el dibujo de
+Romina era "de otro sitio", así que pintar el traje ganado (que lee sus
+píxeles) reventaba ROMINA al entrar: *the canvas has been tainted*. Ahora
+`update.js` guarda lo descargado como propio (`propia()`), rehace al arrancar
+las cachés bajadas antes (`reparaCache()`), y el dibujo de Romina se pide con
+permiso (`crossOrigin`). Sin el arreglo, `emula-telefono.js` da MAL.
+
 **Cuando algo revienta en el teléfono.** Allí no hay consola: una excepción
 dejaba la pantalla congelada en el último fotograma. Ahora `main.js` atrapa los
 fallos de las escenas (al entrar, jugando, pintando y al tocar), pinta abajo un

@@ -14,6 +14,13 @@ import { FRAMES, TINTES } from './romi-atlas.js';
 // ---------- La hoja ----------
 // Se pide al importar, no al entrar en la pelea: para cuando ella sale ya esta.
 const HOJA = new Image();
+// CON PERMISO (crossOrigin). El traje del armario se pinta leyendo sus pixeles
+// (tine, abajo), y un dibujo que llega de otro sitio sin permiso no se deja
+// leer: 'the canvas has been tainted'. En el telefono llegaba de GitHub (ver
+// propia() en update.js) y ROMINA revento al entrar desde que ella se puso un
+// traje ganado (23-09-2026). GitHub da el permiso (Access-Control-Allow-
+// Origin: *), y pedido asi da igual de donde venga.
+HOJA.crossOrigin = 'anonymous';
 HOJA.src = new URL('../../img/romina.png', import.meta.url).href;
 function lista() { return HOJA.complete && HOJA.naturalWidth > 0; }
 // Para las vistas previas de tools/ (ver cargaOgro en ogro-sprite.js: se espera
@@ -57,7 +64,13 @@ export function vestir(t) {
   const igual = (a, b) => a.every((c, i) => c.toLowerCase() === b[i].toLowerCase());
   if (!t || (igual(t.capa, TINTES.capa) && igual(t.falda, TINTES.falda) && igual(t.ribete, TINTES.ribete)
              && igual(t.estela, ['#eaeaea', '#f0f0f0', '#ffffff']))) { vestida = null; return; }
-  if (!tenidas.has(clave)) tenidas.set(clave, tine(t));
+  if (!tenidas.has(clave)) {
+    // Si aun asi no se pudiera leer el dibujo, sale con los colores de serie:
+    // mejor sin traje que sin juego.
+    let hoja = null;
+    try { hoja = tine(t); } catch (e) { console.warn('[romina] sin traje:', e && e.message); }
+    tenidas.set(clave, hoja);
+  }
   vestida = tenidas.get(clave);
 }
 const rgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
