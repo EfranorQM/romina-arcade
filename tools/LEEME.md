@@ -295,6 +295,8 @@ enemigos. Llegar al árbol con cara es ganar.
 
 ```
 node tools/prueba-nivel.mjs                                  # el nivel, medido
+node tools/ver-app.js x.png "espera1200;archivo:tools/prueba-aventura-final.js;disparo"
+                                                             # cada final acaba (la escena de verdad)
 python tools/gif.py aventura:lobo vistas/lobo.gif            # grabar un tramo
 python tools/bosque-atlas.py RUTA/PNG/Battleground3/Bright   # hornear el bosque
 python tools/enemigos-atlas.py RUTA/enemigos                 # hornear lobo y kitsune
@@ -354,6 +356,14 @@ Trampas que salieron midiendo, y que no se veían en una captura:
   nacían y desaparecían. Se borran por distancia a ella.
 - `tools/ver.js` servía los `.mjs` como binario y la grabadora no cargaba el
   piloto: ahora son JavaScript.
+- **Perder el último corazón en un foso no acababa nunca** (salió en el
+  teléfono, 23-09-2026: "la pantalla se quedó volviendo negra y encendiendo").
+  El cuerpo seguía cayendo, el nivel avisaba otra caída y la escena volvía del
+  final al fundido de la caída, una vuelta cada 3,3 s. Igual si un golpe la
+  derrotaba en pleno salto sobre un foso. Ahora solo cae quien está viva, la
+  escena solo atiende caídas jugando y una partida se acaba una vez.
+  `prueba-aventura-final.js` recorre los cuatro finales con la escena de
+  verdad y apunta la secuencia de fases.
 
 El arte:
 

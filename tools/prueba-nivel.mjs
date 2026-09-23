@@ -235,6 +235,29 @@ console.log('\n5. CAER A UN FOSO: un corazon, y se vuelve a un sitio seguro');
   // Con el ultimo corazon, se acaba.
   K.hp = 1; K.y = def.suelo + 300;
   ok(N.vuelveDelFoso(L, K) === false && !K.vivo, 'con el ultimo corazon, caer la derrota');
+  // Y el cuerpo sigue cayendo por el foso SIN volver a avisar: cada aviso
+  // devolvia la escena a 'cae' y la partida no acababa nunca (el bucle de
+  // fundidos a negro del 23-09-2026).
+  let otra = 0;
+  for (let f = 0; f < 600; f++) {
+    C.stepCaballero(K, NADA, DT, N.mundo(L));
+    for (const e of N.stepNivel(L, K, DT, VW)) if (e.tipo === 'cae') otra++;
+  }
+  ok(otra === 0, 'derrotada en el foso, el cuerpo no avisa otra caida en 10 s (' + otra + ')');
+}
+// Si pierde el ultimo corazon EN EL AIRE sobre un foso (un golpe en pleno
+// salto), el cuerpo cae por el sin contar como caida.
+{
+  const def = nivelCon({ fosos: [[1300, 1440]] });
+  const L = N.makeNivel(def, semilla(5));
+  const K = C.makeCaballero(1370, { y: def.suelo - 150 });
+  K.enSuelo = false; K.hp = 0; K.vivo = false; K.st = C.MUERTO; K.muereT = 0;
+  let avisos = 0;
+  for (let f = 0; f < 600; f++) {
+    C.stepCaballero(K, NADA, DT, N.mundo(L));
+    for (const e of N.stepNivel(L, K, DT, VW)) if (e.tipo === 'cae') avisos++;
+  }
+  ok(K.y > def.suelo + 300 && avisos === 0, 'derrotada en el aire sobre un foso, cae sin avisar caida (y=' + Math.round(K.y) + ', ' + avisos + ' avisos)');
 }
 // La esquiva hacia ATRAS (sin stick) se queda en el borde; la de hacia
 // delante (con stick) cruza: esa se elige.

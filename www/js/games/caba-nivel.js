@@ -253,8 +253,11 @@ export function stepNivel(N, K, dt, VW) {
   }
   N.ramas = N.ramas.filter(R => !R.fuera);
 
-  // --- Caer a un foso.
-  if (K.y > def.suelo + CAIDA_Y && !N.cayo) { N.cayo = true; N.caidas++; ev.push({ tipo: 'cae', x: K.x, y: K.y }); }
+  // --- Caer a un foso. Solo VIVA: el cuerpo de la que ya perdio sigue cayendo
+  // por el foso, y avisarlo otra vez metia la escena en un bucle (fundido a
+  // negro, "te ha podido", fundido a negro...) que no acababa nunca: la
+  // pantalla "se quedo volviendo negra y encendiendo congelada" (23-09-2026).
+  if (K.vivo && K.y > def.suelo + CAIDA_Y && !N.cayo) { N.cayo = true; N.caidas++; ev.push({ tipo: 'cae', x: K.x, y: K.y }); }
 
   // --- La hoguera y la salida.
   if (!N.hoguera && K.vivo && K.x >= def.hoguera) { N.hoguera = true; ev.push({ tipo: 'hoguera', x: def.hoguera, y: def.suelo }); }
@@ -265,9 +268,9 @@ export function stepNivel(N, K, dt, VW) {
 // Ella vuelve del foso: un corazon menos, y de pie en el ultimo sitio seguro.
 // Si era el ultimo corazon, se acaba (la escena lo ve en K.vivo).
 export function vuelveDelFoso(N, K) {
-  N.cayo = false;
   K.hp = Math.max(0, K.hp - 1);
   if (K.hp <= 0) { K.vivo = false; K.st = C.MUERTO; K.muereT = 0; return false; }
+  N.cayo = false;
   K.x = N.seguroX; K.y = N.def.suelo; K.vx = 0; K.vy = 0;
   K.enSuelo = true; K.st = C.QUIETO; K.animT = 0; K.aterriza = 0;
   K.iframe = CAIDA_IFRAME;
