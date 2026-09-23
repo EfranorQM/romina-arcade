@@ -1,0 +1,100 @@
+<!doctype html>
+<!-- LA AVENTURA de ROMINA, grabada fotograma a fotograma (como ver-escena.html
+     con la pelea): importa caballero.js tal cual, entra en la aventura y la
+     juega un PILOTO con reflejos de persona (0.25 s), el mismo de
+     tools/prueba-nivel.mjs, pulsando los botones de la escena.
+
+       python tools/gif.py aventura:inicio vistas/bosque-inicio.gif
+
+     Guiones (?s=): inicio (el cartel, echa a andar y salta el primer foso),
+     lobo (el primer hombre lobo), troncos (la primera zona de troncos y el
+     segundo foso), kitsune (la primera kitsune: bolas y corro), ramas (las
+     ramas que caen, un lobo debajo y la hoguera), tocon (el foso ancho en dos
+     saltos) y final (los dos ultimos lobos, el arbol, el cartel y la nota).
+     Cada uno empieza en su sitio del nivel. -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#000}canvas{display:block}</style>
+<canvas id="tira"></canvas>
+<script type="module">
+import { initCanvas, setVirtual, cam } from '../www/js/core.js';
+import { updateParticles, drawParticles } from '../www/js/gfx.js';
+import escena from '../www/js/games/caballero.js';
+import * as AV from '../www/js/games/caba-aventura.js';
+import * as N from '../www/js/games/caba-nivel.js';
+import { cargaRomina } from '../www/js/games/romi-sprite.js';
+import { cargaOgro } from '../www/js/games/ogro-sprite.js';
+import { cargaArena } from '../www/js/games/arena-sprite.js';
+import { cargaBosque } from '../www/js/games/bosque-sprite.js';
+import { cargaEnemigos } from '../www/js/games/enemigos-sprite.js';
+import { piloto as decide } from './piloto-aventura.mjs';
+
+await Promise.all([cargaRomina(), cargaOgro(), cargaArena(), cargaBosque(), cargaEnemigos()]);
+const DT = 1 / 60;
+
+// Donde empieza cada guion (null: desde el principio, con su cartel).
+const DESDE = { inicio: null, lobo: 1400, troncos: 1900, kitsune: 2920, ramas: 3500, tocon: 5480, final: 6100 };
+
+// EL PILOTO, el mismo del arnes (tools/piloto-aventura.mjs): decide que
+// pulsar y aqui se pulsa en los botones de la escena, como un pulgar.
+function piloto(n, E, m) {
+  E.salta = false; E.golpea = false; E.esquiva = false;
+  if (E.av.fase !== 'juego') { E.stick.dx = 0; E.bSalta.pressed = false; E.bGuardia.pressed = false; return; }
+  const inp = decide(n, E.K, E.av.N, m, 2);
+  E.stick.dx = inp.dx;
+  if (inp.salta) { E.salta = true; E.pulsos.saltar = 1; }
+  E.bSalta.pressed = inp.saltaAbajo;
+  if (inp.golpea) { E.golpea = true; E.pulsos.atacar = 1; }
+  if (inp.esquiva) { E.esquiva = true; E.pulsos.esquivar = 1; }
+  if (inp.bloquea && !E.bGuardia.pressed) E.pulsos.guardia = 1;
+  E.bGuardia.pressed = inp.bloquea;
+}
+
+const params = new URLSearchParams(location.search);
+const nombre = params.get('s') || 'inicio';
+const fps = +(params.get('fps') || 25), dura = +(params.get('dura') || 6), esc = +(params.get('escala') || 0.6);
+
+const lienzo = document.createElement('canvas');
+const g = initCanvas(lienzo);
+setVirtual(1200, 540);
+escena.init({ toMenu() {} }, {});
+escena.dif = 'normal';
+AV.empieza(escena);
+if (DESDE[nombre] !== null) {
+  // Ya jugando, en su sitio del nivel (con la hoguera encendida si queda atras).
+  const A = escena.av, K = escena.K;
+  A.fase = 'juego'; A.faseT = 0;
+  K.x = DESDE[nombre]; A.N.seguroX = K.x;
+  if (K.x > A.N.def.hoguera) A.N.hoguera = true;
+  // Los enemigos que quedan detras ya estarian vencidos: vivos, disparaban
+  // por la espalda a una Romina que nunca paso por ellos.
+  for (const En of A.N.enemigos) if (En.x < K.x - 100) { En.vivo = false; En.st = 6; En.muertoT = 9; A.N.vencidos++; }
+  N.camara(A.N, K, 1200, 0, true);
+}
+
+const COLS = 10;
+const CW = Math.round(1200 * esc), CH = Math.round(540 * esc), n = Math.ceil(dura * fps);
+const tira = document.getElementById('tira');
+tira.width = Math.min(n, COLS) * CW; tira.height = Math.ceil(n / COLS) * CH;
+const t2 = tira.getContext('2d');
+t2.imageSmoothingEnabled = true;
+const memoria = {};
+let paso = 0;
+for (let i = 0; i < n; i++) {
+  while (paso * DT < i / fps) {
+    piloto(paso, escena, memoria);
+    escena.update(DT, {});
+    updateParticles(DT);
+    cam.update(DT, Math.random);
+    paso++;
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.imageSmoothingEnabled = false;
+  g.save();
+  if (cam.x || cam.y) g.translate(cam.x, cam.y);
+  escena.draw(g, {}, 1);
+  drawParticles(g);
+  g.restore();
+  t2.drawImage(lienzo, 0, 0, 1200, 540, (i % COLS) * CW, Math.floor(i / COLS) * CH, CW, CH);
+}
+document.title = 'listo ' + n;
+</script>

@@ -14,7 +14,10 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png' };
+// .mjs tambien es JavaScript: servido como binario, Chrome no lo carga como
+// modulo (tools/piloto-aventura.mjs, que usa tools/ver-aventura.html).
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+                '.mjs': 'text/javascript; charset=utf-8', '.png': 'image/png' };
 const ROOT = path.join(__dirname, '..');
 
 const page = process.argv[2] || 'tools/ver-portadas.html';

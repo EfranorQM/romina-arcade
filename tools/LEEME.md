@@ -285,6 +285,94 @@ trampas que salieron al hacer el guion: pulsar SALTA es a la vez el flanco y el
 botón apretado (sin lo segundo el salto se corta en el acto), y en el aire se
 conserva la carrerilla (saltando justo debajo de la repisa se pasa de largo).
 
+## La AVENTURA de ROMINA: el bosque
+
+El segundo modo de ROMINA (pestaña AVENTURA en la pantalla de elegir; la pelea
+contra el ogro sigue en su pestaña). Un nivel que avanza: Romina va hacia la
+derecha por un bosque de 7400 px, la cámara la sigue, y por el camino hay
+fosos, troncos que ruedan, ramas que caen, una hoguera a mitad de camino y
+enemigos. Llegar al árbol con cara es ganar.
+
+```
+node tools/prueba-nivel.mjs                                  # el nivel, medido
+python tools/gif.py aventura:lobo vistas/lobo.gif            # grabar un tramo
+python tools/bosque-atlas.py RUTA/PNG/Battleground3/Bright   # hornear el bosque
+python tools/enemigos-atlas.py RUTA/enemigos                 # hornear lobo y kitsune
+```
+
+Dónde está cada cosa, todo sin DOM salvo el dibujo:
+
+- `caba-nivel.js`: el nivel es DATOS (`BOSQUE`: fosos, tocones, zonas de
+  troncos y de ramas, hoguera, salida y enemigos) y aquí vive lo que pasa en él.
+- `caba-enemigos.js`: el hombre lobo y la kitsune. `caba-aventura.js`: la
+  escena (entrada, juego, caída, final, resultado). La escena de ROMINA le pasa
+  el mando: vive dentro de ella porque el arcade solo pausa las escenas que
+  están en su lista de juegos.
+- El cuerpo de Romina es el de la pelea (`caba-cuerpo.js`), con tres cosas
+  nuevas que la pelea no usa: `mundo.x0/x1` (las paredes del nivel),
+  `mundo.sinSuelo` (el suelo son bloques, uno por tramo de camino, y entre dos
+  tramos hay un foso) y la esquiva hacia atrás que se para en el borde.
+
+Lo que miden las secciones de `prueba-nivel.mjs`:
+
+- **Fosos.** El salto de Romina cruza 170 px como mucho (esquivando hacia
+  delante, 260). Un foso de 120 deja 233 ms para despegar; uno de 150, 117
+  (injusto con el pulgar). Por eso van de 100 a 120, y el ancho lleva un tocón.
+- **Troncos.** Con 30 de radio a 330 px/s, saltarlos solo salvaba pulsando en
+  117 ms; a 24 y 380 px/s son 250 ms. La guardia no los para.
+- **Ramas.** Avisan con su sombra 1,2 s antes de llegar al suelo.
+- **Lobo.** El zarpazo se para con la guardia (433 ms de margen; PARADA, 167 ms)
+  y la acometida se atraviesa esquivando (650 ms).
+- **Kitsune.** La bola de fuego se para (1,4 s de margen) y con una PARADA se
+  devuelve y le quema; saltar no la libra. Del corro se libra apartándose.
+- **El piloto** (`tools/piloto-aventura.mjs`, el mismo que usa la grabadora):
+  reacciona 0,25 s después de ver cada cosa, nunca antes. Con reflejos de
+  persona normal (0,35 s) pasa el bosque en PASEO y NORMAL, y FURIA muerde más.
+  Un MACHACÓN que salta y ataca pero no se defiende no pasa (0 de 12), y el
+  que solo corre se cae en el primer foso.
+
+Trampas que salieron midiendo, y que no se veían en una captura:
+
+- **Enemigos al otro lado de un foso.** Un lobo apostado en el borde le daba el
+  zarpazo en pleno salto y la tiraba dentro; una bola de fuego también. Ahora
+  solo van a por ella si pisa su TRAMO de camino, el tramo entero: con los
+  límites por donde se mueven, que empiezan lejos del borde, ella se quedaba
+  justo pasado el foso y los dos se esperaban para siempre.
+- **La bola a quemarropa.** La kitsune decidía lanzar a 300 px, pero mientras
+  cargaba Romina se le echaba encima y la bola nacía a 80 px: imposible de
+  parar. Ahora, si al soltarla ella está a menos de 250 px, hace el corro, que
+  avisa.
+- **Pelear de espaldas a un foso.** Esquivar hacia atrás (lo que hace ESQUIVAR
+  sin stick) era caerse. La esquiva hacia atrás se para en el borde, y los
+  enemigos esperan lejos de los bordes (el lobo a 300 px).
+- **Dos del mismo tramo a la vez.** Despertándose por distancia, los lobos de
+  las ramas se sumaban a la pelea con la kitsune. Los que comparten tramo se
+  despiertan cuando ella pasa por su sitio.
+- **Las partículas** del arcade se pintan en coordenadas de pantalla: con la
+  cámara en marcha, el polvo se quedaba atrás. Se corren con la cámara.
+- **Las bolas se borraban al salir de cámara**, y el arnés no mueve la cámara:
+  nacían y desaparecían. Se borran por distancia a ella.
+- `tools/ver.js` servía los `.mjs` como binario y la grabadora no cargaba el
+  piloto: ahora son JavaScript.
+
+El arte:
+
+- **El bosque** es el campo de batalla 3 del mismo pack que el salón. Cada capa
+  empalma consigo misma cada 480 px (medido), así que se repite sin costuras; se
+  guarda solo en las filas en que se ve, y el camino en dos (la hierba de
+  detrás, entera; el piso, por tramos, con los fosos entre ellos). El tronco que
+  rueda, la rama, el tocón, las paredes del foso y la hoguera se pintan en
+  `bosque-atlas.py` con la paleta del propio bosque. El bosque cuesta 0,6 ms
+  por frame y la escena entera 0,85 (pintado forzado).
+- **Los enemigos** son de dos packs gratis de CraftPix (el agente bajó nueve y
+  se compararon a escala): el hombre lobo negro y la kitsune. En esos packs las
+  animaciones NO comparten lienzo: el mismo cuerpo sale hasta 19 px más atrás
+  en unas que en otras, y `enemigos-atlas.py` las alinea con el reposo (el
+  tronco, de la cintura para arriba). Doblados con Scale2x, como ella. Los
+  packs no están en el repo, solo lo horneado.
+- La música del bosque es `SONGS.caballeroBosque`, en Fa lidio (el modo que
+  suena a encantado y cabe entero en el secuenciador).
+
 ## Ver las carátulas del menú
 
 ```

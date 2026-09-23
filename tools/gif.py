@@ -34,10 +34,11 @@ FPS = 25
 # Pagina, tamaño de celda y duracion de cada secuencia (la misma que en la
 # pagina). 'escena' graba el juego ENTERO (tools/ver-escena.html), reducido.
 PAGINA = {'ogro': ('tools/ver-ogro.html', 620, 470), 'caballera': ('tools/ver-caballera.html', 620, 470),
-          'escena': ('tools/ver-escena.html', 720, 324)}
+          'escena': ('tools/ver-escena.html', 720, 324), 'aventura': ('tools/ver-aventura.html', 720, 324)}
 DURA = {
     'escena': {'arena': 5.2, 'parada': 2.2, 'barrido': 1.8, 'embestida': 2.6,
                'inicio': 4.6, 'victoria': 6.6},
+    'aventura': {'inicio': 8.0, 'lobo': 7.0, 'troncos': 6.0, 'kitsune': 9.0, 'ramas': 6.0, 'tocon': 5.0, 'final': 16.0},
     'ogro': {'garrote': 0.95, 'pisoton': 1.45, 'barrido': 0.88, 'embestida': 1.30,
              'ruge': 1.2, 'dolor': 0.24, 'pared': 1.25, 'parada': 0.55, 'jadeo': 0.55,
              'muere': 1.2, 'anda': 1.2, 'espera': 1.0},
@@ -51,9 +52,10 @@ def tira(sec):
     pagina, cw, ch = PAGINA[quien]
     dura = DURA[quien][nombre]
     # la escena entera cuenta sus fotogramas con ceil(); las otras, uno mas
-    n = int(dura * FPS + 0.999) + (0 if quien == 'escena' else 1)
+    entera = quien in ('escena', 'aventura')
+    n = int(dura * FPS + 0.999) + (0 if entera else 1)
     # la escena entera viene en filas de 10 (un lienzo no pasa de 32767 px)
-    cols = 10 if quien == 'escena' else n
+    cols = 10 if entera else n
     filas = (n + cols - 1) // cols
     with tempfile.TemporaryDirectory() as tmp:
         png = os.path.join(tmp, 'tira.png')

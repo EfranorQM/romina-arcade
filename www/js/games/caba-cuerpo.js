@@ -136,7 +136,7 @@ export function makeCaballero(x, o = {}) {
   const hpMax = o.hp || HP0;
   return {
     hpMax, paradaVent: o.paradaVent || PARADA_VENT,
-    x, y: SUELO, vx: 0, vy: 0, dir: 1,
+    x, y: o.y !== undefined ? o.y : SUELO, vx: 0, vy: 0, dir: 1,
     st: QUIETO, t: 0,
     enSuelo: true, coyote: 0, buffer: 0, cortable: 0, aterriza: 0,
     esqT: 0, esqCd: 0, esqDir: 1,
@@ -155,12 +155,19 @@ export function makeCaballero(x, o = {}) {
 //   solo sentido). Asi se sube de un salto sin darse con la cabeza.
 //   BLOQUES (los escombros de la boveda): solidos. Se aterriza encima y cortan
 //   el paso por los lados: hay que saltarlos o subirse.
+// LA AVENTURA (caba-nivel.js) añade tres cosas, y la pelea no usa ninguna:
+//   x0, x1    las paredes del nivel, que es mas ancho que la pantalla (sin
+//             ellas, las de la arena: AX0 y AX1)
+//   sinSuelo  no hay suelo en todas partes: el suelo son BLOQUES, un tramo por
+//             trozo de camino, y entre dos tramos hay un FOSO. Como son
+//             bloques, dentro del foso sus paredes cortan el paso: no se sale
+//             andando.
 export const PIES_R = 16;     // se sigue de pie con el centro hasta 16 px fuera del borde
 export const CUERPO_K = 22;   // medio ancho del cuerpo, para chocar de lado con un bloque
 
 // La superficie en la que aterriza al bajar de yAntes a y en x, o null.
 function aterrizaEn(x, yAntes, y, mundo) {
-  let mejor = y >= SUELO ? SUELO : null;
+  let mejor = y >= SUELO && !(mundo && mundo.sinSuelo) ? SUELO : null;
   const cruza = (top, x0, x1) => {
     if (x >= x0 - PIES_R && x <= x1 + PIES_R && yAntes <= top + 0.01 && y >= top &&
         (mejor === null || top < mejor)) mejor = top;
@@ -174,22 +181,29 @@ function aterrizaEn(x, yAntes, y, mundo) {
 
 // ¿Tiene algo bajo los pies a esta altura?
 export function apoyada(x, y, mundo) {
-  if (y >= SUELO - 0.01) return true;
-  if (!mundo) return false;
+  if (!mundo) return y >= SUELO - 0.01;
+  if (y >= SUELO - 0.01 && !mundo.sinSuelo) return true;
   for (const p of mundo.repisas || []) if (Math.abs(y - p.y) < 0.5 && x >= p.x0 - PIES_R && x <= p.x1 + PIES_R) return true;
   for (const b of mundo.bloques || []) if (Math.abs(y - b.top) < 0.5 && x >= b.x0 - PIES_R && x <= b.x1 + PIES_R) return true;
   return false;
 }
 
 // La superficie mas alta que hay bajo (x, y): para la sombra, que tiene que caer
-// sobre la repisa cuando salta encima de ella, no en el suelo de abajo.
+// sobre la repisa cuando salta encima de ella, no en el suelo de abajo. Sobre
+// un foso no hay nada: Infinity (y no se pinta sombra).
 export function sueloBajo(x, y, mundo) {
-  let s = SUELO;
+  let s = mundo && mundo.sinSuelo ? Infinity : SUELO;
   if (mundo) {
     for (const p of mundo.repisas || []) if (x >= p.x0 - PIES_R && x <= p.x1 + PIES_R && p.y >= y - 0.5 && p.y < s) s = p.y;
     for (const b of mundo.bloques || []) if (x >= b.x0 - PIES_R && x <= b.x1 + PIES_R && b.top >= y - 0.5 && b.top < s) s = b.top;
   }
   return s;
+}
+
+// ¿Hay algo que pisar bajo esta x? (Solo la aventura: el suelo son bloques.)
+function haySuelo(x, mundo) {
+  for (const b of mundo.bloques || []) if (x >= b.x0 - PIES_R && x <= b.x1 + PIES_R) return true;
+  return false;
 }
 
 // Los bloques cortan el paso: con los pies por debajo de su techo no se entra.
@@ -238,7 +252,7 @@ export function stepCaballero(K, inp, dt, mundo) {
     // Sin stick, hacia atras y mirando al frente; con stick, hacia alli.
     const sentido = conStick ? Math.sign(inp.dx) : -K.dir;
     if (conStick) K.dir = sentido;
-    K.st = ESQUIVA; K.esqT = 0; K.esqCd = ESQ_CD; K.esqDir = sentido;
+    K.st = ESQUIVA; K.esqT = 0; K.esqCd = ESQ_CD; K.esqDir = sentido; K.esqAtras = !conStick;
     K.vx = sentido * ESQ_VX; K.vy = -ESQ_VY;
     K.enSuelo = false; K.coyote = 0; K.buffer = 0; K.cortable = 0;
     K.animT = 0;
@@ -377,8 +391,16 @@ function gravedad(K, dt, mundo) {
 
   const xAntes = K.x;
   K.x += K.vx * dt;
-  if (K.x < AX0) { K.x = AX0; K.vx = 0; }
-  else if (K.x > AX1) { K.x = AX1; K.vx = 0; }
+  // LA ESQUIVA HACIA ATRAS NO TIRA AL FOSO. Es la de defenderse (la que sale
+  // sin tocar el stick), y en la aventura se pelea con fosos a la espalda:
+  // esquivar un zarpazo no puede costar dos corazones. Se queda en el borde.
+  // La de hacia delante (con el stick) si cruza fosos: esa se elige.
+  if (K.st === ESQUIVA && K.esqAtras && mundo && mundo.sinSuelo &&
+      haySuelo(xAntes, mundo) && !haySuelo(K.x, mundo)) { K.x = xAntes; K.vx = 0; }
+  const x0 = mundo && mundo.x0 !== undefined ? mundo.x0 : AX0;
+  const x1 = mundo && mundo.x1 !== undefined ? mundo.x1 : AX1;
+  if (K.x < x0) { K.x = x0; K.vx = 0; }
+  else if (K.x > x1) { K.x = x1; K.vx = 0; }
   chocaBloques(K, xAntes, mundo);
 }
 
@@ -424,17 +446,20 @@ export function invulnerable(K) {
 }
 
 // Le llega un golpe desde sx. `tipo` dice QUE golpe es, porque la guardia solo
-// vale contra uno:
+// vale contra algunos:
 //   'garrote'                      la guardia lo para (y si es a tiempo, PARADA)
 //   'barrido' 'embestida' 'pisoton' 'onda'   le ROMPEN la guardia
 //   'piedra'                       cae del techo: la guardia ni se entera
+// En la aventura (caba-enemigos.js) se paran tambien el ZARPAZO del lobo y
+// el FUEGO de la kitsune; el corro de fuego y los troncos la rompen.
 // Devuelve 'parada' o 'bloqueado' si la guardia lo para, 'rota' si entra
 // rompiendole la guardia, true si entra sin mas, y false si no le entra
 // (esquivando o recien golpeada). `dano`: cuantos corazones quita.
+export const PARABLES = new Set(['garrote', 'zarpazo', 'fuego']);
 export function herir(K, sx, tipo = 'garrote', dano = 1) {
   if (!K.vivo) return false;
   const enGuardia = K.st === BLOQUEA && K.bloqT >= BLOQ_SUBE && (sx - K.x) * K.dir > 0;
-  if (enGuardia && tipo === 'garrote') {
+  if (enGuardia && PARABLES.has(tipo)) {
     // PARADA: si el golpe llega en la ventana justo despues de levantar la
     // guardia, no es un bloqueo cualquiera -- rebota al ogro y le deja
     // abierto. Es lo que premia LEER el ataque en vez de taparse siempre.
