@@ -1,0 +1,69 @@
+<!doctype html>
+<!-- LOS BOTONES DE ROMINA en todos sus estados, pintados con el modulo real
+     (www/js/games/caba-botones.js) sobre el salon del juego, a tamaño de juego
+     y a x3 para ver el pixel:
+
+       node tools/ver.js tools/ver-botones.html vistas/botones.png 1440 900
+
+     Fila de arriba a tamaño real (el lienzo del juego es 1200x540 y en el
+     telefono se estira x1.95). Debajo, cada estado a x3: en reposo, apretado,
+     ESQUIVAR recargando, GUARDIA en la ventana de la parada y ATACAR con el
+     contraataque listo. -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#000}canvas{display:block}</style>
+<canvas id="c" width="1440" height="900"></canvas>
+<script type="module">
+import { Button, Stick } from '../www/js/input.js';
+import * as BT from '../www/js/games/caba-botones.js';
+import { drawSalon, cargaArena } from '../www/js/games/arena-sprite.js';
+import { text } from '../www/js/font.js';
+
+await cargaArena();
+const cv = document.getElementById('c');
+const g = cv.getContext('2d');
+g.imageSmoothingEnabled = false;
+
+// Los mismos sitios y radios que en caballero.js
+const B = {
+  saltar: new Button(1096, 300, 34, 20), atacar: new Button(1132, 428, 40, 20),
+  esquivar: new Button(1016, 452, 32, 20), guardia: new Button(1016, 336, 32, 20),
+};
+const H = BT.hornea(B);
+const NOM = { atacar: 'ATACAR', saltar: 'SALTAR', esquivar: 'ESQUIVAR', guardia: 'GUARDIA' };
+
+// 1. A tamaño real, sobre el salon: el trozo de la derecha del juego.
+g.save();
+g.beginPath(); g.rect(0, 0, 1200, 540); g.clip();
+drawSalon(g, 0);
+for (const k in B) BT.boton(g, H, k, B[k], { nombre: NOM[k] });
+const st = new Stick(80, 14);
+BT.stick(g, H, st, 150, 490);
+const st2 = new Stick(80, 14);
+st2.down({ id: 1, x: 330, y: 470 }); st2.move({ id: 1, x: 380, y: 470 });
+BT.stick(g, H, st2, 0, 0);
+g.restore();
+text(g, 'a tamaño de juego', 8, 8, '#ffe066', 2);
+
+// 2. Los estados a x3.
+const estados = [
+  ['reposo', 'atacar', { nombre: 'ATACAR' }],
+  ['apretado', 'atacar', { apretado: true, pulso: 0.6, nombre: 'ATACAR' }],
+  ['contra', 'atacar', { brillo: 1, nombre: 'CONTRA!', colorNombre: '#ffe066' }],
+  ['recarga', 'esquivar', { recarga: 0.55, nombre: 'ESQUIVAR' }],
+  ['parada', 'guardia', { apretado: true, brillo: 1, nombre: 'GUARDIA' }],
+  ['saltar', 'saltar', { nombre: 'SALTAR' }],
+];
+const TAM = 240;
+estados.forEach(([rot, k, e], i) => {
+  const cx = i * TAM, cy = 560;
+  g.save();
+  g.beginPath(); g.rect(cx, cy, TAM - 6, 330); g.clip();
+  g.translate(cx, cy); g.scale(3, 3);
+  g.save(); g.translate(-980, -250); drawSalon(g, 0); g.restore();
+  const b = { x: 40, y: 48, r: B[k].r };
+  BT.boton(g, H, k, b, e);
+  g.restore();
+  text(g, rot, cx + 6, cy + 310, "#ffe066", 2);
+});
+document.title = 'listo';
+</script>

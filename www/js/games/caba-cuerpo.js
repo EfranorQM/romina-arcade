@@ -32,10 +32,27 @@ export const GRAV_UP = 3000, GRAV_DN = 4200;
 const CORTE_T = 0.09, CORTE_F = 0.55;
 const COYOTE = 0.08, BUFFER = 0.10;    // margenes invisibles que salvan el salto
 
-// --- Rodar ---
-export const ROLL_T = 0.36, ROLL_CD = 0.62;
-const ROLL_V0 = 660;                   // pico; el perfil baja al final
-export const ROLL_INV0 = 0.06, ROLL_INV1 = 0.28;   // invulnerable solo en medio
+// --- Esquivar: un SALTO EVASIVO ---
+// Antes era una rodada, pero el pack de ella no trae voltereta y la montada
+// con la agachada se leia como estar de rodillas resbalando. Ahora es un
+// saltito bajo y rapido dibujado con SU salto (impulso, recogida en el aire
+// con la capa al viento, aterrizaje agachada), invulnerable casi todo el
+// vuelo. Sin tocar el stick va HACIA ATRAS sin dejar de mirar al ogro (para
+// contestar al caer); con el stick, hacia donde apunta.
+//
+// Medido: 620 de impulso con la gravedad del salto son 64 px de alto y 0.38 s
+// en el aire, y a 640 px/s recorre ~245 px. Invulnerable de 0.02 a 0.36: todo
+// el vuelo menos el aterrizaje.
+//
+// LOS NUMEROS SALEN DE LA PELEA, no del dibujo (tools/prueba-ogro.mjs, seccion
+// 6). Con el salto de la rodada (190 px, invulnerable 240 ms), esquivar hacia
+// atras un barrido de cerca solo salvaba pulsando en 117 ms concretos: el
+// garrote llega a 340 px y el salto la dejaba dentro. Con 245 px y 340 ms la
+// ventana es de 200 ms pegada al ogro y de 400 desde 150 px. Mas largo (700)
+// salvaba de todo pulsando cuando fuera, y la pelea seria machacar ESQUIVAR.
+export const ESQ_VX = 640, ESQ_VY = 620;
+export const ESQ_CD = 0.62;
+export const ESQ_INV0 = 0.02, ESQ_INV1 = 0.36;
 
 // --- Tajo: un COMBO DE TRES, no un golpe suelto ---
 //
@@ -76,43 +93,52 @@ const TAJO_FREN = 0.45;                // cuanta velocidad conserva al cortar
 export const HP0 = 4;
 export const IFRAME = 1.0;
 
+// Al recibir un golpe sale despedida hacia atras en un saltito: es lo que hace
+// LEER que le han dado (antes se quedaba de pie con la espada en alto, que
+// parecia un ataque). 380 son ~24 px de alto y 0.23 s en el aire, dentro de
+// los 0.28 s del dolor. El ultimo golpe la lanza mas lejos.
+const DOLOR_VY = 380, DOLOR_VX = 140;
+const MUERE_VY = 520, MUERE_VX = 230;
+
 // Estados
-export const QUIETO = 0, CORRE = 1, SALTA = 2, RUEDA = 3, TAJO = 4, DOLOR = 5, MUERTO = 6, BLOQUEA = 7;
-// (EMPUJE = 8 se declara abajo, con el resto de las constantes del escudo)
-// Cuanto tarda el escudo en levantarse: antes de eso NO protege. Es lo que
-// impide que bloquear sea un boton de invulnerabilidad.
+export const QUIETO = 0, CORRE = 1, SALTA = 2, ESQUIVA = 3, TAJO = 4, DOLOR = 5, MUERTO = 6, BLOQUEA = 7;
+// Cuanto tarda la guardia en levantarse: antes de eso NO protege. Es lo que
+// impide que la guardia sea un boton de invulnerabilidad.
 export const BLOQ_SUBE = 0.10;
 
-// --- El escudo tiene TRES verbos, no uno ---
+// --- La GUARDIA: ella para con la ESPADA, no con escudo ---
 //
-// Mantener la guardia y ya es pasivo: pulsas y esperas. Estos tres se hacen
-// con el MISMO boton, y cual sale depende de CUANDO lo pulsas, que es lo que
-// convierte el escudo en una decision en vez de un seguro.
+// SOLO PARA EL GARROTAZO. Es el unico ataque del ogro que cae de frente y a la
+// altura de la espada; el barrido, la embestida y las ondas le ROMPEN la
+// guardia y entran igual. Antes paraba cualquier golpe de frente, y la pelea
+// se ganaba con el dedo apoyado en el boton: los otros tres botones sobraban
+// y el diseño (cada ataque, su respuesta) no existia.
 //
-//  1. PARADA (parry). Si el golpe llega en los primeros 0.18 s de levantar el
-//     escudo, no solo lo para: rebota al enemigo y le deja abierto. Es la
-//     recompensa por leer el ataque en vez de taparse todo el rato.
-//  2. GUARDIA. Lo de siempre: para de frente, a cambio de moverse al 40%.
-//  3. EMPUJON. Pulsar ATACAR con el escudo arriba da un golpe de escudo que no
-//     hace daño pero empuja y rompe la guardia del otro.
-export const PARADA_VENT = 0.18;       // ventana del parry, desde BLOQ_SUBE
-export const PARADA_PREMIO = 0.55;     // cuanto se queda abierto el enemigo
-export const ESC_EMPUJE_T = 0.28;      // lo que dura el empujon
-export const ESC_EMPUJE_A0 = 0.06, ESC_EMPUJE_A1 = 0.16;
-export const ESC_EMPUJE_F = 340;       // cuanta fuerza lleva
-export const ESC_EMPUJE_CD = 0.5;      // enfriamiento, para que no se abuse
-export const EMPUJE = 8;               // estado nuevo
+// Y tiene dos verbos segun CUANDO se pulsa:
+//  1. PARADA. Si el garrotazo llega en los primeros 0.18 s de levantarla, no
+//     solo lo para: rebota al ogro y lo deja abierto, y el siguiente ATACAR
+//     es un CONTRAATAQUE. Es el premio por leer el golpe en vez de taparse.
+//  2. GUARDIA. Aguantada, para el garrotazo sin premio y se anda al 40%.
+export const PARADA_VENT = 0.18;       // ventana de la parada, desde BLOQ_SUBE
+// Cuanto dura la ocasion de contraatacar (y cuanto se queda abierto el ogro).
+// Tras la parada hay 0.15 s de congelacion y ~0.25 de reaccion; el filo del
+// contraataque sale 0.10 s despues de pulsar. Con 0.55 no llegaba.
+export const PARADA_PREMIO = 0.8;
+
+// EL CONTRAATAQUE: tras una parada, ATACAR no empieza el combo por el reves:
+// sale el remate (sus dibujos) mas RAPIDO y con mas daño. Misma forma que
+// TAJOS: [ciclo, activa0, activa1, avance, daño, alcance].
+export const CONTRA = [0.42, 0.10, 0.22, 46, 3, 130];
 
 export function makeCaballero(x) {
   return {
     x, y: SUELO, vx: 0, vy: 0, dir: 1,
     st: QUIETO, t: 0,
     enSuelo: true, coyote: 0, buffer: 0, cortable: 0, aterriza: 0,
-    rollT: 0, rollCd: 0,
-    bloqT: 0, bloqHit: 0,
-    tajoT: 0, tajoId: 0, golpeo: 0, combo: 0, comboOlvido: 0,
-    escT: 0, escGolpe: 0, parada: 0, escCd: 0, escId: 0,
-    hp: HP0, iframe: 0, hurtT: 0,
+    esqT: 0, esqCd: 0, esqDir: 1,
+    bloqT: 0, bloqHit: 0, parada: 0,
+    tajoT: 0, tajoId: 0, golpeo: 0, combo: 0, comboOlvido: 0, contra: 0,
+    hp: HP0, iframe: 0, hurtT: 0, hurtIni: 0, muereT: 0,
     animT: 0, frame: 0,
     vivo: true,
   };
@@ -174,58 +200,48 @@ function chocaBloques(K, xAntes, mundo) {
   }
 }
 
-// Un paso. `inp` = { dx, salta, golpea, rueda }: dx es el stick (-1..1) y los
-// otros tres son FLANCOS (true solo en el frame en que se pulsan).
+// Un paso. `inp` = { dx, salta, golpea, esquiva, saltaAbajo, bloquea }: dx es
+// el stick (-1..1), saltaAbajo y bloquea son botones MANTENIDOS y los otros
+// tres son FLANCOS (true solo en el frame en que se pulsan).
 export function stepCaballero(K, inp, dt, mundo) {
-  if (!K.vivo) return;
+  if (!K.vivo) { caeDerrotada(K, dt, mundo); return; }
   K.t += dt; K.animT += dt;
   if (K.iframe > 0) K.iframe -= dt;
-  if (K.rollCd > 0) K.rollCd -= dt;
+  if (K.esqCd > 0) K.esqCd -= dt;
   if (K.hurtT > 0) K.hurtT -= dt;
 
   // Buffer de salto: si pulsa un poco antes de tocar suelo, se le guarda.
   if (inp.salta) K.buffer = BUFFER;
   if (K.buffer > 0) K.buffer -= dt;
 
-  const puedeActuar = K.st !== RUEDA && K.st !== DOLOR;
+  const puedeActuar = K.st !== ESQUIVA && K.st !== DOLOR;
 
-  // --- Bloquear: mientras se mantiene el boton y este en el suelo ---
   if (K.bloqHit > 0) K.bloqHit -= dt;
   if (K.aterriza > 0) K.aterriza -= dt;
-  if (K.escCd > 0) K.escCd -= dt;
   if (K.parada > 0) K.parada -= dt;
 
-  // EMPUJON DE ESCUDO: atacar con el escudo arriba. Se comprueba ANTES que el
-  // tajo, porque con el escudo en alto el boton de atacar significa esto.
-  if (inp.golpea && K.st === BLOQUEA && K.escCd <= 0 && K.enSuelo) {
-    K.st = EMPUJE; K.escT = 0; K.animT = 0; K.escCd = ESC_EMPUJE_CD;
-    K.escId = (K.escId || 0) + 1; K.escGolpe = 0;
-    K.vx = K.dir * 150;
-  }
-  if (K.st === EMPUJE) {
-    K.escT += dt;
-    if (K.escT >= ESC_EMPUJE_T) {
-      // Si sigue apretando el escudo, vuelve a la guardia; si no, se baja.
-      K.st = inp.bloquea ? BLOQUEA : QUIETO;
-      K.bloqT = inp.bloquea ? BLOQ_SUBE : 0;   // ya lo tenia arriba
-      K.animT = 0;
-    }
-  } else if (inp.bloquea && K.enSuelo && puedeActuar && K.st !== TAJO) {
+  // --- GUARDIA: mientras se mantiene el boton y este en el suelo ---
+  if (inp.bloquea && K.enSuelo && puedeActuar && K.st !== TAJO) {
     if (K.st !== BLOQUEA) { K.st = BLOQUEA; K.bloqT = 0; K.animT = 0; }
     K.bloqT += dt;
   } else if (K.st === BLOQUEA) {
     K.st = QUIETO; K.bloqT = 0; K.animT = 0;
   }
 
-  // --- Rodar: manda sobre todo lo demas, y cancela el tajo ---
-  if (inp.rueda && K.rollCd <= 0 && K.st !== RUEDA && K.st !== DOLOR && K.enSuelo) {
-    K.st = RUEDA; K.rollT = 0; K.rollCd = ROLL_CD;
-    K.vx = ROLL_V0 * K.dir;
+  // --- ESQUIVAR: manda sobre todo lo demas, y cancela el tajo ---
+  if (inp.esquiva && K.esqCd <= 0 && puedeActuar && K.enSuelo) {
+    const conStick = Math.abs(inp.dx) > 0.3;
+    // Sin stick, hacia atras y mirando al frente; con stick, hacia alli.
+    const sentido = conStick ? Math.sign(inp.dx) : -K.dir;
+    if (conStick) K.dir = sentido;
+    K.st = ESQUIVA; K.esqT = 0; K.esqCd = ESQ_CD; K.esqDir = sentido;
+    K.vx = sentido * ESQ_VX; K.vy = -ESQ_VY;
+    K.enSuelo = false; K.coyote = 0; K.buffer = 0; K.cortable = 0;
     K.animT = 0;
   }
 
   // --- Saltar ---
-  if (K.buffer > 0 && (K.enSuelo || K.coyote > 0) && K.st !== RUEDA && K.st !== DOLOR) {
+  if (K.buffer > 0 && (K.enSuelo || K.coyote > 0) && K.st !== ESQUIVA && K.st !== DOLOR) {
     K.vy = -JUMP_V; K.enSuelo = false; K.coyote = 0; K.buffer = 0;
     K.cortable = CORTE_T;
     K.st = SALTA; K.animT = 0;
@@ -236,29 +252,36 @@ export function stepCaballero(K, inp, dt, mundo) {
     if (!inp.saltaAbajo && K.vy < 0) { K.vy *= CORTE_F; K.cortable = 0; }
   }
 
-  // --- Tajo: arrancar o ENCADENAR ---
-  // Con el escudo arriba el boton de atacar es el EMPUJON, que ya se ha
-  // resuelto arriba: por eso se excluye EMPUJE aqui. Sin esto, el mismo
-  // `golpea` lanzaba el empujon y el tajo en el mismo frame.
-  if (inp.golpea && puedeActuar && K.st !== EMPUJE) {
-    const enCombo = K.st === TAJO;
-    // Se puede encadenar solo DESPUES de que el filo haya pasado: encadenar
-    // antes convertiria el combo en un machaque sin ritmo.
-    const [ciclo, , a1] = TAJOS[K.combo];
-    const puedeEnlazar = enCombo && K.tajoT >= a1 && K.tajoT <= ciclo + ENLACE_EXTRA
-                         && K.combo < TAJOS.length - 1;
-    if (!enCombo || puedeEnlazar) {
-      // Si viene de encadenar, sube el contador; si no, empieza por el primero.
-      K.combo = puedeEnlazar ? K.combo + 1 : 0;
+  // --- Tajo: arrancar, ENCADENAR o CONTRAATACAR ---
+  // Con la guardia arriba, ATACAR la baja y pega: el tajo manda.
+  if (inp.golpea && K.st !== ESQUIVA && K.st !== DOLOR) {
+    if (K.parada > 0) {
+      // EL CONTRAATAQUE: la parada acaba de abrir al ogro. Sale el remate,
+      // rapido, sea cual sea el golpe del combo en que estuviera.
+      K.parada = 0; K.contra = 1; K.combo = 2;
       K.st = TAJO; K.tajoT = 0; K.tajoId++; K.golpeo = 0; K.animT = 0;
       K.comboOlvido = COMBO_OLVIDO;
-      // Cada golpe empuja hacia delante: es lo que hace que el combo AVANCE
-      // en vez de picotear en el sitio. Es un IMPULSO que se frena enseguida,
-      // no velocidad sostenida: medido, con velocidad sostenida el tercer
-      // golpe salia a 294 px/s -- mas rapido que correr (240) -- y eso haria
-      // del machaque la mejor forma de cruzar la arena.
-      K.vx = K.vx * TAJO_FREN * 0.5 + K.dir * TAJOS[K.combo][3] * 3.2;
-      K.tajoImp = 1;
+      K.vx = K.dir * CONTRA[3] * 3.2;
+    } else {
+      const enCombo = K.st === TAJO;
+      // Se puede encadenar solo DESPUES de que el filo haya pasado: encadenar
+      // antes convertiria el combo en un machaque sin ritmo.
+      const [ciclo, , a1] = tajoDe(K);
+      const puedeEnlazar = enCombo && !K.contra && K.tajoT >= a1 && K.tajoT <= ciclo + ENLACE_EXTRA
+                           && K.combo < TAJOS.length - 1;
+      if (!enCombo || puedeEnlazar) {
+        // Si viene de encadenar, sube el contador; si no, empieza por el primero.
+        K.combo = puedeEnlazar ? K.combo + 1 : 0;
+        K.contra = 0;
+        K.st = TAJO; K.tajoT = 0; K.tajoId++; K.golpeo = 0; K.animT = 0;
+        K.comboOlvido = COMBO_OLVIDO;
+        // Cada golpe empuja hacia delante: es lo que hace que el combo AVANCE
+        // en vez de picotear en el sitio. Es un IMPULSO que se frena enseguida,
+        // no velocidad sostenida: medido, con velocidad sostenida el tercer
+        // golpe salia a 294 px/s -- mas rapido que correr (240) -- y eso haria
+        // del machaque la mejor forma de cruzar la arena.
+        K.vx = K.vx * TAJO_FREN * 0.5 + K.dir * TAJOS[K.combo][3] * 3.2;
+      }
     }
   }
   // El combo se olvida si pasa el rato sin seguir
@@ -268,14 +291,9 @@ export function stepCaballero(K, inp, dt, mundo) {
   }
 
   // --- Movimiento en X ---
-  if (K.st === RUEDA) {
-    K.rollT += dt;
-    // Perfil: arranca fuerte y se apaga al final, para que la rodada termine
-    // donde se ve que termina en vez de frenar en seco.
-    const u = K.rollT / ROLL_T;
-    const f = u < 0.15 ? u / 0.15 : u > 0.72 ? (1 - u) / 0.28 : 1;
-    K.vx = ROLL_V0 * f * K.dir;
-    if (K.rollT >= ROLL_T) { K.st = QUIETO; K.vx = 0; K.animT = 0; }
+  if (K.st === ESQUIVA) {
+    // Sin control: el salto ya va lanzado. Es lo que lo hace un compromiso.
+    K.esqT += dt;
   } else if (K.st === DOLOR) {
     K.vx *= 0.86;
     if (K.t - K.hurtIni > 0.28) { K.st = QUIETO; K.animT = 0; }
@@ -287,7 +305,7 @@ export function stepCaballero(K, inp, dt, mundo) {
     // El pulgar aun corrige un poco la direccion, pero no acelera.
     if (Math.abs(inp.dx) > 0.08) K.vx += Math.sign(inp.dx) * 300 * dt;
   } else {
-    // Con el escudo en alto se avanza a la mitad: protegerse cuesta movilidad.
+    // Con la guardia en alto se avanza al 40%: protegerse cuesta movilidad.
     const ctrl = (K.enSuelo ? 1 : AIRE_CTRL) * (K.st === BLOQUEA ? 0.4 : 1);
     const quiere = inp.dx * VEL * (K.st === BLOQUEA ? 0.4 : 1);
     if (Math.abs(inp.dx) > 0.08) {
@@ -301,7 +319,34 @@ export function stepCaballero(K, inp, dt, mundo) {
     }
   }
 
-  // --- Gravedad y suelo (o repisa, o escombro) ---
+  gravedad(K, dt, mundo);
+
+  // --- Ciclo del tajo ---
+  if (K.st === TAJO) {
+    K.tajoT += dt;
+    // El impulso del golpe se frena poco a poco: empuja al salir y se apaga.
+    // Barrido en Node (mult x roza): con 3.2 y 0.96 el combo avanza 101 px --
+    // media zancada por golpe -- con punta de 193 px/s, por debajo de los 240
+    // de correr. Con 0.88 avanzaba 2 px (nada) y con mult 6 corria mas que ella.
+    K.vx *= 0.96;
+    if (K.tajoT >= tajoDe(K)[0]) {
+      K.st = K.enSuelo ? QUIETO : SALTA; K.animT = 0;
+      // El contraataque es un remate: tras el, el combo vuelve a empezar.
+      if (K.contra) { K.contra = 0; K.combo = 0; }
+      // Si no, no se resetea el combo aqui: comboOlvido da la ventana.
+    }
+  }
+
+  // --- Estado de animacion ---
+  if (K.st === QUIETO || K.st === CORRE) {
+    K.st = (!K.enSuelo) ? SALTA : (Math.abs(K.vx) > 16 ? CORRE : QUIETO);
+  }
+}
+
+// La gravedad, el aterrizaje (en el suelo, una repisa o un escombro), el
+// avance en X y las paredes. Aparte porque tambien la usa la derrota: el
+// ultimo golpe la lanza por el aire y tiene que caer.
+function gravedad(K, dt, mundo) {
   if (!K.enSuelo) {
     const yAntes = K.y;
     K.vy += (K.vy < 0 ? GRAV_UP : GRAV_DN) * dt;
@@ -314,6 +359,8 @@ export function stepCaballero(K, inp, dt, mundo) {
       if (K.vy > 300) K.aterriza = 0.12;
       K.y = s; K.vy = 0; K.enSuelo = true;
       if (K.st === SALTA) { K.st = QUIETO; K.animT = 0; }
+      // La esquiva acaba al tocar suelo, con su agachada de aterrizaje.
+      if (K.st === ESQUIVA) { K.st = QUIETO; K.vx = 0; K.aterriza = 0.12; K.animT = 0; }
     }
   } else if (!apoyada(K.x, K.y, mundo)) {
     // Se le acaba la repisa (o el escombro) bajo los pies: empieza a caer. El
@@ -329,47 +376,31 @@ export function stepCaballero(K, inp, dt, mundo) {
   if (K.x < AX0) { K.x = AX0; K.vx = 0; }
   else if (K.x > AX1) { K.x = AX1; K.vx = 0; }
   chocaBloques(K, xAntes, mundo);
-
-  // --- Ciclo del tajo ---
-  if (K.st === TAJO) {
-    K.tajoT += dt;
-    // El impulso del golpe se frena poco a poco: empuja al salir y se apaga.
-    // Barrido en Node (mult x roza): con 3.2 y 0.96 el combo avanza 101 px --
-    // media zancada por golpe -- con punta de 193 px/s, por debajo de los 240
-    // de correr. Con 0.88 avanzaba 2 px (nada) y con mult 6 corria mas que ella.
-    K.vx *= 0.96;
-    if (K.tajoT >= TAJOS[K.combo][0]) {
-      K.st = K.enSuelo ? QUIETO : SALTA; K.animT = 0;
-      // No se resetea el combo aqui: comboOlvido da la ventana para seguir.
-    }
-  }
-
-  // --- Estado de animacion ---
-  if (K.st === QUIETO || K.st === CORRE) {
-    K.st = (!K.enSuelo) ? SALTA : (Math.abs(K.vx) > 16 ? CORRE : QUIETO);
-  }
 }
+
+// Derrotada: sale despedida por el ultimo golpe, cae y se queda de rodillas.
+function caeDerrotada(K, dt, mundo) {
+  K.muereT += dt;
+  if (K.aterriza > 0) K.aterriza -= dt;
+  if (K.enSuelo) K.vx *= 0.8;
+  gravedad(K, dt, mundo);
+}
+
+// Los numeros del tajo que esta dando: el del combo o el contraataque.
+function tajoDe(K) { return K.contra ? CONTRA : TAJOS[K.combo]; }
 
 // La espada esta cortando en este frame.
 export function espadaActiva(K) {
   if (K.st !== TAJO) return false;
-  const [, a0, a1] = TAJOS[K.combo];
+  const [, a0, a1] = tajoDe(K);
   return K.tajoT >= a0 && K.tajoT < a1;
 }
-// El escudo esta golpeando en este frame (el empujon).
-export function escudoActivo(K) {
-  return K.st === EMPUJE && K.escT >= ESC_EMPUJE_A0 && K.escT < ESC_EMPUJE_A1;
-}
-// Donde golpea el escudo.
-export function puntaEscudo(K) {
-  return [K.x + K.dir * 56, K.y - 60];
-}
-// Acaba de parar un golpe con la parada perfecta.
+// Hay contraataque esperando: la parada acaba de abrir al ogro.
 export function hayParada(K) { return K.parada > 0; }
 
 // Cuanto daño hace el golpe que esta saliendo ahora.
 export function danoTajo(K) {
-  return K.st === TAJO ? TAJOS[K.combo][4] : 0;
+  return K.st === TAJO ? tajoDe(K)[4] : 0;
 }
 // Que numero de golpe del combo es (0,1,2). Para el sonido y las chispas.
 export function golpeCombo(K) { return K.combo; }
@@ -378,44 +409,52 @@ export function golpeCombo(K) { return K.combo; }
 export function puntaEspada(K) {
   // El alcance depende del golpe: el tercero (el giro) llega mas lejos, y eso
   // tiene que notarse en la colision, no solo en el dibujo.
-  const alc = K.st === TAJO ? TAJOS[K.combo][5] : ALCANCE;
+  const alc = K.st === TAJO ? tajoDe(K)[5] : ALCANCE;
   return [K.x + K.dir * alc, K.y - 16];
 }
 
-// Es invulnerable ahora mismo (por rodar o por i-frames).
+// Es invulnerable ahora mismo (esquivando o por i-frames).
 export function invulnerable(K) {
   if (K.iframe > 0) return true;
-  return K.st === RUEDA && K.rollT >= ROLL_INV0 && K.rollT <= ROLL_INV1;
+  return K.st === ESQUIVA && K.esqT >= ESQ_INV0 && K.esqT <= ESQ_INV1;
 }
 
-// Devuelve 'bloqueado' si el escudo para el golpe, true si hiere, false si no
-// le entra por invulnerabilidad. `desdeArriba`: lo que cae del techo no se
-// para con la guardia (va de frente), solo se esquiva.
-export function herir(K, sx, desdeArriba = false) {
+// Le llega un golpe desde sx. `tipo` dice QUE golpe es, porque la guardia solo
+// vale contra uno:
+//   'garrote'                      la guardia lo para (y si es a tiempo, PARADA)
+//   'barrido' 'embestida' 'pisoton' 'onda'   le ROMPEN la guardia
+//   'piedra'                       cae del techo: la guardia ni se entera
+// Devuelve 'parada' o 'bloqueado' si la guardia lo para, 'rota' si entra
+// rompiendole la guardia, true si entra sin mas, y false si no le entra
+// (esquivando o recien golpeada). `dano`: cuantos corazones quita.
+export function herir(K, sx, tipo = 'garrote', dano = 1) {
   if (!K.vivo) return false;
-  // El escudo para lo que viene DE FRENTE, y solo cuando ya esta arriba.
-  // Durante el EMPUJON tambien protege: el escudo va por delante.
-  if (!desdeArriba && ((K.st === BLOQUEA && K.bloqT >= BLOQ_SUBE) || K.st === EMPUJE)) {
-    const deFrente = (sx - K.x) * K.dir > 0;
-    if (deFrente) {
-      // PARADA: si el golpe llega en la ventana justo despues de levantar el
-      // escudo, no es un bloqueo cualquiera -- rebota al que pega y le deja
-      // abierto. Es lo que premia LEER el ataque en vez de taparse siempre.
-      const recienArriba = K.st === BLOQUEA && K.bloqT < BLOQ_SUBE + PARADA_VENT;
-      if (recienArriba) {
-        K.parada = PARADA_PREMIO; K.bloqHit = 0.22; K.vx = -K.dir * 40;
-        return 'parada';
-      }
-      K.bloqHit = 0.22; K.vx = -K.dir * 90;
-      return 'bloqueado';
+  const enGuardia = K.st === BLOQUEA && K.bloqT >= BLOQ_SUBE && (sx - K.x) * K.dir > 0;
+  if (enGuardia && tipo === 'garrote') {
+    // PARADA: si el golpe llega en la ventana justo despues de levantar la
+    // guardia, no es un bloqueo cualquiera -- rebota al ogro y le deja
+    // abierto. Es lo que premia LEER el ataque en vez de taparse siempre.
+    if (K.bloqT < BLOQ_SUBE + PARADA_VENT) {
+      K.parada = PARADA_PREMIO; K.bloqHit = 0.22; K.vx = -K.dir * 40;
+      return 'parada';
     }
+    K.bloqHit = 0.22; K.vx = -K.dir * 90;
+    return 'bloqueado';
   }
   if (invulnerable(K)) return false;
-  K.hp--; K.iframe = IFRAME;
+  const rota = enGuardia && tipo !== 'piedra';
+  K.hp = Math.max(0, K.hp - dano); K.iframe = IFRAME;
   K.st = DOLOR; K.hurtIni = K.t; K.hurtT = 0.28; K.animT = 0;
-  K.vx = (K.x < sx ? -1 : 1) * 140;
-  if (K.hp <= 0) { K.vivo = false; K.st = MUERTO; }
-  return true;
+  K.contra = 0; K.parada = 0;
+  const lejos = K.x < sx ? -1 : 1;
+  K.vx = lejos * DOLOR_VX;
+  if (K.enSuelo) { K.vy = -DOLOR_VY; K.enSuelo = false; }
+  if (K.hp <= 0) {
+    // El ultimo golpe la lanza mas lejos: cae, y se queda de rodillas.
+    K.vivo = false; K.st = MUERTO; K.muereT = 0;
+    K.vx = lejos * MUERE_VX; K.vy = -MUERE_VY; K.enSuelo = false;
+  }
+  return rota ? 'rota' : true;
 }
 
 // Que pose y que fotograma toca dibujar. Devuelve [pose, frame].
@@ -424,30 +463,37 @@ export function herir(K, sx, desdeArriba = false) {
 // tools/romina-atlas.py), no la muñeca por codigo de antes. Cuantos
 // fotogramas tiene cada una lo dice el atlas, y el arnes comprueba contra el
 // que todos se alcanzan jugando y ninguno se sale.
+//
+// El pack no trae esquiva, ni golpe recibido, ni derrota: las tres salen de
+// SU salto, que es lo que de verdad hace el cuerpo (despega, va recogida por
+// el aire con la capa al viento y cae agachada). Montarlas con la agachada
+// quieta, como antes, se leia como estar de rodillas.
 export function pose(K) {
-  // DOLOR: tres fotogramas en los 0.28 s que dura. MUERTO: de rodillas.
-  if (K.st === MUERTO) return ['dead', 0];
-  if (K.st === DOLOR) {
-    const u = (K.t - K.hurtIni) / 0.28;
-    return ['hurt', u < 0.28 ? 0 : u < 0.62 ? 1 : 2];
+  // DERROTA: despedida por el aire, el golpe contra el suelo y de rodillas.
+  if (K.st === MUERTO) {
+    if (!K.enSuelo) return ['jump', 3];
+    return K.aterriza > 0 ? ['jump', 8] : ['dead', 0];
   }
-  // BLOQUEAR: 0 levantando, 1 plantada, 2 el impacto. El 0 dura lo que tarda
-  // el escudo en subir (BLOQ_SUBE), que es justo cuando todavia no para.
+  // GOLPE RECIBIDO: sale despedida recogida (el destello blanco lo pone la
+  // escena) y cae agachada.
+  if (K.st === DOLOR) return K.enSuelo ? ['jump', 8] : ['jump', 3];
+  // GUARDIA: 0 levantandola, 1 plantada, 2 el impacto (la espada salta arriba)
+  // y 3 rehacerse. El 0 dura lo que tarda en subir (BLOQ_SUBE), que es justo
+  // cuando todavia no para.
   if (K.st === BLOQUEA) {
-    // bloqHit dura 0.22 s: los primeros 0.10 es el IMPACTO (2) y el resto
-    // es rehacerse (3), para que parar un golpe tenga su recuperacion visible.
     if (K.bloqHit > 0) return ['block', K.bloqHit > 0.12 ? 2 : 3];
     return ['block', K.bloqT < BLOQ_SUBE ? 0 : 1];
   }
-  if (K.st === RUEDA) return ['roll', Math.min(3, Math.floor(K.rollT / ROLL_T * 4))];
-  // EMPUJON DE ESCUDO: tres fotogramas (carga, impacto, vuelta).
-  if (K.st === EMPUJE) {
-    if (K.escT < ESC_EMPUJE_A0) return ['bash', 0];
-    if (K.escT < ESC_EMPUJE_A1) return ['bash', 1];
-    return ['bash', 2];
+  // ESQUIVA: el impulso, la recogida en el aire subiendo y bajando. El
+  // aterrizaje lo pone K.aterriza, como en el salto. El impulso hacia delante
+  // es el del salto (se inclina hacia donde va); hacia atras se agacha: con el
+  // del salto parecia que se lanzaba contra el ogro antes de irse.
+  if (K.st === ESQUIVA) {
+    if (K.esqT < 0.05) return ['jump', K.esqDir === K.dir ? 0 : 8];
+    return ['jump', K.vy < -200 ? 2 : 3];
   }
   if (K.st === TAJO) {
-    const [ciclo, a0, a1] = TAJOS[K.combo];
+    const [ciclo, a0, a1] = tajoDe(K);
     const t = K.tajoT;
     // EN EL AIRE: su tajo aereo, sea el golpe que sea del combo.
     if (!K.enSuelo) return ['air', t < a0 ? 0 : t < (a0 + a1) / 2 ? 1 : t < a1 ? 2 : 3];
@@ -455,6 +501,7 @@ export function pose(K) {
     // fotogramas en tres tramos: la CARGA hasta activa0, el FILO (los dos
     // fotogramas con la estela) justo en la parte activa, y la VUELTA hasta
     // el ciclo. Asi la estela se ve EXACTAMENTE cuando el golpe hace daño.
+    // El contraataque usa los dibujos del remate con sus tiempos, mas cortos.
     const [nombre, carga, filo, vuelta] = [['atk', 2, 2, 2], ['atk2', 3, 2, 3], ['atk3', 6, 2, 3]][K.combo];
     return [nombre, reparte(t, a0, a1, ciclo, carga, filo, vuelta)];
   }

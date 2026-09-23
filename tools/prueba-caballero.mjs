@@ -3,7 +3,7 @@
 //   node tools/prueba-caballero.mjs
 //
 // Importa el modulo REAL del juego (www/js/games/caba-cuerpo.js) y comprueba
-// que el salto, la rodada y el tajo son lo que dice el diseño. Si se toca una
+// que el salto, la esquiva, la guardia y el tajo son lo que dice el diseño. Si se toca una
 // constante de alli, se vuelve a correr esto.
 import { pathToFileURL } from 'url';
 import path from 'path';
@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const C = await import(pathToFileURL(path.join(here, '..', 'www', 'js', 'games', 'caba-cuerpo.js')).href);
 const { makeCaballero, stepCaballero, espadaActiva, invulnerable, herir, pose,
-        SUELO, VEL, JUMP_V, ROLL_T, ROLL_CD, TAJO_T, TAJO_A0, TAJO_A1, AX0, AX1, HP0 } = C;
+        SUELO, VEL, JUMP_V, ESQ_CD, ESQ_INV0, ESQ_INV1, TAJO_T, TAJO_A0, TAJO_A1, AX0, AX1, HP0 } = C;
 
 // El atlas es solo datos (sin DOM): de el sale cuantos fotogramas tiene de
 // verdad cada pose, en vez de una tabla aparte que se quedaria vieja.
@@ -22,7 +22,7 @@ const DT = 1 / 60;
 const fmt = v => (Math.round(v * 10) / 10).toFixed(1);
 let fallos = 0;
 function ok(cond, msg) { console.log((cond ? '   ok  ' : '   MAL ') + msg); if (!cond) fallos++; }
-const nada = { dx: 0, salta: false, golpea: false, rueda: false, saltaAbajo: false };
+const nada = { dx: 0, salta: false, golpea: false, esquiva: false, saltaAbajo: false, bloquea: false };
 function corre(K, secs, inp) {
   const n = Math.round(secs / DT);
   for (let i = 0; i < n; i++) stepCaballero(K, inp || nada, DT);
@@ -99,25 +99,53 @@ console.log('== 3) COYOTE Y BUFFER ==');
   ok(saltoOtraVez, 'el buffer guarda un salto pulsado justo antes de tocar suelo');
 }
 
-console.log('== 4) RODAR ==');
+console.log('== 4) ESQUIVAR ==');
 {
-  const K = makeCaballero(200);
+  // Sin stick: salta HACIA ATRAS y sigue mirando al frente (para contestar
+  // al caer). Es lo que se pulsa con el ogro delante.
+  const K = makeCaballero(500);
   const x0 = K.x;
-  stepCaballero(K, { ...nada, rueda: true }, DT);
-  let inv = 0, n = 0;
-  while (K.st === C.RUEDA) { stepCaballero(K, nada, DT); if (invulnerable(K)) inv += DT; n++; }
+  stepCaballero(K, { ...nada, esquiva: true }, DT);
+  let inv = 0, n = 0, alto = 0;
+  while (K.st === C.ESQUIVA && n < 120) {
+    stepCaballero(K, nada, DT); if (invulnerable(K)) inv += DT; n++;
+    alto = Math.max(alto, SUELO - K.y);
+  }
   const d = K.x - x0;
-  console.log(`rodada: ${fmt(d)} px en ${fmt(n * DT)} s, invulnerable ${fmt(inv * 1000)} ms`);
-  ok(d >= 150 && d <= 230, 'la rodada avanza entre 150 y 230 px (algo mas de un cuerpo)');
-  ok(inv > 0.15 && inv < ROLL_T, 'es invulnerable en el medio, pero NO toda la rodada');
+  console.log(`esquiva: ${fmt(d)} px en ${fmt(n * DT)} s, ${fmt(alto)} px de alto, invulnerable ${fmt(inv * 1000)} ms`);
+  ok(d <= -200 && d >= -270, 'sin stick va hacia ATRAS entre 200 y 270 px');
+  ok(K.dir === 1, 'y sigue mirando al frente');
+  ok(K.enSuelo && n * DT > 0.25 && n * DT < 0.45, 'es un salto corto: acaba en el suelo en ' + fmt(n * DT) + ' s');
+  ok(alto >= 40 && alto <= 70, 'bajo: sube ' + fmt(alto) + ' px (el salto de verdad sube ~120)');
+  ok(inv > 0.2 && inv < n * DT, 'es invulnerable casi todo el vuelo, pero NO al caer');
+  // Con el stick va hacia donde apunta, y se gira hacia alli.
+  const K1 = makeCaballero(500);
+  stepCaballero(K1, { ...nada, dx: -1, esquiva: true }, DT);
+  corre(K1, 0.5, { ...nada, dx: -1 });
+  ok(K1.x < 500 - 200 && K1.dir === -1, 'con el stick a la izquierda va y mira a la izquierda');
+  const K1b = makeCaballero(500);
+  stepCaballero(K1b, { ...nada, dx: 1, esquiva: true }, DT);
+  corre(K1b, 0.5, nada);
+  ok(K1b.x > 500 + 200 && K1b.dir === 1, 'con el stick hacia el ogro, salta hacia el (por encima del golpe)');
+  // En el aire no se controla: es un compromiso, no un teletransporte.
+  const Ka = makeCaballero(500), Kb = makeCaballero(500);
+  stepCaballero(Ka, { ...nada, esquiva: true }, DT); corre(Ka, 0.2, nada);
+  stepCaballero(Kb, { ...nada, esquiva: true }, DT); corre(Kb, 0.2, { ...nada, dx: 1 });
+  ok(Math.abs(Ka.x - Kb.x) < 1, 'el stick no la frena a mitad de esquiva');
   // El enfriamiento impide encadenarlas
-  const K2 = makeCaballero(200);
-  stepCaballero(K2, { ...nada, rueda: true }, DT);
-  corre(K2, ROLL_T);
+  const K2 = makeCaballero(500);
+  stepCaballero(K2, { ...nada, esquiva: true }, DT);
+  corre(K2, 0.4);
   const x1 = K2.x;
-  stepCaballero(K2, { ...nada, rueda: true }, DT);
+  stepCaballero(K2, { ...nada, esquiva: true }, DT);
   corre(K2, 0.1);
-  ok(Math.abs(K2.x - x1) < 40, 'no se puede encadenar una rodada con otra');
+  ok(Math.abs(K2.x - x1) < 40, 'no se puede encadenar una esquiva con otra');
+  // Y solo desde el suelo
+  const K3 = makeCaballero(500);
+  stepCaballero(K3, { ...nada, salta: true, saltaAbajo: true }, DT);
+  corre(K3, 0.1, { ...nada, saltaAbajo: true });
+  stepCaballero(K3, { ...nada, esquiva: true, saltaAbajo: true }, DT);
+  ok(K3.st !== C.ESQUIVA, 'en mitad de un salto no se puede esquivar');
 }
 
 console.log('== 5) TAJO ==');
@@ -130,12 +158,12 @@ console.log('== 5) TAJO ==');
   // El PRIMER golpe del combo dura 260 ms a proposito: es el rapido.
   ok(Math.abs(n * DT - C.TAJOS[0][0]) < 0.03, `el primer golpe dura ${C.TAJOS[0][0] * 1000} ms`);
   ok(act >= 0.05 && act <= 0.09, 'la ventana activa esta entre 50 y 90 ms');
-  // Se puede cancelar con un rodar
+  // Se puede cancelar con una esquiva
   const K2 = makeCaballero(300);
   stepCaballero(K2, { ...nada, golpea: true }, DT);
   corre(K2, 0.05);
-  stepCaballero(K2, { ...nada, rueda: true }, DT);
-  ok(K2.st === C.RUEDA, 'el rodar cancela el tajo');
+  stepCaballero(K2, { ...nada, esquiva: true }, DT);
+  ok(K2.st === C.ESQUIVA, 'la esquiva cancela el tajo');
   // EL COMBO AVANZA, pero correr sigue siendo mas rapido. Esto es lo que
   // impide que machacar el boton sea la mejor forma de cruzar la arena --
   // medido, con el empuje original el tercer golpe salia a 294 px/s contra
@@ -166,11 +194,25 @@ console.log('== 6) DAÑO ==');
   ok(!herir(K, 400), 'el segundo golpe seguido NO entra (i-frames)');
   corre(K, 1.05);
   ok(herir(K, 400), 'pasado el iframe vuelve a entrar');
-  // Rodando es invulnerable en el medio
+  // Esquivando es invulnerable en el medio
   const K2 = makeCaballero(300);
-  stepCaballero(K2, { ...nada, rueda: true }, DT);
+  stepCaballero(K2, { ...nada, esquiva: true }, DT);
   corre(K2, 0.12);
-  ok(!herir(K2, 400), 'rodando (en el medio) no le entra');
+  ok(!herir(K2, 400), 'esquivando (en el medio) no le entra');
+  // Un golpe la lanza hacia atras por el aire: es lo que hace leer que le han
+  // dado. Y el ultimo, mas lejos: y cae, no se queda flotando.
+  const K4 = makeCaballero(600);
+  herir(K4, 700);
+  corre(K4, 0.1);
+  ok(!K4.enSuelo && K4.x < 600, 'el golpe la despide hacia atras por el aire');
+  corre(K4, 0.4);
+  ok(K4.enSuelo, 'y vuelve al suelo');
+  const K5 = makeCaballero(600);
+  for (let i = 0; i < HP0; i++) { K5.iframe = 0; herir(K5, 700); }
+  corre(K5, 0.1);
+  const enAire = !K5.enSuelo;
+  corre(K5, 1.0);
+  ok(enAire && K5.enSuelo && K5.x < 560, 'derrotada, sale despedida y CAE al suelo (en ' + fmt(K5.x) + ')');
   // Morir
   const K3 = makeCaballero(300);
   for (let i = 0; i < HP0; i++) { K3.iframe = 0; herir(K3, 400); }
@@ -185,11 +227,11 @@ console.log('== 7) POSES ==');
   corre(K, 0.8, { ...nada, dx: 1 }); vistas.add(pose(K)[0]);
   stepCaballero(K, { ...nada, salta: true, saltaAbajo: true }, DT); corre(K, 0.1, { ...nada, saltaAbajo: true }); vistas.add(pose(K)[0]);
   corre(K, 0.6); vistas.add(pose(K)[0]);
-  stepCaballero(K, { ...nada, rueda: true }, DT); vistas.add(pose(K)[0]);
+  corre(K, 0.4, { ...nada, bloquea: true }); vistas.add(pose(K)[0]);
   corre(K, 0.4);
   stepCaballero(K, { ...nada, golpea: true }, DT); vistas.add(pose(K)[0]);
   console.log('poses vistas: ' + [...vistas].join(', '));
-  ok(vistas.has('idle') && vistas.has('run') && vistas.has('jump') && vistas.has('roll') && vistas.has('atk'),
+  ok(vistas.has('idle') && vistas.has('run') && vistas.has('jump') && vistas.has('block') && vistas.has('atk'),
      'las cinco poses principales se alcanzan jugando');
   // Los fotogramas nunca se salen del array. Se comprueba contra el numero
   // REAL de fotogramas de cada pose, sacado del ATLAS (la caballera pintada a
@@ -202,7 +244,7 @@ console.log('== 7) POSES ==');
   const vistos = {};
   for (let i = 0; i < 4000; i++) {
     const inp = { dx: Math.sin(i / 17), salta: i % 53 === 0, golpea: i % 29 === 0,
-                  rueda: i % 71 === 0, saltaAbajo: i % 53 < 8, bloquea: i % 97 < 30 };
+                  esquiva: i % 71 === 0, saltaAbajo: i % 53 < 8, bloquea: i % 97 < 30 };
     stepCaballero(K2, inp, DT);
     const [p, f] = pose(K2);
     if (!(p in CUENTA)) malo = ['pose desconocida', p];
@@ -259,15 +301,12 @@ console.log('== 7) POSES ==');
     jugar(K, 25, nada);
   }
 
-  // GUION 2: el escudo -- levantar, aguantar, comer un golpe, y empujar.
+  // GUION 2: la guardia -- levantarla, aguantar y parar un garrotazo.
   {
     const K = makeCaballero(300);
     jugar(K, 3, { ...nada, bloquea: true });        // subiendo (frame 0)
     jugar(K, 20, { ...nada, bloquea: true });       // plantada (frame 1)
-    herir(K, K.x + K.dir * 60);                     // le entra: 2 y 3
-    jugar(K, 20, { ...nada, bloquea: true });
-    // el EMPUJON: atacar con el escudo arriba
-    jugar(K, 1, { ...nada, bloquea: true, golpea: true });
+    herir(K, K.x + K.dir * 60, 'garrote');          // lo para: 2 y 3
     jugar(K, 20, { ...nada, bloquea: true });
     jugar(K, 10, nada);
   }
@@ -279,8 +318,8 @@ console.log('== 7) POSES ==');
     jugar(K, 1, { ...nada, dx: 1, salta: true, saltaAbajo: true });
     jugar(K, 40, { ...nada, dx: 1, saltaAbajo: true });     // salto entero
     jugar(K, 15, nada);                                     // y el aterrizaje
-    jugar(K, 1, { ...nada, rueda: true });
-    jugar(K, 25, nada);                                     // la rodada
+    jugar(K, 1, { ...nada, esquiva: true });
+    jugar(K, 30, nada);                                     // la esquiva
     jugar(K, 120, nada);                                    // respirar
     K.iframe = 0; herir(K, K.x + 60);
     jugar(K, 25, nada);                                     // el dolor entero
@@ -295,7 +334,7 @@ console.log('== 7) POSES ==');
     jugar(K, 20, { ...nada, saltaAbajo: true });            // el tajo aereo entero
     jugar(K, 40, nada);
     for (let i = 0; i < HP0; i++) { K.iframe = 0; herir(K, K.x + 60); }
-    anota(K);                                                 // de rodillas
+    jugar(K, 90, nada);            // sale despedida, cae y se queda de rodillas
   }
 
   for (const nombre in CUENTA) {
@@ -328,6 +367,65 @@ console.log('== 8) EL TAJO LLEGA HASTA DONDE LLEGA LA ESTELA ==');
     ok(alc <= borde && alc >= borde - 30,
        `${nom}: el daño llega a ${alc} px y la estela dibujada a ${borde} (en sus ultimos 30)`);
   }
+  // El contraataque se dibuja con el remate: su alcance, con esa estela.
+  let borde3 = -1e9;
+  for (let f = 6; f < 8; f++) { const [, , w, , ox] = A.FRAMES.atk3[f]; borde3 = Math.max(borde3, ox + w); }
+  ok(C.CONTRA[5] <= borde3 && C.CONTRA[5] >= borde3 - 30,
+     `contraataque: el daño llega a ${C.CONTRA[5]} px y la estela del remate a ${borde3}`);
+}
+
+console.log('== 9) LA GUARDIA SOLO PARA EL GARROTAZO, Y LA PARADA DA CONTRAATAQUE ==');
+{
+  // La guardia ya levantada (pasado BLOQ_SUBE, fuera de la ventana de parada).
+  const enGuardia = () => {
+    const K = makeCaballero(500);
+    corre(K, C.BLOQ_SUBE + C.PARADA_VENT + 0.05, { ...nada, bloquea: true });
+    return K;
+  };
+  let K = enGuardia();
+  ok(herir(K, 560, 'garrote') === 'bloqueado' && K.hp === HP0, 'el garrotazo de frente se para, sin perder vida');
+  for (const tipo of ['barrido', 'embestida', 'pisoton', 'onda']) {
+    K = enGuardia();
+    ok(herir(K, 560, tipo) === 'rota' && K.hp === HP0 - 1, 'el ' + tipo + ' le ROMPE la guardia y le quita vida');
+  }
+  K = enGuardia();
+  ok(herir(K, 560, 'piedra') === true, 'la piedra que cae del techo entra (la guardia no mira arriba)');
+  K = enGuardia();
+  ok(herir(K, 440, 'garrote') === true, 'por la espalda, el garrotazo entra');
+  // Recien levantada todavia no para: la guardia no es un seguro instantaneo.
+  K = makeCaballero(500);
+  corre(K, 0.05, { ...nada, bloquea: true });
+  ok(herir(K, 560, 'garrote') === true, 'levantandola (antes de ' + C.BLOQ_SUBE + ' s) todavia no para');
+
+  // LA PARADA: en la ventana justo despues de levantarla.
+  K = makeCaballero(500);
+  corre(K, C.BLOQ_SUBE + 0.05, { ...nada, bloquea: true });
+  ok(herir(K, 560, 'garrote') === 'parada', 'a tiempo, el garrotazo se PARA');
+  // Y el contraataque: se pulsa ATACAR con reaccion humana (0.25 s) tras la
+  // congelacion del golpe (0.15 s, en la que el mundo no avanza). El filo
+  // tiene que salir antes de que el ogro se cierre (PARADA_PREMIO).
+  corre(K, 0.25, nada);
+  stepCaballero(K, { ...nada, golpea: true }, DT);
+  ok(K.st === C.TAJO && K.contra === 1, 'el siguiente ATACAR es un CONTRAATAQUE');
+  let t = 0.25 + DT, filo = -1, dano = 0;
+  while (K.st === C.TAJO && t < 2) {
+    if (espadaActiva(K) && filo < 0) { filo = t; dano = C.danoTajo(K); }
+    stepCaballero(K, nada, DT); t += DT;
+  }
+  ok(filo > 0 && filo < C.PARADA_PREMIO, 'su filo sale a los ' + fmt(filo * 1000) + ' ms de la parada (el ogro sigue abierto hasta ' + C.PARADA_PREMIO * 1000 + ')');
+  ok(dano === C.CONTRA[4] && dano > C.TAJOS[2][4], 'pega ' + dano + ', mas que el remate del combo (' + C.TAJOS[2][4] + ')');
+  ok(C.CONTRA[0] < C.TAJOS[2][0], 'y es mas rapido que el remate (' + C.CONTRA[0] + ' s contra ' + C.TAJOS[2][0] + ')');
+  // Sin parada, ATACAR es el combo de siempre.
+  K = makeCaballero(500);
+  stepCaballero(K, { ...nada, golpea: true }, DT);
+  ok(K.contra === 0 && K.combo === 0, 'sin parada, ATACAR empieza el combo por el reves');
+  // Y la ocasion se pasa.
+  K = makeCaballero(500);
+  corre(K, C.BLOQ_SUBE + 0.05, { ...nada, bloquea: true });
+  herir(K, 560, 'garrote');
+  corre(K, C.PARADA_PREMIO + 0.1, nada);
+  stepCaballero(K, { ...nada, golpea: true }, DT);
+  ok(K.contra === 0, 'pasados ' + C.PARADA_PREMIO + ' s, ya no hay contraataque');
 }
 
 console.log(fallos ? `\n${fallos} FALLOS` : '\nTODO OK');

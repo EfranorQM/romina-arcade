@@ -1,7 +1,11 @@
 // ROMINA - la pelea contra el ogro, en el salon del castillo.
 //
 // Se juega de LADO. Pulgar izquierdo = mover. Cuatro botones a la derecha:
-// SALTA, TAJO (el grande), RUEDA y ESCUDO (la guardia, que se mantiene).
+// ATACAR (el grande), SALTAR, ESQUIVAR y GUARDIA (que se mantiene). Cada uno
+// es la respuesta a un ataque del ogro: la guardia para el garrotazo (y a
+// tiempo es una PARADA que da CONTRAATAQUE), el salto libra la onda del
+// pisoton y la esquiva, el barrido y la embestida. Se dibujan en
+// caba-botones.js.
 //
 // Aqui solo se arbitra: la fisica de ella esta en caba-cuerpo.js, la del ogro
 // en ogro-cuerpo.js y la de la arena (repisas, cascotes, escombros) en
@@ -15,6 +19,7 @@ import { SFX } from '../audio.js';
 import { Stick, Button, vibrate } from '../input.js';
 import * as C from './caba-cuerpo.js';
 import { drawRomina, P as PR } from './romi-sprite.js';
+import * as BT from './caba-botones.js';
 import * as AR from './caba-arena.js';
 import { drawSalon, drawRepisas, drawEscombros, drawSombrasPiedras, drawPiedras, P as PA } from './arena-sprite.js';
 import * as OG from './ogro-cuerpo.js';
@@ -50,22 +55,23 @@ export default {
     this.A = AR.makeArena();
 
     this.stick = new Stick(80, 14);
-    // Los tres botones, en triangulo en la esquina de abajo a la derecha. Los
-    // radios son de DIBUJO; el area de toque es r+pad y NO se solapa: los
-    // centros estan a 62 px (TAJO-SALTA) y 60 (TAJO-RUEDA), y la suma de sus
-    // radios de toque es 54. Medido a 0.254 mm/px: separaciones de 15 mm, muy
-    // por encima de los 9 mm en que un pulgar empieza a equivocarse.
-    // Cuatro botones en la esquina de abajo a la derecha. ESCUDO es el unico
-    // que se mantiene apretado; los otros tres son toques.
+    // Cuatro botones en la esquina de abajo a la derecha, en el mismo sitio
+    // que los de antes (medidos para el pulgar). Los radios son de DIBUJO; el
+    // area de toque es r+pad. GUARDIA es el unico que se mantiene apretado;
+    // los otros tres son toques.
     this.bSalta = new Button(1096, 300, 34, 20);
-    this.bTajo  = new Button(1132, 428, 40, 20);
-    this.bRueda = new Button(1016, 452, 32, 20);
-    this.bEscudo = new Button(1016, 336, 32, 20);
-    this.salta = false; this.golpea = false; this.rueda = false;
+    this.bAtaca = new Button(1132, 428, 40, 20);
+    this.bEsquiva = new Button(1016, 452, 32, 20);
+    this.bGuardia = new Button(1016, 336, 32, 20);
+    this.salta = false; this.golpea = false; this.esquiva = false;
+    // Los medallones, horneados una vez (ver caba-botones.js), y el aro que
+    // suelta cada uno al apretarlo (1 -> 0).
+    this.H = BT.hornea({ atacar: this.bAtaca, saltar: this.bSalta, esquivar: this.bEsquiva, guardia: this.bGuardia });
+    this.pulsos = { atacar: 0, saltar: 0, esquivar: 0, guardia: 0 };
 
     this.camX = 0;
     this.t = 0; this.hitstop = 0;
-    this.golpes = 0; this.saltos = 0; this.rodadas = 0;
+    this.golpes = 0; this.saltos = 0; this.esquivas = 0;
     this.msg = ''; this.msgT = 0;
     this.combo = 0; this.comboT = 0;
 
@@ -74,6 +80,7 @@ export default {
     this.O = OG.makeOgro(880);
     this.SO = bakeOgro();
     this.flashO = 0;          // el destello blanco del ogro al recibir un tajo
+    this.chispa = 0;          // la estrella de oro de la PARADA
     this.grietas = [];        // las marcas que deja el pisoton en el suelo
     this.fin = 0;             // >0 cuando acaba la pelea (gana o pierde)
     this.finT = 0;
@@ -86,16 +93,18 @@ export default {
     // Despues del hitstop a proposito: el destello dura TODA la congelacion
     // del golpe y se apaga cuando el mundo vuelve a moverse.
     if (this.flashO > 0) this.flashO -= dt;
+    if (this.chispa > 0) this.chispa -= dt;
 
     const K = this.K;
     const inp = {
       dx: this.stick.dx,
       salta: this.salta, saltaAbajo: this.bSalta.pressed,
-      golpea: this.golpea, rueda: this.rueda, bloquea: this.bEscudo.pressed,
+      golpea: this.golpea, esquiva: this.esquiva, bloquea: this.bGuardia.pressed,
     };
     const antesSuelo = K.enSuelo, antesSt = K.st, antesTajo = K.tajoId;
-    const antesEsc = K.escId, antesParada = K.parada;
-    this.salta = false; this.golpea = false; this.rueda = false;
+    const antesCd = K.esqCd;
+    this.salta = false; this.golpea = false; this.esquiva = false;
+    for (const k in this.pulsos) if (this.pulsos[k] > 0) this.pulsos[k] -= dt / 0.25;
 
     const M = AR.mundo(this.A);
     C.stepCaballero(K, inp, dt, M);
@@ -107,23 +116,22 @@ export default {
       const n = C.golpeCombo(K);
       SFX.espadazo();
       this.golpes++;
-      this.combo = n + 1;
-      this.comboT = 1.0;
-      if (n === 2) { cam.shake(2.5, 0.1); vibrate(12); }
-      else vibrate(5);
+      if (K.contra) {
+        // EL CONTRAATAQUE: sale en oro, no cuenta como combo.
+        this.combo = 0; this.comboT = 0;
+        this.msg = 'CONTRAATAQUE'; this.msgT = 0.8;
+        cam.shake(3, 0.1); vibrate(16);
+        burst(K.x + K.dir * 30, K.y - 90, 12, { rnd: Math.random, colors: [PC.oro3, PC.bla2],
+                                              speed: 220, life: 0.4, size: 4, grav: 120 });
+      } else {
+        this.combo = n + 1;
+        this.comboT = 1.0;
+        if (n === 2) { cam.shake(2.5, 0.1); vibrate(12); }
+        else vibrate(5);
+      }
     }
-    // El EMPUJON de escudo
-    if (K.escId !== antesEsc) {
-      SFX.clang(); vibrate(14); cam.shake(2, 0.08);
-      burst(K.x + K.dir * 40, K.y - 70, 7, { rnd: Math.random, colors: [PC.ace3, PC.oro3], speed: 170, life: 0.3, size: 4, grav: 180 });
-      this.msg = 'EMPUJON'; this.msgT = 0.6;
-    }
-    // La PARADA perfecta: destello de oro y el aviso
-    if (K.parada > 0 && antesParada <= 0) {
-      SFX.clang(); vibrate(22); cam.shake(4, 0.14); this.hitstop = 7 / 60;
-      burst(K.x + K.dir * 34, K.y - 74, 18, { rnd: Math.random, colors: [PC.oro3, PC.bla2, PC.ace4], speed: 300, life: 0.5, size: 4, grav: 60 });
-      this.msg = 'PARADA!'; this.msgT = 0.9;
-    }
+    // ESQUIVAR vuelve a estar listo: el boton lo dice con su aro.
+    if (antesCd > 0 && K.esqCd <= 0) this.pulsos.esquivar = 1;
     // El polvo sale de DONDE PISA (el suelo, una repisa o un escombro), no
     // siempre de la linea del suelo.
     if (!antesSuelo && K.enSuelo) {
@@ -132,9 +140,10 @@ export default {
       SFX.aterriza(); cam.shake(1.5, 0.08);
     }
     if (antesSt !== C.SALTA && K.st === C.SALTA) { SFX.salto(); this.saltos++; vibrate(6); }
-    if (antesSt !== C.RUEDA && K.st === C.RUEDA) {
-      SFX.rodar(); this.rodadas++; vibrate(8);
-      burst(K.x, K.y, 8, { rnd: Math.random, colors: [PA.polvo1, PA.polvo3], speed: 100, life: 0.28, size: 4, grav: 400 });
+    if (antesSt !== C.ESQUIVA && K.st === C.ESQUIVA) {
+      SFX.rodar(); this.esquivas++; vibrate(8);
+      // el polvo del impulso, del suelo del que despega
+      burst(K.x, K.y, 10, { rnd: Math.random, colors: [PA.polvo1, PA.polvo3], speed: 140, life: 0.3, size: 4, grav: 400 });
     }
     // Polvo al correr
     if (K.st === C.CORRE && K.enSuelo && ((this.t * 12) | 0) % 3 === 0) {
@@ -152,7 +161,8 @@ export default {
     // 11 px: la diferencia entre esquivar y comer el golpe.
     OG.stepOgro(O, K, dt);
     // El cuerpo del ogro es SOLIDO: sin esto ella se mete dentro de la
-    // barriga y todas las distancias dejan de significar nada.
+    // barriga y todas las distancias dejan de significar nada. (Esquivando lo
+    // atraviesa: es la respuesta a la embestida. Ver OG.empujaCuerpo.)
     OG.empujaCuerpo(O, K);
 
     // El pisoton acaba de nacer: temblor, polvo, una grieta en el suelo... y
@@ -203,13 +213,17 @@ export default {
     if (C.espadaActiva(K) && O.vivo && !K.golpeo) {
       const [px] = C.puntaEspada(K);
       if (OG.espadaTocaOgro(O, px, K.x)) {
-        const dano = C.TAJOS[K.combo][4];
+        const dano = C.danoTajo(K);
         if (OG.hiereOgro(O, dano, K.dir)) {
           K.golpeo = 1;
           const fuerte = K.combo === 2;
-          this.hitstop = (fuerte ? 8 : 5) / 60;
+          this.hitstop = (K.contra ? 11 : fuerte ? 8 : 5) / 60;
           this.flashO = 0.1;
-          cam.shake(fuerte ? 4 : 3, 0.12);
+          cam.shake(K.contra ? 6 : fuerte ? 4 : 3, 0.12);
+          if (K.contra) {
+            burst(O.x + K.dir * -20, SUELO - 130, 16, { rnd: Math.random, colors: [PC.oro3, PC.bla2, PC.ace4],
+                                                       speed: 340, life: 0.5, size: 4, grav: 200 });
+          }
           SFX.corta(); vibrate(fuerte ? 22 : 14);
           burst(O.x + K.dir * -30, SUELO - 120, 14,
                 { rnd: Math.random, colors: [POG.pie3, POG.pie2, '#8b1a2b'],
@@ -217,45 +231,40 @@ export default {
         }
       }
     }
-    // El EMPUJON de escudo no hace daño, pero lo aparta.
-    if (C.escudoActivo(K) && O.vivo && Math.abs(O.x - K.x) < OG.CUERPO_R + 60) {
-      if (O.st !== OG.ATACA) { O.x += K.dir * 26; cam.shake(2.5, 0.1); SFX.clang(); }
-    }
-
     // --- EL OGRO LE PEGA A ELLA ---
-    // Cuatro ramas, que son las cuatro que devuelve C.herir().
-    if (O.vivo && K.vivo) {
-      let sx = null, dano = 0;
-      if (OG.garroteActivo(O)) {
-        const gp = OG.golpeOgro(O);
-        if (Math.abs(K.x - gp.x) < gp.r + 26) { sx = gp.x; dano = gp.dano; }
-      }
-      const w = OG.ondaGolpea(O, K);
-      if (!sx && w) { sx = w.x; dano = OG.ONDA_DANO; }
-      if (sx !== null) {
-        const r = C.herir(K, sx);
-        if (r === 'parada') {
-          // El PARRY: el premio ya lo pone herir() (K.parada). Aqui se le
-          // devuelve el golpe al ogro: se queda abierto.
-          O.st = OG.ABIERTO; O.t = 0; O.abiertoT = 0.55; O.atk = -1;
-          O.abiertoPor = OG.POR_PARADA;
-          this.hitstop = 9 / 60; cam.shake(4, 0.14); SFX.clang(); vibrate(26);
-          this.msg = 'PARADA!'; this.msgT = 0.8;
-          burst(K.x + K.dir * 30, K.y - 90, 14,
-                { rnd: Math.random, colors: [PC.ace4, PC.ace3, PC.oro3],
-                  speed: 300, life: 0.45, size: 4, grav: 200 });
-        } else if (r === 'bloqueado') {
-          this.hitstop = 4 / 60; cam.shake(2.5, 0.1); SFX.clang(); vibrate(14);
-          burst(K.x + K.dir * 26, K.y - 80, 8,
-                { rnd: Math.random, colors: [PC.ace3, PC.ace2], speed: 200,
-                  life: 0.35, size: 3, grav: 300 });
-        } else if (r === true) {
-          // Le entra de verdad.
-          for (let i = 1; i < dano; i++) if (K.hp > 0) { K.hp--; }
-          if (K.hp < 0) K.hp = 0;
-          if (K.hp <= 0) { K.vivo = false; K.st = C.MUERTO; }
-          this.duele(K);
-        }
+    // QUE le pega lo dice OG.golpeaA (el garrote con su tipo de golpe, o una
+    // onda), y si le entra lo decide C.herir: la misma regla que mide el arnes.
+    // Cinco ramas, que son las cinco que devuelve C.herir().
+    const golpe = O.vivo && K.vivo ? OG.golpeaA(O, K) : null;
+    if (golpe) {
+      const r = C.herir(K, golpe.x, golpe.tipo, golpe.dano);
+      if (r === 'parada') {
+        // LA PARADA: el garrote rebota y el ogro se queda abierto lo que dura
+        // la ocasion de contraatacar (el premio de ella lo pone herir()).
+        OG.abrePorParada(O, C.PARADA_PREMIO);
+        this.hitstop = 9 / 60; cam.shake(4, 0.14); SFX.clang(); vibrate(26);
+        this.msg = 'PARADA!'; this.msgT = 0.8;
+        this.chispa = 0.25;
+        burst(K.x + K.dir * 44, K.y - 110, 18,
+              { rnd: Math.random, colors: [PC.oro3, PC.bla2, PC.ace4],
+                speed: 320, life: 0.5, size: 4, grav: 120 });
+      } else if (r === 'bloqueado') {
+        this.hitstop = 4 / 60; cam.shake(2.5, 0.1); SFX.clang(); vibrate(14);
+        burst(K.x + K.dir * 40, K.y - 110, 8,
+              { rnd: Math.random, colors: [PC.ace3, PC.ace2], speed: 200,
+                life: 0.35, size: 3, grav: 300 });
+      } else if (r === 'rota') {
+        // Con la guardia arriba contra algo que no se para: se le rompe, le
+        // entra igual, y se le dice por que (es como se aprende que el
+        // barrido se esquiva y la onda se salta).
+        this.duele(K);
+        this.msg = golpe.tipo === 'onda' || golpe.tipo === 'pisoton' ? 'SALTA LAS ONDAS' : 'GUARDIA ROTA';
+        this.msgT = 1.0;
+        burst(K.x + K.dir * 30, K.y - 100, 12,
+              { rnd: Math.random, colors: [PC.ace3, PC.ace2, PC.ace1], speed: 260,
+                life: 0.45, size: 4, grav: 500 });
+      } else if (r === true) {
+        this.duele(K);
       }
     }
 
@@ -314,15 +323,15 @@ export default {
 
   onInput(ev, ctx) {
     if (ev.type === 'down') {
-      if (this.bRueda.down(ev)) { this.rueda = true; return; }
-      if (this.bEscudo.down(ev)) return;
-      if (this.bTajo.down(ev)) { this.golpea = true; return; }
-      if (this.bSalta.down(ev)) { this.salta = true; return; }
+      if (this.bEsquiva.down(ev)) { this.esquiva = true; this.pulsos.esquivar = 1; return; }
+      if (this.bGuardia.down(ev)) { this.pulsos.guardia = 1; return; }
+      if (this.bAtaca.down(ev)) { this.golpea = true; this.pulsos.atacar = 1; return; }
+      if (this.bSalta.down(ev)) { this.salta = true; this.pulsos.saltar = 1; return; }
       if (ev.x < VW * 0.45 && ev.y > 240) { this.stick.down(ev); return; }
     } else if (ev.type === 'move') {
       this.stick.move(ev);
     } else {
-      this.stick.up(ev); this.bSalta.up(ev); this.bTajo.up(ev); this.bRueda.up(ev); this.bEscudo.up(ev);
+      this.stick.up(ev); this.bSalta.up(ev); this.bAtaca.up(ev); this.bEsquiva.up(ev); this.bGuardia.up(ev);
     }
   },
 
@@ -434,9 +443,25 @@ export default {
     // media luna blanca del pack), asi que la escena ya no pinta el arco que
     // pintaba para la muñeca de antes: saldrian dos estelas una encima de otra.
     const [p, f] = C.pose(K);
-    const parpadea = K.iframe > 0 && (((K.iframe * 14) | 0) & 1);
-    const rastro = K.st === C.RUEDA && C.invulnerable(K) ? 1 : 0;
-    if (!parpadea) drawRomina(g, K.x - cx, K.y, K.dir, p, f, rastro);
+    // El DESTELLO del golpe recibido: blanca entera los primeros 0.1 s. Y
+    // mientras dura, no parpadea: el destello es lo que tiene que verse.
+    const desde = K.vivo ? K.t - K.hurtIni : K.muereT;
+    const blanco = (K.st === C.DOLOR || K.st === C.MUERTO) ? Math.max(0, 1 - desde / 0.1) : 0;
+    const parpadea = !blanco && K.iframe > 0 && (((K.iframe * 14) | 0) & 1);
+    // La estela de sombras de la ESQUIVA, detras de hacia donde se mueve.
+    const rastro = K.st === C.ESQUIVA && C.invulnerable(K) ? 1 : 0;
+    if (!parpadea) drawRomina(g, K.x - cx, K.y, K.dir, p, f, rastro, blanco, K.st === C.ESQUIVA ? K.esqDir : K.dir);
+    // LA CHISPA DE LA PARADA: una estrella de oro donde la espada para el
+    // garrote. Dura un cuarto de segundo y se encoge.
+    if (this.chispa > 0) {
+      const u = this.chispa / 0.25, sx = Math.round(K.x + K.dir * 44 - cx), sy = Math.round(K.y - 112);
+      const L = Math.round(10 + 22 * u);
+      g.fillStyle = PC.bla2;
+      g.fillRect(sx - L, sy - 2, L * 2, 4); g.fillRect(sx - 2, sy - L, 4, L * 2);
+      g.fillStyle = PC.oro3;
+      const D = Math.round(L * 0.6);
+      for (let i = -D; i <= D; i += 2) { g.fillRect(sx + i - 1, sy + i - 1, 3, 3); g.fillRect(sx + i - 1, sy - i - 1, 3, 3); }
+    }
 
     // Lo que cae de la boveda, por delante de todo: le cae ENCIMA.
     drawPiedras(g, this.A, this.t);
@@ -477,7 +502,7 @@ export default {
     }
     text(g, 'OGRO', bx, by + 20, POG.pie4, 2);
 
-    const s = `TAJOS ${this.golpes}  SALTOS ${this.saltos}  RODADAS ${this.rodadas}`;
+    const s = `TAJOS ${this.golpes}  SALTOS ${this.saltos}  ESQUIVAS ${this.esquivas}`;
     text(g, s, VW - 14 - measure(s, 2), 36, '#c9a9bc', 2);
 
     // El cartel de fin de pelea.
@@ -504,38 +529,34 @@ export default {
   },
 
   drawControles(g) {
-    // Stick: solo se ve cuando el pulgar lo despierta
-    if (this.stick.active) {
-      const ox = Math.round(this.stick.ox), oy = Math.round(this.stick.oy);
-      g.globalAlpha = 0.25; g.fillStyle = PC.ves4;
-      g.fillRect(ox - 60, oy - 60, 120, 4); g.fillRect(ox - 60, oy + 56, 120, 4);
-      g.fillRect(ox - 60, oy - 60, 4, 120); g.fillRect(ox + 56, oy - 60, 4, 120);
-      g.globalAlpha = 1; g.fillStyle = PC.bla2;
-      g.fillRect(Math.round(ox + this.stick.dx * 60) - 8, Math.round(oy + this.stick.dy * 60) - 8, 17, 17);
-    } else {
-      g.globalAlpha = 0.18; g.fillStyle = PC.ves4;
-      g.fillRect(116, SUELO + 36, 68, 4); g.fillRect(148, SUELO + 8, 4, 60);
-      g.globalAlpha = 1;
+    // El stick: solo se ve entero cuando el pulgar lo despierta.
+    BT.stick(g, this.H, this.stick, 150, SUELO + 38);
+    const K = this.K, P = this.pulsos;
+    const late = 0.55 + 0.45 * Math.sin(this.t * 14);
+    const contra = K.parada > 0;
+    // GUARDIA brilla en oro en la ventana de la PARADA: asi se aprende cuando.
+    const enVentana = K.st === C.BLOQUEA && K.bloqT >= C.BLOQ_SUBE && K.bloqT < C.BLOQ_SUBE + C.PARADA_VENT;
+    BT.boton(g, this.H, 'saltar', this.bSalta, { apretado: this.bSalta.pressed, pulso: P.saltar, nombre: 'SALTAR' });
+    BT.boton(g, this.H, 'guardia', this.bGuardia, { apretado: this.bGuardia.pressed, pulso: P.guardia,
+      brillo: enVentana ? 1 : 0, nombre: 'GUARDIA' });
+    BT.boton(g, this.H, 'esquivar', this.bEsquiva, { apretado: this.bEsquiva.pressed, pulso: P.esquivar,
+      recarga: K.esqCd > 0 ? K.esqCd / C.ESQ_CD : 0, nombre: 'ESQUIVAR' });
+    // ATACAR: tras una parada late en oro y dice CONTRA.
+    BT.boton(g, this.H, 'atacar', this.bAtaca, { apretado: this.bAtaca.pressed, pulso: P.atacar,
+      brillo: contra ? late : 0, nombre: contra ? 'CONTRA!' : 'ATACAR', colorNombre: contra ? PC.oro3 : undefined });
+    // Las marcas del COMBO encima de ATACAR: una por golpe encadenado.
+    if (this.comboT > 0 && this.combo > 0) {
+      const b = this.bAtaca;
+      for (let i = 0; i < 3; i++) {
+        const x = b.x - 16 + i * 16, y = b.y - b.r - 14;
+        g.fillStyle = '#1a0e14';
+        g.fillRect(x - 5, y - 2, 10, 5); g.fillRect(x - 2, y - 5, 5, 11);
+        g.fillStyle = i < this.combo ? (this.combo === 3 ? PC.oro3 : PC.ves4) : '#4a2a38';
+        g.fillRect(x - 3, y - 1, 7, 3); g.fillRect(x - 1, y - 3, 3, 7);
+      }
     }
-    const K = this.K;
-    boton(g, this.bSalta, 34, PC.ves1, PC.ves4, 'SALTA', false);
-    boton(g, this.bTajo, 40, PC.ves1, PC.oro3, 'TAJO', false);
-    boton(g, this.bRueda, 32, PC.ves1, PC.ves4, 'RUEDA', K.rollCd > 0);
-    boton(g, this.bEscudo, 32, PC.ace1, PC.ace3, 'ESCUDO', false);
   },
 
   destroy() { this.A = null; },
 };
 
-function boton(g, b, r, fondo, borde, txt, frio) {
-  g.globalAlpha = frio ? 0.28 : (b.pressed ? 0.95 : 0.62);
-  g.fillStyle = fondo;
-  g.fillRect(b.x - r, b.y - r, r * 2, r * 2);
-  g.fillStyle = borde;
-  g.fillRect(b.x - r, b.y - r, r * 2, 4);
-  g.fillRect(b.x - r, b.y + r - 4, r * 2, 4);
-  g.fillRect(b.x - r, b.y - r, 4, r * 2);
-  g.fillRect(b.x + r - 4, b.y - r, 4, r * 2);
-  g.globalAlpha = 1;
-  textCenter(g, txt, b.x, b.y - 7, frio ? '#5a5560' : '#ffffff', 2);
-}

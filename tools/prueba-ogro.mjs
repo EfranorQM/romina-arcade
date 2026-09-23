@@ -35,7 +35,7 @@ function semilla(s) {
   let x = s >>> 0;
   return function () { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; };
 }
-const nada = { dx: 0, salta: false, golpea: false, rueda: false, saltaAbajo: false, bloquea: false };
+const nada = { dx: 0, salta: false, golpea: false, esquiva: false, saltaAbajo: false, bloquea: false };
 
 console.log('== 1) LOS TELEGRAFOS DAN TIEMPO A REACCIONAR ==');
 {
@@ -167,14 +167,83 @@ console.log('== 5) LOS TRES TAJOS DEL COMBO ALCANZAN AL OGRO ==');
   ok(!O.espadaTocaOgro(og, punta2, K.x), 'de espaldas al ogro, el tajo NO le alcanza (control)');
 }
 
-console.log('== 6) CADA ATAQUE PIDE UNA RESPUESTA DISTINTA ==');
+console.log('== 6) CADA ATAQUE PIDE SU RESPUESTA, Y SE PUEDE DAR A TIEMPO ==');
 {
-  // Un jefe donde todo se resuelve con el mismo boton es plano por muchos
-  // ataques que tenga. Esto no lo puede medir el motor: es la tabla de diseño,
-  // y esta aqui para que si alguien cambia un ataque vea que rompe la variedad.
-  const RESP = ['parry/escudo', 'saltar', 'rodar', 'apartarse'];
-  const unicas = new Set(RESP);
-  ok(unicas.size === RESP.length, 'las ' + RESP.length + ' respuestas son distintas: ' + RESP.join(', '));
+  // Esto era una tabla escrita a mano ('parry', 'saltar', 'rodar',
+  // 'apartarse') y MENTIA: al medirlo, la guardia lo paraba TODO y de cerca ni
+  // siquiera paraba el garrotazo. Ahora se juega cada ataque con la regla REAL
+  // (golpeaA, herir, empujaCuerpo, como en la escena) y se mide EN CUANTOS
+  // FRAMES se puede pulsar cada respuesta y salir ilesa, igual que la onda en
+  // la seccion 2. Hace falta una ventana de 250 ms: la reaccion en movil.
+  function ataque(atk, dist, resp, ox = 500) {
+    const og = O.makeOgro(ox); og.dir = 1;
+    const K = C.makeCaballero(ox + dist); K.dir = -1;
+    og.st = O.ATACA; og.atk = atk; og.atkT = 0; og.golpeo = 0;
+    const r = { pierde: 0, rota: 0, parada: 0 };
+    // Hasta que el ataque acaba: lo que venga despues es OTRO ataque.
+    for (let n = 0; n < 200 && og.st === O.ATACA; n++) {
+      C.stepCaballero(K, resp(n * DT), DT);
+      O.stepOgro(og, K, DT, () => 0.5);
+      O.empujaCuerpo(og, K);
+      const g = O.golpeaA(og, K);
+      if (!g) continue;
+      const hp = K.hp, res = C.herir(K, g.x, g.tipo);
+      if (K.hp < hp) r.pierde++;
+      if (res === 'rota') r.rota++;
+      if (res === 'parada') { r.parada++; O.abrePorParada(og, C.PARADA_PREMIO); }
+    }
+    r.pared = og.st === O.ABIERTO && og.abiertoPor === O.POR_PARED;
+    return r;
+  }
+  const pulsa = (tp, que) => t => ({ ...nada, ...(Math.abs(t - tp) < DT / 2 ? que : {}) });
+  const mantiene = (tp) => t => ({ ...nada, bloquea: t >= tp });
+  // Los frames en que pulsar la respuesta salva, hasta el final del golpe.
+  function ventana(atk, dist, resp) {
+    const salva = [];
+    for (let k = 0; k * DT <= O.ATAQUES[atk][2]; k++) if (ataque(atk, dist, resp(k * DT)).pierde === 0) salva.push(k * DT);
+    return salva.length ? (salva[salva.length - 1] - salva[0] + DT) * 1000 : 0;
+  }
+  const ATRAS = { esquiva: true }, HACIA = { esquiva: true, dx: -1 };
+  const ms = v => v.toFixed(0) + ' ms';
+
+  // GARROTE: la GUARDIA. Y a tiempo, la PARADA.
+  for (const d of [90, 150, 250]) {
+    const w = ventana(O.GARROTE, d, mantiene);
+    ok(w >= 250, 'garrote a ' + d + ' px: levantar la GUARDIA salva pulsando en ' + ms(w));
+  }
+  let hayParada = false;
+  for (let k = 0; k * DT < O.ATAQUES[O.GARROTE][1]; k++) if (ataque(O.GARROTE, 150, mantiene(k * DT)).parada) hayParada = true;
+  ok(hayParada, 'y levantandola justo antes del golpe, es una PARADA');
+  ok(ataque(O.GARROTE, 150, () => nada).pierde > 0, 'quieta, el garrote le da (control)');
+
+  // BARRIDO: ESQUIVAR. La guardia se rompe y el salto no llega.
+  for (const d of [90, 150, 250]) {
+    ok(ataque(O.BARRIDO, d, mantiene(-1)).rota > 0, 'barrido a ' + d + ' px: le ROMPE la guardia');
+    const salta = ventana(O.BARRIDO, d, tp => t => ({ ...nada, salta: Math.abs(t - tp) < DT / 2, saltaAbajo: t >= tp }));
+    ok(salta < 250, '   saltar no es la respuesta (salva en ' + ms(salta) + ')');
+    const at = ventana(O.BARRIDO, d, tp => pulsa(tp, ATRAS)), ha = ventana(O.BARRIDO, d, tp => pulsa(tp, HACIA));
+    ok(Math.max(at, ha) >= 250, '   ESQUIVAR salva: hacia atras en ' + ms(at) + ', atravesandolo en ' + ms(ha));
+    if (d >= 150) ok(at >= 250, '   y desde ' + d + ' px vale la esquiva sin stick (hacia atras)');
+  }
+
+  // EMBESTIDA: ESQUIVAR ATRAVESANDOLO. La guardia se rompe y, si ella la
+  // esquiva, el ogro se estrella contra la pared.
+  for (const d of [90, 150, 250]) {
+    ok(ataque(O.EMBESTIDA, d, mantiene(-1)).rota > 0, 'embestida a ' + d + ' px: le ROMPE la guardia');
+    const ha = ventana(O.EMBESTIDA, d, tp => pulsa(tp, HACIA));
+    ok(ha >= 250, '   esquivar ATRAVESANDOLO salva pulsando en ' + ms(ha));
+  }
+  // Con ella entre el y la pared (la embestida corre ~215 px: tiene que
+  // quedarle la pared a mano).
+  let choca = false;
+  for (let k = 0; k * DT < 0.5 && !choca; k++) {
+    const r = ataque(O.EMBESTIDA, 120, pulsa(k * DT, HACIA), C.AX1 - 220);
+    if (r.pierde === 0 && r.pared) choca = true;
+  }
+  ok(choca, 'esquivada contra la pared, el ogro sigue de largo y se estrella');
+
+  // PISOTON: SALTAR (la ventana de la onda es la seccion 2). La guardia no.
+  ok(ataque(O.PISOTON, 250, mantiene(-1)).pierde > 0, 'pisoton: con la guardia arriba, la onda le entra igual');
 }
 
 console.log('== 7) LA VENTANA DE CASTIGO CABE UN COMBO ==');

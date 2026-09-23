@@ -10,7 +10,9 @@
        python tools/gif.py escena:arena vistas/arena.gif
 
      Guiones: arena (sube a la repisa, el pisoton pasa por debajo, caen los
-     cascotes y baja a pegarle). -->
+     cascotes y baja a pegarle), parada (para el garrotazo y CONTRAATACA),
+     barrido (lo esquiva hacia atras) y embestida (la esquiva atravesandolo y
+     el ogro se estrella contra la pared). -->
 <meta charset="utf-8">
 <style>body{margin:0;background:#000}canvas{display:block}</style>
 <canvas id="tira"></canvas>
@@ -33,7 +35,7 @@ const DT = 1 / 60;
 const GUIONES = {
   arena(n, E, m) {
     const K = E.K, O = E.O, R = AR.REPISAS[0];
-    E.salta = false; E.golpea = false; E.rueda = false;
+    E.salta = false; E.golpea = false; E.esquiva = false;
     if (n === 0) { O.esperaT = 99; }                  // el ogro espera a su señal
     if (m.fase === 0) {
       // 1. corre hacia la repisa izquierda y salta ANTES de llegar: en el aire
@@ -63,7 +65,52 @@ const GUIONES = {
       if (k === 0 || k === 12 || k === 24) E.golpea = true;
     }
   },
+
+  // LA PARADA: el ogro suelta un garrotazo; ella levanta la guardia justo a
+  // tiempo (el boton brilla en oro en esa ventana), el garrote rebota y el
+  // siguiente ATACAR es el CONTRAATAQUE.
+  parada(n, E, m) {
+    const K = E.K, O = E.O;
+    suelta(E);
+    if (n === 0) { coloca(E, 480, 1, 700, -1); }
+    if (n === 12) ataca(O, OG.GARROTE);
+    E.bGuardia.pressed = n >= 26 && n < 46;
+    if (n === 26) E.pulsos.guardia = 1;
+    if (n === 58) pulsa(E, 'golpea', 'atacar');
+  },
+
+  // EL BARRIDO: la guardia no lo para; se esquiva hacia atras (sin stick).
+  barrido(n, E, m) {
+    suelta(E);
+    if (n === 0) { coloca(E, 560, 1, 700, -1); }
+    if (n === 10) ataca(E.O, OG.BARRIDO);
+    if (n === 28) pulsa(E, 'esquiva', 'esquivar');
+  },
+
+  // LA EMBESTIDA: se esquiva ATRAVESANDOLO (stick hacia el + ESQUIVAR). Con la
+  // pared detras de ella, el ogro sigue de largo, se estrella y se queda
+  // aturdido: el hueco para el combo.
+  embestida(n, E, m) {
+    suelta(E);
+    if (n === 0) { coloca(E, 150, 1, 320, -1); }
+    if (n === 10) ataca(E.O, OG.EMBESTIDA);
+    E.stick.dx = n >= 28 && n < 30 ? 1 : 0;
+    if (n === 28) pulsa(E, 'esquiva', 'esquivar');
+    if (n > 60 && n < 72) E.stick.dx = -1;             // se da la vuelta hacia el
+    if (n === 78 || n === 90 || n === 104) pulsa(E, 'golpea', 'atacar');
+  },
 };
+
+// Lo que el pulgar suelta cada paso (los flancos duran un frame).
+function suelta(E) { E.salta = false; E.golpea = false; E.esquiva = false; E.stick.dx = 0; }
+// Pulsar un boton: el flanco y el aro del boton, como hace onInput.
+function pulsa(E, flanco, boton) { E[flanco] = true; E.pulsos[boton] = 1; }
+function coloca(E, kx, kdir, ox, odir) {
+  E.K.x = kx; E.K.dir = kdir; E.O.x = ox; E.O.dir = odir; E.O.esperaT = 99;
+}
+function ataca(O, cual) {
+  O.esperaT = 0; O.st = OG.ATACA; O.atk = cual; O.atkT = 0; O.golpeo = 0; O.animT = 0;
+}
 
 const params = new URLSearchParams(location.search);
 const guion = GUIONES[params.get('s') || 'arena'];

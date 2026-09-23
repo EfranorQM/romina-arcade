@@ -22,7 +22,7 @@ const REACCION = 0.25;
 let fallos = 0;
 const ok = (cond, msg) => { console.log((cond ? '   ok  ' : '   MAL ') + msg); if (!cond) fallos++; };
 const f1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
-const nada = { dx: 0, salta: false, golpea: false, rueda: false, saltaAbajo: false, bloquea: false };
+const nada = { dx: 0, salta: false, golpea: false, esquiva: false, saltaAbajo: false, bloquea: false };
 function semilla(s) {
   let x = s >>> 0;
   return function () { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; };
@@ -103,18 +103,18 @@ console.log('== 3) LOS CASCOTES AVISAN CON TIEMPO ==');
     total++; if (!golpe) salvadas++;
   }
   ok(salvadas === total, 'reaccionando a los ' + REACCION + ' s y corriendo, se aparta de ' + salvadas + ' de ' + total + ' piedras');
-  // Rodando (invulnerable) tampoco le entra. La piedra se pone rozandole la
-  // cabeza cuando YA esta en la ventana invulnerable (0.06 a 0.28 s): ponerla
-  // antes mediria los primeros 0.06 s, en que rodar todavia no protege.
+  // Esquivando (invulnerable) tampoco le entra. La piedra se pone rozandole la
+  // cabeza cuando YA esta en la ventana invulnerable (desde ESQ_INV0): ponerla
+  // antes mediria el instante del impulso, en que todavia no protege.
   {
     const A = AR.makeArena(); const K = C.makeCaballero(560); const og = O.makeOgro(1000);
-    C.stepCaballero(K, { ...nada, rueda: true }, DT, AR.mundo(A));
+    C.stepCaballero(K, { ...nada, esquiva: true }, DT, AR.mundo(A));
     corre(K, 5, nada, AR.mundo(A));
-    ok(C.invulnerable(K), 'a los ' + (6 * DT).toFixed(2) + ' s de rodar ya es invulnerable');
+    ok(C.invulnerable(K), 'a los ' + (6 * DT).toFixed(2) + ' s de esquivar ya es invulnerable');
     A.piedras.push({ id: 1, x: K.x, tipo: 2, fase: 'cae', t: AR.AVISO_T, y: K.y - 172, vy: 1200 });
     let golpe = false;
     for (let i = 0; i < 4; i++) { C.stepCaballero(K, nada, DT, AR.mundo(A)); golpe = golpe || AR.stepArena(A, K, og, DT).some(e => e.tipo === 'golpea'); }
-    ok(!golpe, 'rodando en la ventana invulnerable, la piedra no le entra');
+    ok(!golpe, 'esquivando en la ventana invulnerable, la piedra no le entra');
   }
 }
 

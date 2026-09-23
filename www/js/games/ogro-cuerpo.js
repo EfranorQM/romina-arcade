@@ -3,15 +3,15 @@
 // (tools/prueba-ogro.mjs). Esa es la regla del proyecto y aqui se cumple.
 //
 // EL PRINCIPIO DE DISEÑO: cada ataque tiene UNA respuesta correcta distinta.
-// Un jefe donde todo se resuelve rodando es un jefe plano por muchos ataques
-// que tenga. Aqui:
-//   GARROTE   se para con el escudo (es el unico parryable)
+// Un jefe donde todo se resuelve esquivando es un jefe plano por muchos
+// ataques que tenga. Aqui:
+//   GARROTE   se para con la GUARDIA (el unico que se para; a tiempo, PARADA)
 //   PISOTON   se salta (manda una onda por el suelo)
-//   BARRIDO   se rueda (pasa a la altura del pecho, el salto no salva)
-//   EMBESTIDA se esquiva a un lado, y si falla choca contra la pared
+//   BARRIDO   se ESQUIVA (pasa a la altura del pecho, el salto no salva)
+//   EMBESTIDA hay que quitarse de en medio, y si falla choca contra la pared
 // Si algun dia dos ataques comparten respuesta, el jefe pierde gracia.
 
-import { SUELO, AX0, AX1 } from './caba-cuerpo.js';
+import { SUELO, AX0, AX1, ESQUIVA as ESQUIVA_K, invulnerable as invulnerableK } from './caba-cuerpo.js';
 
 // --- Medidas ---
 // EL RADIO DE COLISION NO ES EL TAMAÑO VISUAL. Es la leccion que ya costo
@@ -50,14 +50,15 @@ export const ATAQUES = [
   // y de el nace la ONDA que viaja por el suelo. La recuperacion de 0.73 s
   // es el hueco de castigo mas grande que da el jefe.
   [1.45, 0.62, 0.72, 0, 2, 120],
-  // BARRIDO: una estocada a la altura del pecho, que no se salta: hay que
-  // rodarla. Su parte activa (0.16) no pasa de los 220 ms utiles de la
-  // ventana invulnerable de la rodada (ROLL_INV0 0.06 a ROLL_INV1 0.28), asi
-  // que rodar SIEMPRE tiene solucion si se clava. Sale en el mismo fotograma
-  // que el garrote, asi que llega igual de lejos.
+  // BARRIDO: una estocada a la altura del pecho, que no se salta ni se para:
+  // hay que ESQUIVARLA. Su parte activa (0.16) cabe en los 340 ms
+  // invulnerables de la esquiva (ESQ_INV0 a ESQ_INV1); la ventana para
+  // pulsar la mide la seccion 6 de tools/prueba-ogro.mjs. Sale en el mismo
+  // fotograma que el garrote, asi que llega igual de lejos.
   [0.88, 0.40, 0.56, 34, 1, 240],
-  // EMBESTIDA: cruza la arena. Si ella se aparta, el ogro choca con la pared
-  // y queda abierto 1.25 s: el hueco mas grande del jefe.
+  // EMBESTIDA: cruza la arena. Se esquiva ATRAVESANDOLO (ver empujaCuerpo),
+  // y si la pared esta cerca el ogro choca con ella y queda abierto 1.25 s:
+  // el hueco mas grande del jefe.
   [1.30, 0.50, 1.00, 0, 2, 70],
 ];
 
@@ -73,7 +74,7 @@ export const ONDA_CIEGA = 60;
 export const ESPERA = 0, ANDA = 1, ATACA = 2, ABIERTO = 3, DOLOR = 4, RUGE = 5, MUERTO = 6;
 
 // Por que se quedo ABIERTO. A la fisica le da igual (la ventana es la misma),
-// pero se VE distinto: jadeando tras un ataque, rebotado del escudo o aturdido
+// pero se VE distinto: jadeando tras un ataque, rebotado de la parada o aturdido
 // contra la pared. Lo apunta quien lo abre: aqui el fin de un ataque y el
 // choque, y la escena la parada.
 export const POR_FIN = 'fin', POR_PARADA = 'parada', POR_PARED = 'pared';
@@ -114,7 +115,14 @@ export function ogroAbierto(O) { return O.st === ABIERTO; }
 // Empuja a ella fuera del cuerpo solido del ogro. Sin esto, ella se mete
 // dentro de la barriga y todas las medidas de distancia dejan de significar
 // nada (se puede pegar desde dentro).
+//
+// MENOS ESQUIVANDO: mientras la esquiva la hace invulnerable, lo ATRAVIESA.
+// Es la respuesta a la EMBESTIDA: en una arena de un solo eje no hay "a un
+// lado", y sin atravesarlo el cuerpo la arrastraba hasta la pared (medido: de
+// cerca no la salvaba nada). Saltando hacia el, cae a su espalda y el sigue
+// de largo hasta estrellarse.
 export function empujaCuerpo(O, K, radioK = 26) {
+  if (K.st === ESQUIVA_K && invulnerableK(K)) return;
   const min = CUERPO_R + radioK;
   const d = K.x - O.x;
   const ad = Math.abs(d);
@@ -123,6 +131,13 @@ export function empujaCuerpo(O, K, radioK = 26) {
   K.x = O.x + s * min;
   if (K.x < AX0) K.x = AX0;
   if (K.x > AX1) K.x = AX1;
+}
+
+// Una PARADA de ella: el garrote rebota y el ogro se queda abierto `t`
+// segundos (C.PARADA_PREMIO), que es cuando cabe el contraataque.
+export function abrePorParada(O, t) {
+  O.st = ABIERTO; O.t = 0; O.abiertoT = t; O.atk = -1; O.vx = 0;
+  O.abiertoPor = POR_PARADA;
 }
 
 // ¿La espada de ella toca el cuerpo del ogro?
@@ -299,6 +314,26 @@ export function hiereOgro(O, dano, dirGolpe) {
     O.st = DOLOR; O.t = 0; O.vx = dirGolpe * 150;
   }
   return true;
+}
+
+// Que le esta pegando el ogro a ella en este instante: el garrote (con el
+// TIPO de golpe, porque la guardia solo para el garrotazo) o una onda. Null si
+// nada. Vive aqui y no en la escena para que el arnes mida la MISMA regla con
+// la que se juega.
+//
+// El golpe dice que viene DESDE EL OGRO (x: O.x), no desde el punto donde cae
+// el garrote: con ella pegada a el, ese punto queda A SU ESPALDA, y la guardia
+// (que solo para lo que viene de frente) no paraba el garrotazo de cerca. Lo
+// destapo el arnes al medir la guardia a 90 y 150 px.
+export const TIPOS = ['garrote', 'pisoton', 'barrido', 'embestida'];
+export function golpeaA(O, K, radioK = 26) {
+  if (garroteActivo(O)) {
+    const gp = golpeOgro(O);
+    if (Math.abs(K.x - gp.x) < gp.r + radioK) return { x: O.x, dano: gp.dano, tipo: TIPOS[O.atk] };
+  }
+  const w = ondaGolpea(O, K);
+  if (w) return { x: w.x, dano: ONDA_DANO, tipo: 'onda' };
+  return null;
 }
 
 // Una onda esta tocando a ella: hay que tener los pies bajos.

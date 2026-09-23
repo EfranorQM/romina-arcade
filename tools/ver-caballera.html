@@ -7,7 +7,7 @@
 
      Con ?s=NOMBRE saca UNA accion a tamaño real, un fotograma por celda, para
      el GIF (python tools/gif.py caballera:combo salida.gif). Acciones: combo,
-     corre, salto, rodada, guardia, dolor, aire, derrota. -->
+     corre, salto, esquiva, atraviesa, guardia, parada, dolor, aire, derrota. -->
 <meta charset="utf-8">
 <style>body{margin:0;background:#241c1a}canvas{display:block}</style>
 <canvas id="c" width="1500" height="4200"></canvas>
@@ -27,7 +27,7 @@ const g = cv.getContext('2d');
 g.imageSmoothingEnabled = false;
 const SO = bakeOgro();
 const DT = 1 / 60;
-const nada = { dx: 0, salta: false, golpea: false, rueda: false, saltaAbajo: false, bloquea: false };
+const nada = { dx: 0, salta: false, golpea: false, esquiva: false, saltaAbajo: false, bloquea: false };
 
 // Cada accion: cuanto dura, que se pulsa en cada paso de 1/60 s y, si hace
 // falta, que le pasa (un golpe que le entra) en un paso concreto.
@@ -38,27 +38,39 @@ const SEC = {
   combo: { dura: 1.25, inp: n => ({ ...nada, golpea: n === 0 || n === 12 || n === 24 }) },
   corre: { dura: 1.0, inp: () => ({ ...nada, dx: 1 }) },
   salto: { dura: 0.95, inp: n => ({ ...nada, salta: n === 0, saltaAbajo: n < 20 }) },
-  rodada: { dura: 0.6, inp: n => ({ ...nada, rueda: n === 2 }) },
-  guardia: { dura: 1.3, inp: n => ({ ...nada, bloquea: n < 70, golpea: n === 48 }),
-             evento: (n, K) => { if (n === 20) C.herir(K, K.x + K.dir * 80); } },
-  dolor: { dura: 0.6, inp: () => nada, evento: (n, K) => { if (n === 4) C.herir(K, K.x + K.dir * 80); } },
+  // La esquiva sin stick: hacia atras, mirando al ogro. Arranca cerca de el.
+  esquiva: { dura: 0.65, x0: 250, inp: n => ({ ...nada, esquiva: n === 2 }) },
+  // Con el stick hacia el ogro: lo atraviesa por encima.
+  atraviesa: { dura: 0.65, x0: 180, inp: n => ({ ...nada, dx: n === 2 ? 1 : 0, esquiva: n === 2 }) },
+  // La guardia aguantada para un garrotazo (sin premio).
+  guardia: { dura: 1.0, inp: n => ({ ...nada, bloquea: n < 50 }),
+             evento: (n, K) => { if (n === 26) C.herir(K, K.x + K.dir * 80, 'garrote'); } },
+  // La PARADA (el garrotazo llega recien levantada) y el CONTRAATAQUE.
+  parada: { dura: 1.2, inp: n => ({ ...nada, bloquea: n < 24, golpea: n === 30 }),
+            evento: (n, K) => { if (n === 12) C.herir(K, K.x + K.dir * 80, 'garrote'); } },
+  dolor: { dura: 0.6, x0: 200, inp: () => nada, evento: (n, K) => { if (n === 4) C.herir(K, K.x + K.dir * 80); } },
   aire: { dura: 0.9, inp: n => ({ ...nada, salta: n === 0, saltaAbajo: n < 20, golpea: n === 10 }) },
-  derrota: { dura: 0.5, inp: () => nada,
+  derrota: { dura: 1.0, x0: 200, inp: () => nada,
              evento: (n, K) => { if (n === 6) for (let i = 0; i < C.HP0; i++) { K.iframe = 0; C.herir(K, K.x + 80); } } },
 };
 
 // Simula una accion y devuelve, para cada instante pedido, como estaba ella.
 function simula(s, tiempos) {
-  const K = C.makeCaballero(0);
+  const K = C.makeCaballero(s.x0 || 0);
   const out = [];
   let n = 0, i = 0;
   const pasos = Math.ceil(s.dura / DT) + 1;
   for (; n <= pasos && i < tiempos.length; n++) {
     while (i < tiempos.length && tiempos[i] <= n * DT + 1e-9) {
       const [p, f] = C.pose(K);
-      out.push({ x: K.x, y: K.y, dir: K.dir, p, f,
-                 rastro: K.st === C.RUEDA && C.invulnerable(K) ? 1 : 0,
-                 parpadea: K.iframe > 0 && (((K.iframe * 14) | 0) & 1) });
+      // Lo mismo que decide la escena (caballero.js) para dibujarla.
+      const desde = K.vivo ? K.t - K.hurtIni : K.muereT;
+      const blanco = (K.st === C.DOLOR || K.st === C.MUERTO) ? Math.max(0, 1 - desde / 0.1) : 0;
+      out.push({ x: K.x, y: K.y, dir: K.dir, p, f, blanco,
+                 rastro: K.st === C.ESQUIVA && C.invulnerable(K) ? 1 : 0,
+                 hacia: K.st === C.ESQUIVA ? K.esqDir : K.dir,
+                 contra: K.contra,
+                 parpadea: !blanco && K.iframe > 0 && (((K.iframe * 14) | 0) & 1) });
       i++;
     }
     if (s.evento) s.evento(n, K);
@@ -87,10 +99,10 @@ if (sola) {
     g.save(); g.translate(-240, suelo - 452); drawSalon(g, i / fps); g.restore();
     O.animT = i / fps;
     drawOgro(g, SO, 520, suelo, -1, poseOgro(O));
-    // Ella arranca en x=140 de la celda; las acciones que avanzan se ven
-    // avanzar (la rodada cruza su distancia de verdad).
-    if (!e.parpadea) drawRomina(g, 140 + e.x, suelo - (C.SUELO - e.y), e.dir, e.p, e.f, e.rastro);
-    text(g, (i / fps).toFixed(2) + 's  ' + e.p + ' ' + e.f, 8, 8, '#ffe066', 2);
+    // Ella arranca en x=140+x0 de la celda; las acciones que avanzan se ven
+    // avanzar (la esquiva cruza su distancia de verdad).
+    if (!e.parpadea) drawRomina(g, 140 + e.x, suelo - (C.SUELO - e.y), e.dir, e.p, e.f, e.rastro, e.blanco, e.hacia);
+    text(g, (i / fps).toFixed(2) + 's  ' + e.p + ' ' + e.f + (e.contra ? ' CONTRA' : ''), 8, 8, '#ffe066', 2);
     g.restore();
   }
 } else {
@@ -114,7 +126,7 @@ if (sola) {
       g.fillStyle = '#2b1f2e'; g.fillRect(cx, cy, CW - 4, 146);
       g.save(); g.beginPath(); g.rect(cx, cy, CW - 4, 146); g.clip();
       g.translate(cx + 50, cy + 136); g.scale(K5, K5);
-      if (!e.parpadea) drawRomina(g, 0, -(C.SUELO - e.y), e.dir, e.p, e.f, e.rastro);
+      if (!e.parpadea) drawRomina(g, 0, -(C.SUELO - e.y), e.dir, e.p, e.f, e.rastro, e.blanco, e.hacia);
       g.restore();
       text(g, (i * PASO).toFixed(2) + ' ' + e.p + e.f, cx + 3, cy + 3, '#b8a888', 1);
     }

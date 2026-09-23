@@ -139,9 +139,9 @@ activa). Con `?s=garrote` saca una sola secuencia a tamaño real, que es lo que
 ## ROMINA, la caballera
 
 ```
-node tools/prueba-caballero.mjs                              # su fisica: 8 secciones
+node tools/prueba-caballero.mjs                              # su fisica: 9 secciones
 node tools/ver.js tools/ver-caballera.html caballera.png 1500 4200
-python tools/gif.py caballera:combo vistas/combo.gif         # combo, corre, salto, rodada...
+python tools/gif.py caballera:combo vistas/combo.gif         # combo, corre, salto, esquiva, parada...
 python tools/romina-atlas.py RUTA/ArmoredHero                # rehornear la hoja
 ```
 
@@ -156,6 +156,40 @@ comprueba contra el ATLAS que todos los fotogramas se alcanzan jugando. La
 sección 8 vigila que el daño de cada tajo llegue hasta donde llega su estela
 dibujada. `ver-caballera.html` no elige poses a mano: simula cada acción con la
 física real pulsando botones, como jugando.
+
+El pack no trae esquiva, golpe recibido ni derrota: las tres salen de **su
+salto** (despega, va recogida por el aire, cae agachada), que es lo que de
+verdad hace el cuerpo. Montarlas con la agachada quieta, como al principio, se
+leía como estar de rodillas resbalando.
+
+## Los botones de ROMINA: ATACAR, SALTAR, ESQUIVAR, GUARDIA
+
+```
+node tools/ver.js tools/ver-botones.html vistas/botones.png 1440 900   # todos sus estados
+python tools/gif.py escena:parada vistas/parada.gif          # parada y contraataque, en el juego
+python tools/gif.py escena:barrido vistas/barrido.gif        # esquiva hacia atrás
+python tools/gif.py escena:embestida vistas/embestida.gif    # esquiva atravesándolo
+```
+
+Cada botón es la respuesta a un ataque del ogro, y la sección 6 de
+`prueba-ogro.mjs` lo **mide**: juega cada ataque con la regla real y cuenta en
+cuántos frames se puede pulsar cada respuesta y salir ilesa (hace falta una
+ventana de 250 ms). GUARDIA para solo el garrotazo (a tiempo es una PARADA y el
+siguiente ATACAR es un CONTRAATAQUE); el barrido, la embestida y las ondas le
+rompen la guardia. ESQUIVAR es un salto evasivo invulnerable: sin stick va
+hacia atrás, con el stick hacia el ogro lo **atraviesa** (es la respuesta a la
+embestida: en una arena de un solo eje no hay "a un lado").
+
+Esa sección era antes una tabla escrita a mano y **mentía**: la guardia lo
+paraba todo y, de cerca, ni siquiera paraba el garrotazo (comprobaba "de
+frente" contra el punto donde cae el garrote, que con ella pegada al ogro queda
+a su espalda). Por eso QUÉ le pega al ogro vive en `OG.golpeaA` y no en la
+escena: el arnés mide la misma regla con la que se juega.
+
+Los medallones se hornean una vez (`caba-botones.js`); los iconos son una
+rejilla de 15 px que se contornea sola. Dos que no se leían y se rehicieron
+mirando `ver-botones.html`: el arco de ESQUIVAR con trazo de 2 se cerraba en
+una "A" rellena, y la chispa de GUARDIA con base horizontal parecía una corona.
 
 ## La ARENA de ROMINA: el salón del castillo
 
@@ -180,7 +214,8 @@ pisotón (avisan 1.19 s; si el ogro se mete debajo, le duelen a él) y los
 la espada los rompe). La física de ella acepta un `mundo` opcional con repisas y
 bloques: sin él, el suelo es plano y el arnés viejo mide lo mismo que antes.
 
-`ver-escena.html` graba la **escena entera** de verdad: importa `caballero.js`,
+`ver-escena.html` graba la **escena entera** de verdad (guiones `arena`,
+`parada`, `barrido`, `embestida`): importa `caballero.js`,
 la mueve con un guion de botones (que mira dónde están ella y el ogro, como
 alguien jugando) y la dibuja con su cámara y sus partículas. Ojo con dos
 trampas que salieron al hacer el guion: pulsar SALTA es a la vez el flanco y el

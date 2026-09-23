@@ -6,8 +6,8 @@
 
 Las secuencias del ogro son las de tools/ver-ogro.html (garrote, pisoton,
 barrido, embestida, ruge, dolor, pared, parada, jadeo, muere, anda, espera) y
-las de ella las de tools/ver-caballera.html (combo, corre, salto, rodada,
-guardia, dolor, aire, derrota), que se SIMULAN con la fisica real pulsando
+las de ella las de tools/ver-caballera.html (combo, corre, salto, esquiva,
+atraviesa, guardia, parada, dolor, aire, derrota), que se SIMULAN con la fisica real pulsando
 botones. Todo se renderiza con los modulos reales del juego. Con --x2 se
 amplia con NEAREST, que es el tamaño al que se ve en el telefono (el lienzo de
 1200 se estira a ~2340); sin el, pesa la cuarta parte.
@@ -36,12 +36,12 @@ FPS = 25
 PAGINA = {'ogro': ('tools/ver-ogro.html', 620, 470), 'caballera': ('tools/ver-caballera.html', 620, 470),
           'escena': ('tools/ver-escena.html', 720, 324)}
 DURA = {
-    'escena': {'arena': 5.2},
+    'escena': {'arena': 5.2, 'parada': 2.2, 'barrido': 1.8, 'embestida': 2.6},
     'ogro': {'garrote': 0.95, 'pisoton': 1.45, 'barrido': 0.88, 'embestida': 1.30,
              'ruge': 1.2, 'dolor': 0.24, 'pared': 1.25, 'parada': 0.55, 'jadeo': 0.55,
              'muere': 1.2, 'anda': 1.2, 'espera': 1.0},
-    'caballera': {'combo': 1.25, 'corre': 1.0, 'salto': 0.95, 'rodada': 0.6,
-                  'guardia': 1.3, 'dolor': 0.6, 'aire': 0.9, 'derrota': 0.5},
+    'caballera': {'combo': 1.25, 'corre': 1.0, 'salto': 0.95, 'esquiva': 0.65, 'atraviesa': 0.65,
+                  'guardia': 1.0, 'parada': 1.2, 'dolor': 0.6, 'aire': 0.9, 'derrota': 1.0},
 }
 
 

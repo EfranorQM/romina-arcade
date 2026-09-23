@@ -21,10 +21,11 @@ DE DONDE SALE
     redistribuir el pack, tal cual o modificado. Por eso el pack NO esta en el
     repo: solo la hoja horneada, que es parte del juego.
 
-    Le faltan animaciones que ella usa, y se montan con las suyas: la RODADA es
-    un deslizamiento agachada con la espada atras (la estela de sombras la
-    pone romi-sprite.js); el DAÑO es echarse atras y agacharse; la DERROTA,
-    quedarse de rodillas; el EMPUJON y el BLOQUEO salen de la guardia.
+    Le faltan animaciones que ella usa, y salen de las suyas: la ESQUIVA, el
+    GOLPE RECIBIDO y el vuelo de la DERROTA son su salto (ver C.pose en
+    caba-cuerpo.js); la derrota acaba de rodillas y la GUARDIA es su Guard.
+    (Hubo una rodada montada con la agachada quieta: se leia como estar de
+    rodillas resbalando, y se quito.)
 
 LOS PASOS
     1. PELO Y OJOS NEGROS. El pelo son cuatro amarillos, pero tres los
@@ -77,18 +78,18 @@ ANIMS = [
     ('idle', [('Idle', i) for i in range(9)]),
     ('run', [('Running', i) for i in range(6)]),
     # impulso, subida (1-5), caida (6-7) y el aterrizaje agachada (8)
+    # Tambien son la ESQUIVA, el GOLPE RECIBIDO y el vuelo de la DERROTA (ver
+    # C.pose): lo que hace el cuerpo en las tres es despegar, ir recogida por
+    # el aire y caer agachada, y eso es su salto.
     ('jump', [('Jump', i) for i in range(6)] + [('Fall', 0), ('Fall', 1), ('Crouch', 0)]),
-    ('roll', [('Crouch', i) for i in range(4)]),
     ('atk', [('Attack1', i) for i in range(6)]),
     ('atk2', [('Attack2', i) for i in range(8)]),
     ('atk3', [('Attack3', i) for i in range(11)]),
     ('air', [('AirAttack', i) for i in range(4)]),
-    # subiendo, plantada, el impacto (la espada salta arriba) y rehacerse
+    # la GUARDIA: subiendo, plantada, el impacto (la espada salta arriba) y
+    # rehacerse
     ('block', [('Guard', 0), ('Guard', 2), ('Guard', 1), ('Guard', 3)]),
-    # carga, empuje (la guardia baja y adelantada) y vuelta
-    ('bash', [('Guard', 2), ('Guard', 4), ('Guard', 0)]),
-    # echada atras con la espada arriba (el final del reves), agachada, y de pie
-    ('hurt', [('Attack1', 5), ('Crouch', 0), ('Idle', 0)]),
+    # la derrota: de rodillas
     ('dead', [('Crouch', 3)]),
 ]
 
