@@ -7,14 +7,25 @@
 // NEON FIST — usando los dos colores que el propio juego declara en su meta.
 // Eso las mantiene coherentes con el juego aunque su arte cambie.
 
-export const CW = 96, CH = 128;
+import { cargaRomina, drawRomina } from './games/romi-sprite.js';
+import { cargaOgro, bakeOgro, poseOgro, drawOgro } from './games/ogro-sprite.js';
+import { cargaArena, drawSalon } from './games/arena-sprite.js';
+import * as OG from './games/ogro-cuerpo.js';
 
-// Cada portada se hornea en su canvas. `d` es el contexto ya listo.
+export const CW = 96, CH = 128;
+// Se hornean al DOBLE (192x256) y se dibujan con las coordenadas de siempre:
+// el menu es ahora un salon recreativo a 1200x540 y cada portada va en la
+// pantalla de su maquina, donde a 96x128 se veia borrosa.
+export const ESC = 2;
+
+// Cada portada se hornea en su canvas. `d` es el contexto ya listo, con la
+// escala puesta: se dibuja en 96x128 como siempre.
 function make(draw) {
   const cv = document.createElement('canvas');
-  cv.width = CW; cv.height = CH;
+  cv.width = CW * ESC; cv.height = CH * ESC;
   const d = cv.getContext('2d');
   d.imageSmoothingEnabled = false;
+  d.scale(ESC, ESC);
   draw(d);
   return cv;
 }
@@ -470,73 +481,64 @@ const masa = () => make(d => {
   frame(d, '#ff4d63');
 });
 
-// ---------- ROMINA: la princesa contra el incendio ----------
-// Lo que hay que leer es MEDIEVAL y DE LADO: un caballero de perfil con la
-// espada en alto recortado contra un cielo que arde, y la muralla detras.
-const caballero = () => make(d => {
-  sky(d, '#7d4436', '#241c1a');
-  // El disco del sol bajo, detras de todo
-  d.fillStyle = '#d9793f'; d.beginPath(); d.arc(64, 74, 22, 0, 7); d.fill();
-  // Muralla en ruinas, silueta oscura
-  d.fillStyle = '#241c26';
-  for (const [x, w, h] of [[4, 18, 34], [24, 14, 22], [56, 20, 40], [78, 12, 26], [86, 16, 30]]) {
-    d.fillRect(x, 96 - h, w, h);
-    for (let i = 0; i < w; i += 7) d.fillRect(x + i, 96 - h - 4, 4, 5);
-  }
-  // Suelo
-  d.fillStyle = '#382c27'; d.fillRect(0, 96, CW, CH - 96);
-  d.fillStyle = '#241c1a'; d.fillRect(0, 104, CW, CH - 104);
-  // Lanzas clavadas
-  d.fillStyle = '#5a4a33';
-  for (const [x, h] of [[12, 16], [22, 11], [80, 14], [90, 10]]) d.fillRect(x, 96 - h, 2, h);
-  // Romina de frente: corona, vestido rosa, escudo y espada en alto
-  const cx = 48, base = 104;
-  // El vestido: un trapecio con el borde blanco
-  d.fillStyle = '#c41c5a';
-  d.beginPath(); d.moveTo(cx - 8, base - 34); d.lineTo(cx + 8, base - 34);
-  d.lineTo(cx + 21, base); d.lineTo(cx - 21, base); d.closePath(); d.fill();
-  d.fillStyle = '#ffa8cc';
-  d.beginPath(); d.moveTo(cx - 3, base - 30); d.lineTo(cx + 3, base - 30);
-  d.lineTo(cx + 11, base); d.lineTo(cx - 11, base); d.closePath(); d.fill();
-  d.fillStyle = '#fff4fa'; d.fillRect(cx - 21, base - 4, 42, 5);
-  // Corpiño y hombros
-  d.fillStyle = '#c41c5a'; d.fillRect(cx - 8, base - 46, 16, 14);
-  d.fillStyle = '#ef4a84'; d.fillRect(cx - 11, base - 45, 5, 6); d.fillRect(cx + 6, base - 45, 5, 6);
-  d.fillStyle = '#d9a52a'; d.fillRect(cx - 8, base - 34, 16, 3);
-  // Brazos y cara
-  d.fillStyle = '#f0b48a'; d.fillRect(cx - 13, base - 40, 4, 12); d.fillRect(cx + 9, base - 40, 4, 12);
-  d.fillStyle = '#f0b48a'; d.beginPath(); d.arc(cx, base - 53, 9, 0, 7); d.fill();
-  // Pelo negro a media melena
-  d.fillStyle = '#251f33';
-  d.beginPath(); d.arc(cx, base - 55, 10, Math.PI, 0); d.fill();
-  d.fillRect(cx - 10, base - 55, 4, 14); d.fillRect(cx + 6, base - 55, 4, 14);
-  // Ojos
-  d.fillStyle = '#ffffff'; d.fillRect(cx - 5, base - 55, 3, 3); d.fillRect(cx + 2, base - 55, 3, 3);
-  d.fillStyle = '#6b3a1e'; d.fillRect(cx - 4, base - 54, 2, 2); d.fillRect(cx + 3, base - 54, 2, 2);
-  // Corona
-  d.fillStyle = '#ffe066';
-  d.beginPath(); d.moveTo(cx - 9, base - 62); d.lineTo(cx + 9, base - 62);
-  d.lineTo(cx + 7, base - 70); d.lineTo(cx + 3, base - 65); d.lineTo(cx, base - 72);
-  d.lineTo(cx - 3, base - 65); d.lineTo(cx - 7, base - 70); d.closePath(); d.fill();
-  d.fillStyle = '#ff3860'; d.fillRect(cx - 2, base - 73, 4, 4);
-  // El escudo a la izquierda, con su corazon
-  d.fillStyle = '#8a97b8';
-  d.beginPath(); d.moveTo(cx - 28, base - 44); d.lineTo(cx - 13, base - 44);
-  d.lineTo(cx - 13, base - 30); d.lineTo(cx - 20, base - 23); d.lineTo(cx - 28, base - 30); d.closePath(); d.fill();
-  d.fillStyle = '#ffe066';
-  d.beginPath(); d.arc(cx - 23, base - 38, 3, 0, 7); d.arc(cx - 18, base - 38, 3, 0, 7); d.fill();
-  d.beginPath(); d.moveTo(cx - 26, base - 37); d.lineTo(cx - 15, base - 37); d.lineTo(cx - 20, base - 29); d.closePath(); d.fill();
-  // La espada a la derecha, en alto
-  d.fillStyle = '#9c1b3c';                                    // capa
-  d.beginPath(); d.moveTo(cx - 4, base - 30); d.lineTo(cx - 13, base - 6);
-  d.lineTo(cx - 4, base - 10); d.closePath(); d.fill();
-  d.strokeStyle = '#8a97b8'; d.lineWidth = 5; d.lineCap = 'butt';
-  d.beginPath(); d.moveTo(cx + 14, base - 40); d.lineTo(cx + 30, base - 68); d.stroke();
-  d.strokeStyle = '#ffffff'; d.lineWidth = 2;
-  d.beginPath(); d.moveTo(cx + 15, base - 41); d.lineTo(cx + 30, base - 68); d.stroke();
-  d.fillStyle = '#d9a52a'; d.fillRect(cx + 10, base - 42, 9, 4);    // guarda
+// ---------- ROMINA: ella frente al ogro, en el salon del castillo ----------
+// Con los DIBUJOS DEL JUEGO, no con figuras: la portada vieja era una princesa
+// de corona, vestido rosa y escudo que ya no se parecia en nada a la caballera
+// ni al troll de la pelea. Ahora es la pelea misma: el salon (una ventana y sus
+// velas), el ogro gigante rugiendo con el garrote en alto y ella delante, en
+// guardia, apuntandole con la espada. Ella sale con el traje que lleve puesto.
+//
+// Los dibujos llegan despues de que arranque la app, asi que la portada se
+// hornea primero de fondo y se pinta encima en cuanto estan (en el MISMO
+// lienzo: el menu ya lo tiene cogido).
+const caballero = () => {
+  const cv = document.createElement('canvas');
+  cv.width = CW * ESC; cv.height = CH * ESC;
+  const d = cv.getContext('2d');
+  d.save(); d.scale(ESC, ESC);
+  sky(d, '#3a2230', '#140a14');
   frame(d, '#ef4a84');
-});
+  d.restore();
+  Promise.all([cargaRomina(), cargaOgro(), cargaArena()]).then(() => pintaRomina(d)).catch(() => {});
+  return cv;
+};
+
+function pintaRomina(d) {
+  const W = CW * ESC, H = CH * ESC;
+  d.save();
+  d.clearRect(0, 0, W, H);
+  d.imageSmoothingEnabled = false;
+  // EL SALON a su tamaño de pixel (x1: el juego lo pinta a x2): el trozo de
+  // una ventana con sus candelabros. El suelo del salon cae en y 226.
+  d.save(); d.translate(-318, -6); d.scale(0.5, 0.5); drawSalon(d, 0); d.restore();
+  // Luz calida de la ventana, y el suelo que se oscurece hacia delante.
+  const luz = d.createRadialGradient(W * 0.45, H * 0.35, 10, W * 0.45, H * 0.35, H * 0.8);
+  luz.addColorStop(0, 'rgba(255,200,120,0.10)'); luz.addColorStop(1, 'rgba(20,6,16,0.55)');
+  d.fillStyle = luz; d.fillRect(0, 0, W, H);
+  // EL OGRO, rugiendo con el garrote en alto: el doble de alto que ella.
+  const O = OG.makeOgro(0); O.st = OG.RUGE; O.t = 0.5;
+  const po = poseOgro(O);
+  d.save();
+  d.imageSmoothingEnabled = true;        // el ogro esta PINTADO: se reduce suave
+  d.translate(146, 238); d.scale(0.78, 0.78);
+  drawOgro(d, ogroHorneado(), 0, 0, -1, po, 0);
+  d.restore();
+  // Sombras en el suelo.
+  d.fillStyle = 'rgba(0,0,0,0.35)';
+  d.fillRect(40, 236, 50, 4); d.fillRect(106, 238, 84, 5);
+  // ELLA, en guardia, apuntandole: a x0.5 la hoja doblada con Scale2x vuelve a
+  // su pixel original.
+  d.save(); d.translate(60, 238); d.scale(0.5, 0.5); drawRomina(d, 0, 0, 1, 'block', 1); d.restore();
+  // Viñeta: el borde oscuro que la centra.
+  const vin = d.createLinearGradient(0, H * 0.72, 0, H);
+  vin.addColorStop(0, 'rgba(10,4,12,0)'); vin.addColorStop(1, 'rgba(10,4,12,0.7)');
+  d.fillStyle = vin; d.fillRect(0, 0, W, H);
+  d.scale(ESC, ESC);
+  frame(d, '#ef4a84');
+  d.restore();
+}
+let ogroS = null;
+function ogroHorneado() { return ogroS || (ogroS = bakeOgro()); }
 
 const BUILDERS = { skyline, neonfist, lastwave, symbiote, furia, survival, ahorcado, masa, caballero };
 

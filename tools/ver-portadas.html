@@ -16,10 +16,13 @@
 <div id="hoja"></div>
 <script type="module">
 import { cover, CW, CH } from '../www/js/covers.js';
+import { cargaRomina } from '../www/js/games/romi-sprite.js';
+import { cargaOgro } from '../www/js/games/ogro-sprite.js';
+import { cargaArena } from '../www/js/games/arena-sprite.js';
 
-// Las metas se repiten aqui a proposito: importar games.js arrastraria los
-// cinco juegos enteros (y con ellos el canvas y el audio) solo para leer cinco
-// titulos. Si se agrega un juego, se agrega su linea.
+// Las metas se repiten aqui a proposito: importar games.js arrastraria todos
+// los juegos enteros (y con ellos el canvas y el audio) solo para leer sus
+// titulos y colores. Si se agrega un juego, se agrega su linea.
 const GAMES = [
   { meta: { id:'skyline',  title:'SKYLINE',  colors:['#4de0f0','#e0249a'] } },
   { meta: { id:'neonfist', title:'NEON FIST', colors:['#ff5c9d','#ffe14d'] } },
@@ -29,7 +32,7 @@ const GAMES = [
   { meta: { id:'survival', title:'SURVIVAL', colors:['#ff3ec9','#6bf0ff'] } },
   { meta: { id:'ahorcado', title:'AHORCADO', colors:['#ff9bc8','#1b2c6e'] } },
   { meta: { id:'masa',     title:'LA MASA',  colors:['#ff4d63','#ffe8a8'] } },
-  { meta: { id:'caballero', title:'EL CABALLERO', colors:['#c8d0dc','#9c1b3c'] } },
+  { meta: { id:'caballero', title:'ROMINA',   colors:['#ef4a84','#ffe066'] } },
 ];
 
 const hoja = document.getElementById('hoja');
@@ -42,8 +45,14 @@ const VISTAS = [
   { k: 'detalle x3', h: CH * 3 },
 ];
 
-for (const G of GAMES) {
-  const src = cover(G.meta);
+// La de ROMINA se pinta con los dibujos del juego cuando llegan: se piden
+// todas, se espera a los dibujos y a que se pinten, y despues se copian.
+const portadas = GAMES.map(G => cover(G.meta));
+await Promise.all([cargaRomina(), cargaOgro(), cargaArena()]);
+await new Promise(r => setTimeout(r, 50));
+
+for (const [n, G] of GAMES.entries()) {
+  const src = portadas[n];
   const fila = document.createElement('div');
   fila.className = 'fila';
   for (const v of VISTAS) {

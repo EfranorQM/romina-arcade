@@ -43,12 +43,19 @@ node tools/ver-app.js menu.png "espera900;disparo;tiro900:300:400:300;espera900;
 # el fin de partida con un récord, sin morir jugando
 node tools/ver-app.js fin.png "espera900;js:__arcade.sm.go(__arcade.GameOver,{id:'skyline',score:1234,isRecord:true,title:'SKYLINE'});espera900;disparo"
 
-# ¿arrancan los cinco juegos?
-VERTICAL=1 node tools/ver-app.js x.png "espera1200;archivo:tools/prueba-juegos.js;espera6000;archivo:tools/prueba-juegos.js"
+# ¿arrancan todos los juegos? (y la vuelta al menú desde el último)
+VERTICAL=1 node tools/ver-app.js x.png "espera1200;archivo:tools/prueba-juegos.js;espera6000;archivo:tools/prueba-juegos.js;js:__arcade.sm.go(__arcade.Menu);espera900;disparo"
 
 # ¿cuánto tarda el menú en dibujar un frame?
 node tools/ver-app.js x.png "espera1500;archivo:tools/medir-menu.js;espera3500;archivo:tools/medir-menu.js"
 ```
+
+`medir-menu.js` cronometra el JavaScript del dibujo, no el pintado: Chrome
+pinta después, fuera del cronómetro. Para saber lo que cuesta de verdad hay que
+forzar el pintado leyendo un píxel (`getImageData(0, 0, 1, 1)`) tras cada
+dibujo. Con el salón del menú ya optimizado, `medir-menu.js` da 0,2 ms y con
+el pintado forzado sale 1,3; antes de hornear su fondo eran 4,1 (ver «El salón
+del menú»).
 
 ## Probar SURVIVAL
 
@@ -288,16 +295,60 @@ Renderiza `covers.js` de verdad (canvas real, no una imitación) y arma una hoja
 con cada carátula a tres tamaños: el del centro del carrusel, el de una lateral
 y ampliada x3.
 
+Las carátulas se pintan al doble (`ESC = 2` en `covers.js`, 192x256 píxeles
+para 96x128 de dibujo), porque el menú va a x2. La de ROMINA no se dibuja por
+código: es Romina frente al ogro, con los dibujos del juego (su atlas, el troll
+y el salón), y se pinta cuando esos dibujos terminan de cargar; hasta entonces
+es un cielo con el marco. Por eso `ver-portadas.html` espera a los tres
+cargadores antes de copiar.
+
 **Se juzgan a tamaño de menú, no ampliadas.** Todos los defectos reales
 aparecieron ahí: el cuerpo de SYMBIOTE era un pentágono con picos, el puño de
 NEON FIST se leía como una mano abierta, y la corredora de SKYLINE saltaba
 sobre un edificio en vez de sobre el hueco.
+
+## El salón del menú
+
+El menú es un salón recreativo: cada juego es una máquina (su marquesina con el
+nombre, su carátula en la pantalla, palanca, botones y monedas) y detrás está el
+salón, con el cartel de neón, una fila de máquinas lejanas que corre más
+despacio al arrastrar y la moqueta. El dibujo está en `www/js/salon.js`; el
+arrastre, el muelle y los toques siguen en `menu.js`.
+
+```
+# el salón con ROMINA en el centro, y a medio arrastre
+node tools/ver-app.js salon.png "espera1500;js:(__arcade.Menu.pos=8,__arcade.Menu.dest=8);espera900;disparo;pulsa700:300;mueve600:300;espera120;disparo;suelta600:300"
+```
+
+Tres cosas que no se ven en el código:
+
+- **El menú va a x2** (`ss: 2`, 1200x540). `font.js` hornea el texto a x1 y lo
+  divide por el sobremuestreo, así que con `ss: 2` todo texto sale a la mitad.
+  SURVIVAL vive así desde siempre y sus escalas cuentan con ello, de modo que
+  la fuente no se toca: `salon.js` exporta `text` y `textCenter`, que piden la
+  escala multiplicada por el sobremuestreo. El menú escribe con esas.
+- **Los degradados son lo caro.** Pintado en cada frame, el fondo costaba 3 ms
+  (la luz de la máquina 1,6; la pared 0,77; la sombra del suelo 0,4), cuando un
+  rectángulo liso del mismo tamaño cuesta 0,05. Ahora la pared, la fila lejana
+  y la moqueta con su sombra se hornean una vez y se copian, y la luz son
+  cuatro círculos lisos de alfa bajo: el fondo cuesta 0,4 ms y el menú entero
+  1,3 (medido con el pintado forzado, Chrome sin GPU).
+- **La fila lejana se desplaza al píxel del lienzo**, no al virtual: corre a
+  0,3 de la fila y a píxeles virtuales avanzaba a saltos al arrastrar despacio.
+  Sus pantallas titilan con rectángulos pintados encima de la tira horneada; se
+  comprobó leyendo píxeles que caen justo encima en siete desplazamientos.
+
+Al volver de un juego, su máquina sigue en el centro (antes el menú volvía
+siempre al primero, y había que ir a buscar el juego para echar otra).
 
 ## Simular la física del menú
 
 ```
 node tools/prueba-menu.mjs
 ```
+
+`SEP` (la separación entre máquinas, 100) está copiada de `menu.js`: si cambia
+allí, hay que cambiarla aquí.
 
 Corre el modelo del carrusel miles de pasos y comprueba seis cosas: que siempre
 encaja, que el índice nunca se sale del array, que un gesto rápido avanza sin

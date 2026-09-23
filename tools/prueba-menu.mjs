@@ -14,7 +14,7 @@ const K = 90;                 // rigidez del muelle que lleva al destino
 const C = 2 * Math.sqrt(K);   // amortiguacion CRITICA: lo mas rapido sin rebote
 const GLIDE = 0.16;           // cuanto pesa el impulso al elegir destino
 const MAX_SALTOS = 3;         // caratulas que puede cruzar un solo gesto
-const SEP = 88;               // px de arrastre por caratula
+const SEP = 100;              // px de arrastre por maquina (menu.js)
 const DT = 1 / 60;
 
 const mod = (n, m) => ((n % m) + m) % m;
