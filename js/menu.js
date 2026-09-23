@@ -1,30 +1,38 @@
-// Menu del arcade: una estanteria de caratulas que se arrastra de lado.
+// Menu del arcade: un SALON RECREATIVO. Cada juego es una maquina (su
+// marquesina con el nombre, su portada en la pantalla, la palanca, los botones
+// y las monedas), en fila; se arrastra el dedo y la fila corre con inercia
+// hasta encajar sola en la maquina mas cercana. La del centro esta de frente,
+// encendida y grande; las de los lados se alejan, se encogen, se inclinan
+// hacia dentro y se apagan. Detras, el salon (salon.js): el cartel de neon, una
+// fila de maquinas lejanas que corre mas despacio y la moqueta.
 //
-// La portada del centro esta de frente y grande; las de los lados se alejan,
-// se encogen y se inclinan hacia dentro, como cajas puestas de canto en un
-// estante. Debajo de cada una va su reflejo. Se arrastra el dedo y la fila
-// corre con inercia hasta encajar sola en la portada mas cercana.
+// Antes era una estanteria de caratulas sobre un degradado. El arrastre, el
+// muelle y los toques son los de entonces, medidos por tools/prueba-menu.mjs:
+// solo cambio el dibujo (y la separacion, porque una maquina es mas ancha).
 //
 // Es la unica escena apaisada junto al fin de partida: su lienzo (VW x VH) es
-// 600x270, y al entrar a un juego el telefono gira a vertical.
+// 600x270, dibujado a x2 (ss: 2) para que las maquinas y las portadas se vean
+// nitidas, y al entrar a un juego el telefono gira a vertical.
 import { VW, VH, Save, clamp } from './core.js';
-import { text, textCenter, measure } from './font.js';
+import { measure } from './font.js';
 import { SFX, toggleMute } from './audio.js';
 import { GAMES } from './games.js';
-import { cover, CW, CH } from './covers.js';
+import { cover } from './covers.js';
+import { horneaMaquina, rayasPantalla, drawFondo, drawLetrero, MQ_W, MQ_H, PANTALLA, SUELO_Y,
+         text, textCenter } from './salon.js';
 import { Update, buscaActualizacion, versionActual } from './update.js';
 
-// ---------- Geometria de la estanteria ----------
+// ---------- Geometria del salon ----------
 // El escenario tiene 270 de alto y hay que repartirlo sin que nada se corte:
-//   0..18    titulo del arcade
-//   18..146  las caratulas (la del centro mide 118 y APOYA en el estante)
-//   146..212 nombre del juego, su lema y el record
-//   212..270 reflejo, puntos de posicion y el rotulo del sonido
-const SEL_H = 118;            // alto de la caratula del centro
-const SEP = 88;               // separacion entre caratulas contiguas, en px
-const SIDE_SQUEEZE = 0.62;    // cuanto se estrecha una caratula por cada paso
-const SIDE_SCALE = 0.70;      // cuanto encoge por cada paso que se aleja
-const SHELF_Y = 146;          // linea del estante: donde apoyan las caratulas
+//   0..28    el cartel de neon
+//   26..218  las maquinas (la del centro mide 192 y PISA en y 218; las de los
+//            lados, mas al fondo, pisan mas arriba: es lo que da la distancia)
+//   218..270 el lema y el record del juego, los puntos, la version y el sonido
+// (El nombre del juego va en la marquesina de su maquina.)
+const SEP = 100;              // separacion entre maquinas contiguas, en px
+const SIDE_SQUEEZE = 0.62;    // cuanto se estrecha una maquina por cada paso
+const SIDE_SCALE = 0.72;      // cuanto encoge por cada paso que se aleja
+const PISA_Y = SUELO_Y + 22;  // donde pisa la maquina del centro
 const MAX_VISIBLE = 3;        // pasos a cada lado que se dibujan
 
 // Fisica del arrastre. Los numeros salen de tools/prueba-menu.mjs, que simula
@@ -38,17 +46,21 @@ const FLICK = 0.055;          // px/frame -> velocidad de la fila
 const TAP_SLOP = 8;           // px de movimiento que aun cuentan como toque
 
 export const Menu = {
-  // wide: el lienzo de esta escena ES el escenario apaisado.
-  meta: { id: '_menu', title: 'MENU', wide: true, vw: 600, vh: 270 },
+  // wide: el lienzo de esta escena ES el escenario apaisado. ss: 2, dibujado al
+  // doble para que las maquinas y sus portadas se vean nitidas.
+  meta: { id: '_menu', title: 'MENU', wide: true, vw: 600, vh: 270, ss: 2 },
 
   init() {
     this.t = 0;
     // `pos` es la posicion continua en la fila: 0 = primer juego centrado,
     // 1.5 = a medio camino entre el segundo y el tercero. El encaje la lleva
     // siempre hacia el entero mas cercano.
-    this.pos = 0;
+    // Al volver de un juego, su maquina sigue en el centro: si acaba de jugar
+    // a ROMINA y quiere otra, la tiene delante y no tiene que ir a buscarla.
+    // Solo al abrir la app se empieza por el primero.
+    this.pos = Math.round(this.pos || 0);
     this.vel = 0;
-    this.dest = 0;              // caratula a la que se esta yendo
+    this.dest = this.pos;       // maquina a la que se esta yendo
     this.drag = null;
     // Se fija ya: si se dejara sin definir, el primer update tras volver de un
     // juego veria un cambio de seleccion que no ocurrio y sonaria un blip.
@@ -56,6 +68,9 @@ export const Menu = {
     this.covers = GAMES.map(G => cover(G.meta));
     // Se hornean al entrar al menu, no al arrancar la app: entrar y salir de un
     // juego no las vuelve a dibujar porque cover() las cachea por id.
+    // Las maquinas tambien, una por juego (sin la portada, que se pinta encima
+    // en cada frame: la de ROMINA llega tarde, cuando cargan sus dibujos).
+    this.maquinas = this.maquinas || GAMES.map(G => horneaMaquina(G.meta));
   },
 
   // El juego elegido: el entero mas cercano, traido al rango 0..N-1.
@@ -106,8 +121,8 @@ export const Menu = {
     // Escala: la del centro entera, las de los lados encogidas. Se usa una
     // curva y no una recta para que el centro destaque de verdad.
     const sc = Math.pow(SIDE_SCALE, ad * 0.8);
-    const h = SEL_H * sc;
-    const w = CW / CH * h;
+    const h = MQ_H * sc;
+    const w = MQ_W * sc;
     // Estrechamiento: simula el giro hacia dentro sin usar transformaciones 3D.
     const squeeze = 1 - (1 - SIDE_SQUEEZE) * Math.min(1, ad * 0.85);
     // Posicion horizontal: los pasos se comprimen al alejarse, que es lo que
@@ -115,70 +130,52 @@ export const Menu = {
     const dir = Math.sign(d);
     const comp = ad <= 1 ? ad : 1 + (ad - 1) * 0.55;
     const x = VW / 2 + dir * comp * SEP;
-    return { d, ad, x, w: w * squeeze, h, sc, front: 1 - Math.min(1, ad) };
+    // Las del fondo pisan mas arriba: estan mas lejos en el salon.
+    const base = PISA_Y - 10 * Math.min(ad, 2);
+    return { d, ad, x, w: w * squeeze, h, sc, base, front: 1 - Math.min(1, ad) };
   },
 
   draw(g) {
-    // ---------- Fondo: el mueble del arcade ----------
-    const bg = g.createLinearGradient(0, 0, 0, VH);
-    bg.addColorStop(0, '#1a0b3a'); bg.addColorStop(0.55, '#12082a'); bg.addColorStop(1, '#080418');
-    g.fillStyle = bg; g.fillRect(0, 0, VW, VH);
-    // Resplandor detras de la caratula elegida. El color se MEZCLA entre las
-    // dos caratulas que se estan cruzando: tomando el del juego elegido a secas,
-    // el fondo entero cambiaba de golpe al pasar el punto medio del arrastre.
+    // ---------- El salon: pared, maquinas lejanas, lamparas, moqueta ----------
+    // La luz de la maquina del centro MEZCLA los colores de las dos que se
+    // estan cruzando: con el del juego elegido a secas, todo el salon cambiaba
+    // de golpe al pasar el punto medio del arrastre.
     const selG = this.glowColor();
-    const halo = g.createRadialGradient(VW / 2, SHELF_Y - 56, 8, VW / 2, SHELF_Y - 56, 150);
-    halo.addColorStop(0, hexA(selG, 0.20));
-    halo.addColorStop(1, hexA(selG, 0));
-    g.fillStyle = halo; g.fillRect(0, 0, VW, VH);
-    // Suelo del estante: una linea de luz y su degradado hacia abajo.
-    const fl = g.createLinearGradient(0, SHELF_Y, 0, VH);
-    fl.addColorStop(0, hexA(selG, 0.14)); fl.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = fl; g.fillRect(0, SHELF_Y, VW, VH - SHELF_Y);
-    g.fillStyle = hexA(selG, 0.45); g.fillRect(0, SHELF_Y, VW, 1);
+    drawFondo(g, VW, this.t, this.pos * SEP, selG);
+    drawLetrero(g, VW, this.t);
 
-    // ---------- Marquesina, centrada arriba ----------
-    // En una linea sola: en dos ocupaba el alto que necesitan las caratulas y
-    // dejaba un hueco muerto a la izquierda de la fila.
-    const t1 = "ROMINA'S", t2 = 'ARCADE';
-    const w1 = measure(t1, 2), w2 = measure(t2, 2), gapT = 8;
-    const tx = Math.round(VW / 2 - (w1 + gapT + w2) / 2);
-    text(g, t1, tx, 8, '#ff5c9d', 2);
-    text(g, t2, tx + w1 + gapT, 8, '#5cffd8', 2);
-
-    // ---------- Las caratulas, de fuera hacia dentro ----------
+    // ---------- Las maquinas, de fuera hacia dentro ----------
     // Se dibujan por distancia descendente para que la del centro tape a las
     // otras: si se dibujaran en orden de indice, la de la derecha se le
     // montaria encima.
     for (const { i, s } of this.visible().sort((a, b) => b.s.ad - a.s.ad)) {
-      this.drawCover(g, i, s);
+      this.drawMaquina(g, i, s);
     }
 
-    // ---------- Texto del juego elegido ----------
+    // ---------- El lema y el record del juego elegido ----------
+    // (El nombre va en la marquesina de su maquina.) Se desvanece mientras la
+    // fila esta en movimiento: leerlo corriendo marea. Cuanto falta para
+    // encajar se mide contra el entero mas cercano y NO contra sel: sel esta
+    // acotado a 0..N-1 y pos no, asi que al dar la vuelta la resta valdria
+    // varias unidades y el texto se apagaria de golpe.
     const G = GAMES[this.sel].meta;
-    // Se desvanece mientras la fila esta en movimiento: leerlo corriendo marea.
-    // Cuanto falta para encajar, medido contra el entero mas cercano y NO
-    // contra sel: sel esta acotado a 0..N-1 y pos no, asi que al dar la vuelta
-    // la resta valdria varias unidades y el texto se apagaria de golpe.
     const settle = clamp(1 - Math.abs(this.pos - Math.round(this.pos)) * 3.5, 0, 1);
     if (settle > 0.02) {
-      const ty = SHELF_Y + 14;
-      textCenter(g, G.title, VW / 2, ty, fade(G.colors[0], settle), 3);
-      textCenter(g, G.tag || '', VW / 2, ty + 26, fade('#8a7ab8', settle), 2);
+      textCenter(g, G.tag || '', VW / 2, PISA_Y + 5, fade(G.colors[0], settle), 2);
       const best = Save.best(G.id);
       textCenter(g, best > 0 ? 'MEJOR ' + best : 'SIN RECORD AUN',
-                 VW / 2, ty + 44, fade(best > 0 ? '#c8b8ff' : '#5a4a88', settle), 2);
+                 VW / 2, PISA_Y + 23, fade(best > 0 ? '#c8b8ff' : '#5a4a88', settle), 2);
     }
 
     // ---------- Flechas de que hay mas a los lados ----------
     // La fila da la vuelta, asi que las flechas no avisan de un tope: son la
     // pista de que esto se arrastra de lado.
     const puls = 0.55 + Math.sin(this.t * 3) * 0.25;
-    arrow(g, 14, SHELF_Y - 52, -1, hexA('#c8b8ff', puls));
-    arrow(g, VW - 16, SHELF_Y - 52, 1, hexA('#c8b8ff', puls));
+    arrow(g, 14, 120, -1, hexA('#c8b8ff', puls));
+    arrow(g, VW - 16, 120, 1, hexA('#c8b8ff', puls));
 
     // ---------- Puntos de posicion y sonido ----------
-    const dotY = VH - 12, dw = 10;
+    const dotY = VH - 7, dw = 10;
     const dx0 = VW / 2 - (GAMES.length - 1) * dw / 2;
     for (let i = 0; i < GAMES.length; i++) {
       const on = i === this.sel;
@@ -212,39 +209,40 @@ export const Menu = {
     }
   },
 
-  drawCover(g, i, s) {
-    const img = this.covers[i];
+  // UNA MAQUINA en su ranura: el mueble, su portada en la pantalla con las
+  // rayas y el reflejo del cristal, y la luz: la del centro encendida, las de
+  // los lados en penumbra.
+  drawMaquina(g, i, s) {
     const G = GAMES[i].meta;
-    const x = s.x - s.w / 2, y = SHELF_Y - s.h;
-    // Sombra en el estante, mas ancha cuanto mas cerca esta la caratula.
-    g.fillStyle = 'rgba(0,0,0,0.45)';
-    g.fillRect(Math.round(x - 2), SHELF_Y, Math.round(s.w + 4), 2);
-    // La caratula.
-    g.drawImage(img, Math.round(x), Math.round(y), Math.round(s.w), Math.round(s.h));
-    // Reflejo bajo el estante: la misma imagen volteada, desvaneciendose.
-    const rh = Math.round(s.h * 0.42);
-    g.save();
-    g.globalAlpha = 0.20 + s.front * 0.12;
-    g.translate(0, SHELF_Y * 2 + 1);
-    g.scale(1, -1);
-    g.drawImage(img, 0, 0, CW, Math.round(CH * 0.42),
-                Math.round(x), Math.round(SHELF_Y - rh), Math.round(s.w), rh);
-    g.restore();
-    // El reflejo se apaga hacia abajo con una banda oscura encima. El degradado
-    // se cachea por altura: sin esto se creaban siete objetos por frame, uno
-    // por caratula, solo para tirarlos.
-    g.fillStyle = fadeBand(g, rh);
-    g.fillRect(Math.round(x) - 1, SHELF_Y + 1, Math.round(s.w) + 2, rh);
-    // Las caratulas de los lados se oscurecen: solo la del centro va a plena luz.
+    const x = s.x - s.w / 2, y = s.base - s.h;
+    // Su sombra en la moqueta.
+    g.fillStyle = 'rgba(0,0,0,0.5)';
+    g.fillRect(Math.round(x - 3), Math.round(s.base - 1), Math.round(s.w + 6), 3);
+    // Encogidas, suaves: con el pixel duro, las de los lados parpadeaban al
+    // arrastrar (cada pixel caia en un sitio distinto en cada frame).
+    const suave = g.imageSmoothingEnabled;
+    g.imageSmoothingEnabled = s.front < 0.99;
+    g.drawImage(this.maquinas[i], x, y, s.w, s.h);
+    const kx = s.w / MQ_W, ky = s.h / MQ_H;
+    const px = x + PANTALLA.x * kx, py = y + PANTALLA.y * ky, pw = PANTALLA.w * kx, ph = PANTALLA.h * ky;
+    g.drawImage(this.covers[i], px, py, pw, ph);
+    g.drawImage(rayasPantalla(), px, py, pw, ph);
+    g.imageSmoothingEnabled = suave;
+    // Las de los lados, en penumbra: solo la del centro esta encendida.
     if (s.front < 1) {
-      g.fillStyle = hexA('#080418', 0.55 * (1 - s.front));
-      g.fillRect(Math.round(x), Math.round(y), Math.round(s.w), Math.round(s.h));
+      g.fillStyle = hexA('#080418', 0.6 * (1 - s.front));
+      g.fillRect(Math.round(x), Math.round(y), Math.ceil(s.w), Math.ceil(s.h));
     }
-    // Marco encendido en la del centro.
-    if (s.front > 0.4) {
-      g.strokeStyle = hexA(G.colors[0], (s.front - 0.4) / 0.6);
-      g.lineWidth = 1;
-      g.strokeRect(Math.round(x) - 0.5, Math.round(y) - 0.5, Math.round(s.w) + 1, Math.round(s.h) + 1);
+    // La del centro: la marquesina y la pantalla echan luz alrededor.
+    if (s.front > 0.3) {
+      const a = (s.front - 0.3) / 0.7;
+      g.fillStyle = hexA(G.colors[0], 0.22 * a);
+      g.fillRect(Math.round(x + 2 * kx), Math.round(y - 3), Math.round(s.w - 4 * kx), 3);
+      g.fillStyle = hexA(G.colors[0], 0.12 * a);
+      g.fillRect(Math.round(px - 3), Math.round(py - 3), Math.round(pw + 6), Math.round(ph + 6));
+      // Y la pantalla respira un poco: esta encendida, no es una foto.
+      g.fillStyle = hexA('#ffffff', 0.03 * a * (0.5 + 0.5 * Math.sin(this.t * 4)));
+      g.fillRect(Math.round(px), Math.round(py), Math.round(pw), Math.round(ph));
     }
   },
 
@@ -307,13 +305,13 @@ export const Menu = {
   pick(x, y) {
     const cands = this.visible().sort((a, b) => a.s.ad - b.s.ad);
     for (const { i, s } of cands) {
-      const left = s.x - s.w / 2, top = SHELF_Y - s.h;
-      if (x >= left - 3 && x <= left + s.w + 3 && y >= top - 3 && y <= SHELF_Y + 3) {
+      const left = s.x - s.w / 2, top = s.base - s.h;
+      if (x >= left - 3 && x <= left + s.w + 3 && y >= top - 3 && y <= s.base + 3) {
         return { i, d: s.d };
       }
     }
-    // Un toque bajo el estante, sobre el texto, tambien lanza el juego.
-    if (y > SHELF_Y + 10 && y < VH - 24 && Math.abs(x - VW / 2) < 120) {
+    // Un toque bajo las maquinas, sobre el texto, tambien lanza el juego.
+    if (y > PISA_Y + 2 && y < VH - 24 && Math.abs(x - VW / 2) < 120) {
       return { i: this.sel, d: 0 };
     }
     return null;
@@ -369,20 +367,6 @@ function mod(n, m) { return ((n % m) + m) % m; }
 
 // ---------- Utilidades de color ----------
 // Un color '#rrggbb' con alfa. Se usa mucho por frame, asi que se cachea.
-// Banda que apaga el reflejo, cacheada por altura.
-const bandCache = new Map();
-function fadeBand(g, rh) {
-  let b = bandCache.get(rh);
-  if (b === undefined) {
-    b = g.createLinearGradient(0, SHELF_Y, 0, SHELF_Y + rh);
-    b.addColorStop(0, 'rgba(8,4,24,0.35)');
-    b.addColorStop(1, 'rgba(8,4,24,1)');
-    if (bandCache.size > 80) bandCache.clear();
-    bandCache.set(rh, b);
-  }
-  return b;
-}
-
 const aCache = new Map();
 function hexA(hex, a) {
   const k = hex + '|' + a.toFixed(3);
