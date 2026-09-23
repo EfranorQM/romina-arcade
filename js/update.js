@@ -45,7 +45,7 @@ const LS = {
 
 // La version que trae el APK de fabrica. La reescribe tools/publica.mjs en
 // cada publicacion, para que el numero que se ve en el menu sea el de verdad.
-export const VERSION_APK = '1.0.20';
+export const VERSION_APK = '1.0.21';
 
 // Que version se esta usando ahora mismo.
 export function versionActual() {
@@ -72,6 +72,8 @@ export async function iniciaUpdate() {
   //
   // Aqui solo quedaria CONFIRMAR que la version estrenada funciona, y eso ya
   // no lo hace un reloj: lo hace latido(), abajo.
+  // Y rehacer como propia la cache en uso, si la bajo el actualizador viejo.
+  reparaCache(LS.ver).catch(() => {});
 }
 
 // ---------- La confirmacion: el juego tiene que DEMOSTRAR que va ----------
@@ -142,8 +144,9 @@ export async function buscaActualizacion() {
         await caches.delete(nombre);
         return fallo('FALLO AL BAJAR');
       }
-      // Se guarda con la ruta LOCAL, que es la que pedira el juego
-      await cache.put(new Request('/' + rel), res.clone());
+      // Se guarda con la ruta LOCAL, que es la que pedira el juego, y COMO
+      // PROPIA (ver propia(), abajo)
+      await cache.put(new Request('/' + rel), await propia(res));
       hechos++;
       Update.progreso = hechos / man.archivos.length;
     }
@@ -168,6 +171,38 @@ export async function buscaActualizacion() {
 
 function fallo(msg) {
   Update.estado = 'error'; Update.msg = msg; Update.progreso = 0;
+}
+
+// ---------- Lo descargado se guarda como PROPIO ----------
+// Guardada tal cual, la respuesta de GitHub conservaba su direccion
+// (github.io/...), y al servirla el worker el navegador la tomaba por suya: los
+// modulos calculaban sus imports y sus dibujos desde GitHub (medido: 70 de 71
+// ficheros se pedian directamente alli, saltandose la cache: sin internet no
+// arrancaba), y los dibujos eran "de otro sitio" (el traje de Romina no se
+// podia pintar). Una respuesta hecha aqui no tiene direccion: el worker la
+// sirve como del propio telefono. Se conserva el Content-Type: un modulo sin
+// el suyo no se ejecuta.
+async function propia(res) {
+  const tipo = res.headers.get('Content-Type');
+  return new Response(await res.blob(), { status: 200, headers: tipo ? { 'Content-Type': tipo } : {} });
+}
+
+// Las caches bajadas ANTES de este arreglo (por el actualizador viejo) tienen
+// las respuestas con la direccion de GitHub: se rehacen como propias, en
+// segundo plano. Sirven desde el siguiente arranque.
+async function reparaCache(v) {
+  if (!v || typeof caches === 'undefined') return;
+  const nombre = 'rom-' + v;
+  if (!(await caches.has(nombre))) return;
+  const c = await caches.open(nombre);
+  let n = 0;
+  for (const req of await c.keys()) {
+    const r = await c.match(req);
+    if (!r || !r.url || new URL(r.url).origin === location.origin) continue;
+    await c.put(req, await propia(r));
+    n++;
+  }
+  if (n) console.log('[update] cache', nombre, 'rehecha como propia:', n, 'ficheros');
 }
 
 // Compara "1.2.3" con "1.10.0" numericamente (no como texto, que diria que
