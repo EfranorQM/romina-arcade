@@ -49,17 +49,30 @@
 
   // Que version toca. Se lee aqui (no en update.js) porque update.js es un
   // modulo y llegaria tarde. Misma logica: una version pendiente se estrena
-  // ahora, y si la anterior no llego a confirmarse se descarta.
-  var ver = null;
+  // ahora, y si la anterior no llego a confirmarse (ver latido() en
+  // update.js) se descarta.
+  //
+  // SE VUELVE A LA ANTERIOR, NO A LA DEL APK. Al estrenar se apunta cual se
+  // usaba (rom.prev), y su cache sigue ahi (limpiaViejas la guarda). Antes se
+  // volvia al APK, que puede ser de hace semanas: el 23-09 un arranque de la
+  // v1.0.18 dado por roto dejo el telefono en la v1.0.8.
+  var ver = null, borrar = null;
   try {
     var sosp = localStorage.getItem('rom.sosp');
     if (sosp) {                      // arranco mal la ultima vez: se revierte
-      caches.delete('rom-' + sosp);
+      borrar = 'rom-' + sosp;
       localStorage.removeItem('rom.sosp');
-      if (localStorage.getItem('rom.ver') === sosp) localStorage.removeItem('rom.ver');
+      if (localStorage.getItem('rom.ver') === sosp) {
+        var prev = localStorage.getItem('rom.prev');
+        if (prev && prev !== sosp) localStorage.setItem('rom.ver', prev);
+        else localStorage.removeItem('rom.ver');
+      }
     }
     var pend = localStorage.getItem('rom.pend');
     if (pend) {                      // hay una descargada: se estrena AHORA
+      var usada = localStorage.getItem('rom.ver');
+      if (usada && usada !== pend) localStorage.setItem('rom.prev', usada);
+      else localStorage.removeItem('rom.prev');
       localStorage.setItem('rom.ver', pend);
       localStorage.removeItem('rom.pend');
       localStorage.setItem('rom.sosp', pend);   // a prueba hasta que demuestre
@@ -71,14 +84,29 @@
   function sigue() { if (!listo) { listo = true; arranca(); } }
   setTimeout(sigue, 3000);           // si el worker se atasca, no se espera mas
 
-  navigator.serviceWorker.register('sw.js').then(function () {
+  // La version elegida tiene que tener su cache entera; si no, el APK. Y la
+  // que se revierte se borra ANTES de cargar nada (antes se borraba sin
+  // esperar, mientras el worker aun servia de ella).
+  var hay = ver && window.caches ? caches.has('rom-' + ver) : Promise.resolve(false);
+  Promise.resolve(hay).catch(function () { return false; }).then(function (existe) {
+    if (ver && !existe) {
+      ver = null;
+      try { localStorage.removeItem('rom.ver'); } catch (e) {}
+    }
+    if (borrar && window.caches) return caches.delete(borrar).catch(function () {});
+  }).then(function () {
+    return navigator.serviceWorker.register('sw.js');
+  }).then(function () {
     return navigator.serviceWorker.ready;
   }).then(function (reg) {
     var sw = navigator.serviceWorker.controller || reg.active;
-    if (!sw || !ver) { sigue(); return; }
+    if (!sw) { sigue(); return; }
     // Se espera a que el worker CONFIRME que ya sabe que version servir. Sin
     // esta confirmacion los modulos podrian pedirse antes de que se entere,
-    // que es justo el fallo que esto viene a arreglar.
+    // que es justo el fallo que esto viene a arreglar. Se le dice SIEMPRE,
+    // tambien "ninguna" (la del APK): si no, seguia sirviendo de la ultima que
+    // se le dijo aunque ya estuviera borrada, y ficheros de dos versiones
+    // podian acabar mezclados.
     var ch = new MessageChannel();
     ch.port1.onmessage = function () { sigue(); };
     sw.postMessage({ tipo: 'usa', version: ver }, [ch.port2]);

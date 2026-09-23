@@ -373,6 +373,35 @@ El arte:
 - La música del bosque es `SONGS.caballeroBosque`, en Fa lidio (el modo que
   suena a encantado y cabe entero en el secuenciador).
 
+## Las actualizaciones: estrenar, confirmar y volver atrás
+
+```
+node tools/publica.mjs                         # publicar (sube www/ a gh-pages)
+node tools/ver-app.js x.png "espera3000;archivo:tools/prueba-ota.js;espera14000;archivo:tools/prueba-ota.js;js:location.reload();espera5000;archivo:tools/prueba-ota.js" "https://efranorqm.github.io/romina-arcade/"
+node tools/ver-app.js x.png "espera1500;archivo:tools/prueba-arranque.js;js:location.reload();espera700;archivo:tools/prueba-arranque.js;js:location.reload();espera1200;archivo:tools/prueba-arranque.js;js:location.reload();espera4000;archivo:tools/prueba-arranque.js;js:location.reload();espera1200;archivo:tools/prueba-arranque.js;js:location.reload();espera1200;archivo:tools/prueba-arranque.js"
+```
+
+`prueba-ota.js` baja la versión publicada y comprueba que tras reiniciar corre
+el código nuevo. `prueba-arranque.js` (con `serve.js` en marcha) prueba lo que
+pasa después, con el service worker de verdad y dos versiones de mentira:
+estrenar, confirmar y volver atrás.
+
+**Lo que falló el 23-09-2026.** La versión nueva se confirmaba con un reloj de
+20 s. Si la app se cerraba antes (o Android la dormía en segundo plano, que
+para los temporizadores), el siguiente arranque la daba por rota y volvía...
+al APK, la v1.0.8, con el ROMINA de pruebas: "solo me aparece el mapa". Ahora:
+
+- **Se confirma por latidos**: 120 fotogramas pintados enteros (`latido()` en
+  `update.js`, llamado al final de cada fotograma de `main.js`). Una versión
+  rota de verdad no llega a pintar dos segundos.
+- **Se vuelve a la ANTERIOR** (`rom.prev`, cuya caché guarda `limpiaViejas`),
+  no al APK, que puede ser de hace semanas.
+- **Al worker se le dice siempre qué versión servir**, también "ninguna": si no,
+  seguía sirviendo de la última que se le dijo aunque ya estuviera borrada.
+
+El APK de Romina lleva dentro la v1.0.8: si todo lo demás falla, es a lo que
+vuelve. Recompilarlo lo pondría al día, pero hay que reinstalarlo a mano.
+
 ## Ver las carátulas del menú
 
 ```

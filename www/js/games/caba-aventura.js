@@ -49,6 +49,7 @@ export function empieza(S, desdeHoguera = false) {
   S.salta = false; S.golpea = false; S.esquiva = false;
   S.combo = 0; S.comboT = 0; S.leccion = null;
   S.fase = 'aventura'; S.faseT = 0;
+  Save.guarda('caba.aventuraVista', true);      // ya no hace falta el NUEVO
   playMusic(SONGS.caballeroBosque || SONGS.caballero);
 }
 

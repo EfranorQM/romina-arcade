@@ -7,7 +7,7 @@ import { particles, updateParticles, drawParticles } from './gfx.js';
 import { GAMES } from './games.js';
 import { Menu } from './menu.js';
 import { drawBoton, tocaBoton, drawPantalla, onInputPantalla, olvidaToques } from './pausa.js';
-import { iniciaUpdate } from './update.js';
+import { iniciaUpdate, latido } from './update.js';
 
 let g = null;
 const rnd = makeRng(0x1234abcd);
@@ -384,6 +384,10 @@ function frame(now) {
 
   drawPausa(g);
   drawRotateHint(g);
+  // Un fotograma entero sin excepcion: la version que corre demuestra que va
+  // (ver latido() en update.js). Va al final a proposito: si update o draw
+  // revientan, no se llega aqui y no cuenta.
+  latido();
 }
 
 // ---------- Pantalla de pausa ----------
