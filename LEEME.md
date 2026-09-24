@@ -18,8 +18,10 @@ Y abrir http://localhost:8080 — se juega con el mouse (clic = tocar).
 powershell -ExecutionPolicy Bypass -File build-apk.ps1
 ```
 
-Deja `RominaArcade.apk` en esta carpeta. La primera compilación tarda
-10-20 minutos (Gradle descarga sus dependencias); las siguientes, ~30 segundos.
+Deja `RomiQuest.apk` en esta carpeta, y `node tools/prueba-apk.mjs` lo
+comprueba por dentro (permisos, icono, juego y actualizador). La primera
+compilación tarda 10-20 minutos (Gradle descarga sus dependencias); las
+siguientes, ~30 segundos.
 
 Después de cambiar cualquier archivo de `www/`, hay que volver a compilar:
 el APK empaqueta una copia, editar `www/` a secas no cambia nada.
@@ -45,7 +47,8 @@ MIUI muestra avisos porque la app no viene de la Play Store. Es normal:
 2. MIUI escanea la app y puede decir que no la reconoce → **Instalar de todos modos**.
 3. Si aparece "Enviar para análisis" → se puede omitir.
 
-La app queda con su ícono (una marquesina de arcade en neón) y ya no pide nada más.
+La app queda con su ícono (un blasón: escudo azul y oro con un corazón rosa,
+corona y dos espadas) y no le pide ningún permiso al abrirla.
 
 ---
 
@@ -105,9 +108,10 @@ android/              proyecto nativo (lo genera Capacitor)
 Sin dependencias, sin paso de compilación, sin archivos de imagen ni de sonido:
 todo el arte y el audio se generan por código. El APK pesa poco por eso.
 
-**El ícono también se dibuja por código**, con `tools/icono.py`: una marquesina
-de arcade con neón rosa, mueble cian y pantalla oscura. `build-apk.ps1` lo
-regenera en cada compilación, y tiene que ser así — `npx cap sync` reescribe los
+**El ícono también se dibuja por código**, con `tools/icono.py`: un blasón en
+pixel art (el escudo con los colores de la capa de Romina, un corazón rosa,
+corona y dos espadas en aspa), elegido el 23-09-2026 entre cuatro propuestas.
+`build-apk.ps1` lo regenera en cada compilación, y tiene que ser así — `npx cap sync` reescribe los
 mipmap con el ícono por defecto de Capacitor, y `android/` no está en git.
 
 ```
@@ -137,8 +141,10 @@ en lugar de escalonados, sin usar ni una imagen.
   Las dos resoluciones son 20:9 exacto, la proporción del Note 10, así que no
   quedan barras negras en ninguna de las dos.
 - **Se necesita Java 21** para compilar (Capacitor lo exige). Java 17 no sirve.
-- El APK **no tiene permiso de internet**: se elimina a la fuerza del manifest,
-  porque Capacitor lo reinyecta si solo se borra la línea.
+- El APK pide **solo internet** (y el estado de la red), para el botón de
+  actualizar del menú. Nada de fotos ni de almacenamiento: el permiso de fotos
+  del juego GALERÍA se quitó el 23-09-2026, y `build-apk.ps1` lo borra si
+  vuelve a aparecer en el manifest.
 - El giro lo pide el software (`screen.orientation.lock`), no el manifest: por
   eso el manifest deja girar (`fullUser`). Si el bloqueo falla — MIUI a veces lo
   rechaza — aparece un aviso de **GIRA EL TELÉFONO** y el juego se pausa, así

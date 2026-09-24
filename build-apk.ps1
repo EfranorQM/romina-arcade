@@ -115,10 +115,10 @@ if ($py) {
 }
 
 # --- 4c. Instalar el puente de orientacion ---
-# MainActivity.java lleva DOS puentes nativos:
-#   - el que gira la pantalla por escena (SURVIVAL y el menu apaisados, los
-#     juegos verticales)
-#   - el que lee las fotos del telefono para el juego GALERIA
+# MainActivity.java lleva el puente nativo que gira la pantalla por escena
+# (SURVIVAL y el menu apaisados, los juegos verticales), el boton ATRAS que
+# pausa en vez de cerrar y la pantalla completa. (Llevaba tambien un puente de
+# FOTOS para el juego GALERIA; se quito con su permiso el 23-09-2026.)
 # Se copia desde
 # android-src/, que SI se versiona, porque android/ esta en .gitignore y la
 # regenera `npx cap add android`: dejar el original solo dentro de android/
@@ -135,9 +135,9 @@ $destino = Join-Path $root 'android\app\src\main\java\com\romina\juegos\MainActi
 if (Test-Path $puente) {
   New-Item -ItemType Directory -Force (Split-Path $destino) | Out-Null
   Copy-Item $puente $destino -Force
-  Write-Host 'Puentes nativos instalados (orientacion y fotos)' -ForegroundColor Green
+  Write-Host 'Puente nativo instalado (giro, atras y pantalla completa)' -ForegroundColor Green
 } else {
-  Write-Host 'AVISO: falta android-src\MainActivity.java. SURVIVAL pedira el giro a mano y GALERIA jugara con caratulas.' -ForegroundColor Yellow
+  Write-Host 'AVISO: falta android-src\MainActivity.java. SURVIVAL pedira el giro a mano.' -ForegroundColor Yellow
 }
 
 # --- 4d. Instalar el tema de pantalla completa ---
@@ -154,22 +154,29 @@ if (Test-Path $tema) {
   Write-Host 'AVISO: falta android-src\styles.xml. Se veran las barras del sistema.' -ForegroundColor Yellow
 }
 
-# --- 5. Parchear el manifest: quitar INTERNET, arrancar apaisado ---
+# --- 5. Parchear el manifest: los permisos justos, arrancar apaisado ---
 $manifest = Join-Path $root 'android\app\src\main\AndroidManifest.xml'
 if (Test-Path $manifest) {
   $m = Get-Content $manifest -Raw
   if ($m -notmatch 'xmlns:tools') {
     $m = $m -replace '(<manifest\s+xmlns:android="[^"]+")', '$1 xmlns:tools="http://schemas.android.com/tools"'
   }
-  # Capacitor reinyecta INTERNET: hay que forzar su eliminacion, no basta borrar la linea.
-  if ($m -notmatch 'android.permission.INTERNET"\s+tools:node="remove"') {
-    $m = $m -replace '(<application)', @"
-<uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
-
-    `$1
-"@
+  # INTERNET SI hace falta: el boton de actualizar del menu baja las versiones
+  # nuevas de GitHub Pages. HASTA EL 23-09-2026 ESTE BLOQUE HACIA LO CONTRARIO:
+  # forzaba su eliminacion con tools:node="remove", de cuando el juego era 100%
+  # offline, y un APK compilado con este script salia con el boton diciendo
+  # siempre NO SE PUDO CONECTAR (tools/prueba-apk.mjs lo caza). Por eso se
+  # quita cualquier eliminacion forzada que quede y se asegura la declaracion.
+  $m = $m -replace '\s*<uses-permission android:name="android\.permission\.(INTERNET|ACCESS_NETWORK_STATE)"\s+tools:node="remove"\s*/>', ''
+  foreach ($perm in 'INTERNET', 'ACCESS_NETWORK_STATE') {
+    if ($m -notmatch "android\.permission\.$perm`"") {
+      $m = $m -replace '(</manifest>)', "    <uses-permission android:name=`"android.permission.$perm`" />`r`n`$1"
+    }
   }
+  # Las FOTOS no: eran del juego GALERIA, que ya no existe, y Android se lo
+  # seguia ensenando a ella como "Fotos y videos". Si alguno de estos vuelve
+  # al manifest, se quita aqui.
+  $m = $m -replace '\s*<uses-permission android:name="android\.permission\.(READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE)"[^>]*/>', ''
   # La orientacion la elige CADA ESCENA, pero ya NO con screen.orientation.lock:
   # ahora la pide el puente nativo de MainActivity (setRequestedOrientation), que
   # manda sobre el bloqueo de giro del sistema. Ver el comentario del manifest.
@@ -188,7 +195,7 @@ if (Test-Path $manifest) {
     $m = $m -replace '(<activity\s)', '$1android:screenOrientation="sensorLandscape" android:resizeableActivity="false" '
   }
   Set-Content $manifest $m -Encoding utf8
-  Write-Host 'Manifest parcheado: sin INTERNET, arranque apaisado (el giro lo pide el puente)' -ForegroundColor Green
+  Write-Host 'Manifest parcheado: con INTERNET, sin fotos, arranque apaisado (el giro lo pide el puente)' -ForegroundColor Green
 }
 
 # --- 6. Compilar ---
@@ -200,7 +207,7 @@ Set-Location $root
 
 $apk = Join-Path $root 'android\app\build\outputs\apk\debug\app-debug.apk'
 if (Test-Path $apk) {
-  $dest = Join-Path $root 'RominaArcade.apk'
+  $dest = Join-Path $root 'RomiQuest.apk'
   Copy-Item $apk $dest -Force
   $mb = [math]::Round((Get-Item $dest).Length / 1MB, 2)
   Write-Host ''

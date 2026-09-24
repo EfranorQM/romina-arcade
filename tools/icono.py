@@ -1,4 +1,4 @@
-"""Genera el icono del APK: un escudo con una espada cruzada, en PIXEL ART.
+"""Genera el icono del APK: el BLASON de RomiQuest, en pixel art.
 
     python tools/icono.py                # escribe los PNG en android/
     python tools/icono.py --hoja out.png # hoja de contactos para revisarlo
@@ -7,27 +7,37 @@
 Como el resto del arte del proyecto, no hay archivos de imagen de origen: la
 geometria vive aqui y se rasteriza con PIL.
 
-ESTE ICONO ES PIXEL ART, Y ESO CAMBIA LAS REGLAS
-    El icono anterior era un gabinete de recreativa dibujado SUAVE: se pintaba
-    a 8x y se reducia con LANCZOS, y el antialiasing salia de ahi. Este no. Se
-    dibuja en una rejilla de 24x24 celdas y se amplia con NEAREST, sin
-    suavizar ni una celda, porque un icono de pixel art suavizado deja de ser
-    pixel art: se convierte en un dibujo borroso.
-
-POR QUE 24x24 Y NO OTRA REJILLA
-    El icono se ve a 48 px en la lista de apps, y hasta 192. Si la rejilla no
-    DIVIDE EXACTO esos tamanos, unas celdas salen de 2 px y otras de 3, y el
-    resultado se ve sucio -- es el fallo clasico del pixel art escalado. Los
-    unicos divisores comodos de 48 son 16, 24 y 48:
-      16x16 -> 3 px por celda a 48, pero no da para un escudo CON espada
-      48x48 -> 1 px por celda a 48: el detalle se pierde, ilegible
-      24x24 -> 2 px por celda a 48 y 8 a 192. El punto justo.
+DE DONDE SALE
+    El 23-09-2026 Anderson dijo que el icono anterior -- un escudo de madera con
+    una espada, en una rejilla de 24x24 -- era "muy sencillo", y pidio ver
+    disenos antes de elegir. Hubo cuatro propuestas (Romina dando un tajo con la
+    estela en rosa, este blason, un corazon alado y Romina frente al ogro) y
+    eligio el BLASON. Es la evolucion del escudo: el mismo objeto, pero con
+    todo lo que le faltaba.
 
 QUE SE DIBUJA
-    Un escudo de tablones de madera con refuerzo de oro, y una espada de acero
-    cruzada en diagonal cuya punta y pomo SOBRESALEN del escudo. La diagonal es
-    de 45 grados exactos (x+y constante), que es la unica que en una rejilla de
-    pixeles sale limpia en vez de escalonada.
+    Un escudo de punta redonda con los colores de la capa de Romina (campo
+    azul adamascado, borde de oro), un corazon rosa en el centro, una corona de
+    tres puntas con perlas encima y dos espadas en aspa DETRAS: las empunaduras
+    asoman por arriba, a los lados de la corona, y las puntas por abajo, a los
+    lados de la punta del escudo.
+
+POR QUE UNA REJILLA DE 40x42
+    La de 24x24 no daba para mas que un escudo con una cruz: por eso se veia
+    sencillo. Con 40 celdas de ancho caben el borde de oro de dos celdas, el
+    adamascado del campo, un corazon con brillo y una corona con perlas.
+
+POR QUE YA NO SE ESCALA A CELDAS ENTERAS
+    El icono de 24x24 buscaba que cada celda midiera un numero entero de pixeles
+    en cada densidad. Con 40 celdas eso es imposible: no hay una escala entera
+    que quepa en la zona segura en las cinco densidades (a 108 px, una celda de
+    1 px deja el escudo en tres cuartos de su tamano y una de 2 px lo saca del
+    circulo). Y tampoco se veria: el launcher reescala el icono a su tamano, y
+    en el telefono de ella (xxhdpi, 440 dpi) nunca se pinta a 1:1.
+    Asi que el pixel art se amplia con NEAREST a 16 px por celda -- sin
+    suavizar ni una celda -- y ESE dibujo se reduce con BOX (media de area, sin
+    los halos que deja LANCZOS en los bordes duros) al tamano exacto de cada
+    densidad.
 
 LOS DOS ICONOS SON DISTINTOS, NO EL MISMO A DOS TAMANOS
     ic_launcher (48..192)     se ve ENTERO. Trae su silueta y su fondo horneados,
@@ -45,10 +55,7 @@ import sys
 from PIL import Image, ImageDraw, ImageFilter
 
 C = 432.0          # lienzo de referencia
-SS = 8             # solo lo usan las capas suaves (fondo, sombra del legacy)
 SAFE_R = 132.0     # radio de la zona segura del adaptive icon, en coords de 432
-
-N = 24             # la rejilla de pixel art. Ver la cabecera: divide 48 y 192.
 
 # Densidades reales de Android: (carpeta, tamano legacy, tamano foreground)
 DENSITIES = [
@@ -58,36 +65,6 @@ DENSITIES = [
     ('xxhdpi',  144, 324),
     ('xxxhdpi', 192, 432),
 ]
-
-PAL = {
-    'bg_in':   '2a1a3d',   # centro del degradado de fondo
-    'bg_out':  '0d0620',   # esquina; es el theme-color del juego
-    'glow':    'ff5c9d',   # el halo rosa detras del escudo (el color del arcade)
-}
-
-# La paleta del pixel art. Corta a proposito: son los mismos tonos del escudo
-# y la espada que Romina lleva en el juego, para que el icono y el personaje
-# se reconozcan como la misma cosa.
-O   = (43, 21, 38, 255)        # contorno (violeta muy oscuro, no negro puro)
-MAD = [(107, 67, 38, 255), (150, 97, 58, 255), (184, 121, 74, 255)]
-ACE = [(74, 85, 112, 255), (138, 151, 184, 255), (212, 220, 240, 255), (255, 255, 255, 255)]
-ORO = [(138, 98, 22, 255), (217, 165, 42, 255), (255, 224, 102, 255)]
-CUE = (92, 58, 33, 255)        # el cuero de la empunadura
-JOY = (196, 28, 90, 255)       # la joya: el rosa del arcade
-JOY2 = (255, 143, 188, 255)
-
-# El ESCUDO, fila a fila: medio-ancho en celdas. Se define por su mitad y se
-# refleja, asi es simetrico por construccion y no por buen pulso.
-# Se MIDIO que con el escudo a 8 celdas de medio-ancho y la espada saliendo de
-# esquina a esquina, el punto mas lejano caia a 268 px del centro -- el doble
-# del limite de 132 de la zona segura -- y el launcher recortaba medio icono.
-# Con 6 y la espada mas recogida, cabe.
-ESCUDO_FILAS = {
-    5: 6, 6: 6, 7: 6, 8: 6, 9: 6, 10: 6, 11: 5,
-    12: 5, 13: 4, 14: 4, 15: 3, 16: 2,
-}
-ESC_CX = 11.5      # el eje del escudo, entre las celdas 11 y 12
-ESC_PUNTA = 17     # la fila donde acaba la punta de abajo
 
 
 def hexc(h, a=255):
@@ -100,193 +77,299 @@ def lerp(c0, c1, t):
     return tuple(int(c0[i] + (c1[i] - c0[i]) * t) for i in range(4))
 
 
-def pixel_art():
-    """Dibuja el icono en la rejilla de N x N celdas. Devuelve una imagen NxN."""
-    img = Image.new('RGBA', (N, N), (0, 0, 0, 0))
+PAL = {
+    'bg_in':   '3a2466',   # centro del degradado de fondo
+    'bg_out':  '0d0620',   # esquina; es el theme-color del juego
+    'glow':    'ff5c9d',   # el halo rosa detras del blason (el color del arcade)
+}
 
-    def px(x, y, c):
+# La paleta del pixel art, de claro a oscuro. El azul es el de la capa de
+# Romina en el juego (romi-atlas.js): el blason son sus colores.
+O = hexc('1d0f24')                       # contorno (violeta muy oscuro, no negro)
+ORO = [hexc('fff0a0'), hexc('ffe066'), hexc('d9a52a'), hexc('8a6216'), hexc('5a3d0c')]
+AZ = [hexc('6a98f0'), hexc('4878d8'), hexc('3060c0'), hexc('243c90'), hexc('182a66')]
+ROS = [hexc('ffd0e2'), hexc('ff8fbc'), hexc('ff5c9d'), hexc('d62a6e'), hexc('8e1448')]
+ACE = [hexc('ffffff'), hexc('d4dcf0'), hexc('8a97b8'), hexc('4a5570')]
+CUERO = [hexc('7a4a2a'), hexc('5c3a21')]
+PERLA = [hexc('ffffff'), hexc('ffd0e2')]
+
+N_W, N_H = 40, 42  # la rejilla
+EJE = 19.5         # el eje de simetria, entre las columnas 19 y 20 (x -> 39 - x)
+
+# EL ESCUDO, fila a fila: medio-ancho en celdas. Se define por su mitad y se
+# refleja, asi es simetrico por construccion y no por buen pulso.
+ESC_TOP = 12
+ESCUDO_FILAS = {
+    0: 12, 1: 12, 2: 12, 3: 12, 4: 12, 5: 12, 6: 12, 7: 12, 8: 12, 9: 12, 10: 12,
+    11: 12, 12: 12, 13: 12, 14: 11, 15: 11, 16: 10, 17: 10, 18: 9, 19: 8, 20: 7,
+    21: 6, 22: 5, 23: 4, 24: 3, 25: 2, 26: 1,
+}
+
+# Cuantos pixeles mide una celda en el lienzo de 432. MEDIDO, no a ojo: con
+# 5.29 el punto mas lejano (los pomos de las espadas) cae a 130.9 del centro,
+# con el limite de la zona segura en 132 (python tools/icono.py --verificar).
+ESCALA = 5.29
+
+
+# ------------------------------------------------------------ la rejilla
+class Rejilla:
+    """Una rejilla de celdas de color. Lo que se pinta despues tapa lo de antes."""
+
+    def __init__(self, w, h):
+        self.w, self.h = w, h
+        self.c = [[None] * w for _ in range(h)]
+
+    def put(self, x, y, col):
         x, y = int(x), int(y)
-        if 0 <= x < N and 0 <= y < N:
-            img.putpixel((x, y), c)
+        if 0 <= x < self.w and 0 <= y < self.h and col is not None:
+            self.c[y][x] = col
 
-    # ---------- EL ESCUDO ----------
-    for y, w in ESCUDO_FILAS.items():
-        x0, x1 = int(ESC_CX - w), int(ESC_CX + w)
-        for x in range(x0, x1 + 1):
-            # Tablones: la luz entra por la izquierda, asi que esa banda va
-            # clara y la de la derecha en sombra. Tres tonos, no un degradado:
-            # en pixel art el volumen se hace con BANDAS PLANAS.
-            t = (x - x0) / float(x1 - x0 + 1)
-            px(x, y, MAD[2] if t < 0.26 else (MAD[1] if t < 0.70 else MAD[0]))
-    # contorno
-    for y, w in ESCUDO_FILAS.items():
-        px(ESC_CX - w - 1, y, O)
-        px(ESC_CX + w + 1, y, O)
-    for x in range(int(ESC_CX - 6) - 1, int(ESC_CX + 6) + 2):
-        px(x, 4, O)
-    # La punta de abajo se cierra a mano: con solo 2-3 celdas de ancho, el
-    # contorno calculado por filas la partia y el escudo acababa en un pico
-    # roto. A esta escala, cerrar cuatro celdas es mas fiable que una formula.
-    for x, y in ((9, 16), (10, 17), (11, 17), (12, 17), (13, 16)):
-        px(x, y, O)
-    px(11, 16, MAD[1]); px(12, 16, MAD[0])
+    def get(self, x, y):
+        if 0 <= x < self.w and 0 <= y < self.h:
+            return self.c[y][x]
+        return None
 
-    # ---------- EL REFUERZO EN CRUZ ----------
-    # UNA sola fila y UNA sola columna. Con dos de cada, la cruz ocupaba casi
-    # un tercio del escudo y el conjunto se leia como una placa de oro en vez
-    # de como madera reforzada.
-    for x in range(int(ESC_CX - 6), int(ESC_CX + 6) + 1):
-        px(x, 9, ORO[1])
-    for y in range(5, 15):
-        px(11, y, ORO[1])
-    # el canto alto, mas claro: es lo que le da grosor al refuerzo
-    for x in range(int(ESC_CX - 5), int(ESC_CX + 6)):
-        px(x, 8, ORO[0])
-    px(11, 4, ORO[0])
-
-    # ---------- LA ESPADA ----------
-    # Diagonal de 45 grados EXACTOS: es la unica que en una rejilla de pixeles
-    # sale limpia; cualquier otra pendiente da escalones desiguales.
-    # t=0 en el pomo (abajo-izquierda), t=1 en la punta (arriba-derecha).
-    # Sobresale del escudo por las dos puntas, pero sin salirse del circulo
-    # seguro: va de (4,18) a (19,3), no de esquina a esquina.
-    def D(t):
-        return (4 + t * 15, 18 - t * 15)
-
-    # Sombra bajo el filo, una celda abajo-derecha. Es lo que despega la espada
-    # del escudo; sin ella se funden en una mancha.
-    #
-    # PERO SOLO SOBRE LA MADERA, NO EN LUGAR DE ELLA. El primer intento pintaba
-    # el contorno sobre el escudo y partia los tablones: en el mapa de celdas
-    # se veian '#' sueltos por todo el escudo y la silueta dejaba de leerse.
-    # Sobre la madera se usa su tono mas oscuro, que hace de sombra sin abrir
-    # un agujero; el contorno duro se reserva para donde la espada sale al
-    # fondo.
-    for i in range(0, 101):
-        x, y = D(i / 100.0)
-        xi, yi = int(x + 1), int(y + 1)
-        if 0 <= xi < N and 0 <= yi < N:
-            actual = img.getpixel((xi, yi))
-            if actual[3] == 0:
-                px(xi, yi, O)          # fuera del escudo: contorno duro
-            elif actual[:3] in (MAD[1][:3], MAD[2][:3]):
-                px(xi, yi, MAD[0])     # sobre madera: su propia sombra
-
-    # LA HOJA, de t=0.38 a 1.0. Dos celdas de ancho: filo claro y cuerpo.
-    for i in range(38, 101):
-        x, y = D(i / 100.0)
-        px(x, y, ACE[2])
-        px(x - 1, y, ACE[1])
-    # la punta, con su destello
-    for t in (1.0, 0.95):
-        x, y = D(t)
-        px(x, y, ACE[3])
-
-    # LA GUARDA. Perpendicular a la hoja: si la hoja avanza en (+1,-1), la
-    # perpendicular es (+1,+1). Dibujarla en la misma direccion la deja
-    # paralela al filo y no se lee como guarda -- fallo real del primer intento.
-    gx, gy = D(0.38)
-    for k in (-2, -1, 1, 2):
-        px(gx + k, gy + k, ORO[2] if abs(k) == 2 else ORO[1])
-    px(gx, gy, ORO[2])
-
-    # LA EMPUNADURA de cuero, con su anilla
-    for i in range(8, 38):
-        x, y = D(i / 100.0)
-        px(x, y, CUE)
-    x, y = D(0.27)
-    px(x, y, ORO[1])
-
-    # EL POMO. Pegado a la empunadura: con un hueco en medio se veia como una
-    # mota de oro suelta flotando al lado del escudo.
-    x, y = D(0.08)
-    px(x, y, ORO[2]); px(x + 1, y - 1, ORO[1]); px(x - 1, y + 1, ORO[1])
-    # el contorno del pomo, para que no se deshilache contra el fondo
-    px(x - 1, y - 1, O); px(x + 2, y - 2, O)
-
-    # ---------- EL REMACHE del escudo, con su joya ----------
-    px(11, 12, JOY); px(12, 12, JOY2)
-
-    return img
+    def imagen(self):
+        im = Image.new('RGBA', (self.w, self.h), (0, 0, 0, 0))
+        px = im.load()
+        for y in range(self.h):
+            for x in range(self.w):
+                if self.c[y][x] is not None:
+                    px[x, y] = self.c[y][x]
+        return im
 
 
-def art_bounds(geo=None):
-    """Caja envolvente del dibujo, en coordenadas de 432.
-
-    Se MIDE sobre el pixel art en vez de anotarse a mano: al mover una pieza,
-    el encuadre del legacy se recalcula solo y no queda descentrado.
-    """
-    im = pixel_art()
-    bb = im.split()[3].getbbox()
-    if not bb:
-        return (0, 0, C, C)
-    k = C / N
-    return (bb[0] * k, bb[1] * k, bb[2] * k, bb[3] * k)
+VECINOS4 = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+VECINOS8 = VECINOS4 + [(1, 1), (1, -1), (-1, 1), (-1, -1)]
 
 
-def draw_art(size, geo=None, scale=1.0, cx=None, cy=None):
-    """El escudo sobre fondo transparente, en un lienzo de `size` px.
+def mascara(f):
+    return {(x, y) for y in range(N_H) for x in range(N_W) if f(x, y)}
 
-    EL ESCALADO ES NEAREST, SIEMPRE. Con LANCZOS (que es lo que usaba el icono
-    anterior) las celdas se difuminan y deja de ser pixel art.
+
+def borde_ext(m, diag=True):
+    """Las celdas de FUERA que tocan la mascara: donde va el contorno."""
+    out = set()
+    for (x, y) in m:
+        for dx, dy in (VECINOS8 if diag else VECINOS4):
+            if (x + dx, y + dy) not in m:
+                out.add((x + dx, y + dy))
+    return out
+
+
+def encoger(m, n=1, diag=False):
+    for _ in range(n):
+        b = borde_ext(m, diag)
+        m = {p for p in m
+             if not any((p[0] + dx, p[1] + dy) in b for dx, dy in (VECINOS8 if diag else VECINOS4))}
+    return m
+
+
+def biselar(g, m, claro, medio, oscuro):
+    """Volumen en BANDAS PLANAS, que es como se hace en pixel art: la luz entra
+    por arriba a la izquierda, asi que la celda con el vacio en esa diagonal va
+    clara y la que lo tiene en la contraria, oscura."""
+    for (x, y) in m:
+        hacia = (x - 1, y - 1) not in m
+        contra = (x + 1, y + 1) not in m
+        g.put(x, y, claro if hacia and not contra else oscuro if contra and not hacia else medio)
+
+
+# ------------------------------------------------------------ las piezas
+def escudo_m():
+    m = set()
+    for r, h in ESCUDO_FILAS.items():
+        for x in range(int(EJE + 0.5 - h), int(EJE + 0.5 + h)):
+            m.add((x, ESC_TOP + r))
+    # las dos esquinas de arriba, redondeadas
+    m -= {(int(EJE + 0.5 - 12), ESC_TOP), (int(EJE + 0.5 + 11), ESC_TOP)}
+    return m
+
+
+def corazon_m(cx, cy, a):
+    """La curva del corazon, (x^2 + y^2 - 1)^3 = x^2 y^3, muestreada en celdas."""
+    def f(x, y):
+        u = (x + 0.5 - cx) / a
+        v = -(y + 0.5 - cy) / a
+        return (u * u + v * v - 1) ** 3 - u * u * v ** 3 <= 0
+    return mascara(f)
+
+
+def espada(g, pomo, punta, mango=3):
+    """Espada a 45 grados EXACTOS, del POMO a la PUNTA: es la unica pendiente
+    que en una rejilla de pixeles sale limpia en vez de escalonada."""
+    (px_, py_), (tx, ty) = pomo, punta
+    n = abs(ty - py_)
+    dx = 1 if tx > px_ else -1
+    dy = 1 if ty > py_ else -1
+    pts = [(px_ + dx * i, py_ + dy * i) for i in range(n + 1)]
+    celdas = {}
+    x, y = pts[0]
+    for (ax, ay, c) in ((0, 0, ORO[1]), (-dx, 0, ORO[2]), (0, -dy, ORO[2]), (-dx, -dy, ORO[3])):
+        celdas[(x + ax, y + ay)] = c                       # el pomo, 2x2 en oro
+    for i in range(1, 1 + mango):
+        celdas[pts[i]] = CUERO[i % 2]                      # el mango, a franjas
+    gx, gy = pts[1 + mango]
+    # La guarda, PERPENDICULAR a la hoja. Dibujarla en la misma direccion la
+    # deja paralela al filo y no se lee como guarda (fallo real del icono
+    # anterior).
+    for k in range(-3, 4):
+        celdas[(gx + k, gy - k * dx * dy)] = ORO[0] if abs(k) == 3 else ORO[1]
+    celdas[(gx, gy)] = ROS[2]                              # una joya en el centro
+    for i in range(2 + mango, n + 1):
+        x, y = pts[i]
+        celdas[(x, y)] = ACE[1] if i < n else ACE[0]       # el filo, y la punta que brilla
+        if i < n:
+            celdas[(x + dx, y)] = ACE[2]
+    for p in borde_ext(set(celdas)):
+        g.put(p[0], p[1], O)
+    for p, c in celdas.items():
+        g.put(p[0], p[1], c)
+
+
+def corona(g, top):
+    """Corona en zigzag: tres puntas que se tocan por la base, con una perla en
+    cada una. La primera version las hacia finas y separadas, y las perlas se
+    leian como velas."""
+    base_y = top + 6
+    perfil = {13: 2, 14: 4, 15: 3, 16: 2, 17: 2, 18: 4, 19: 5}   # alto por columna; se refleja
+    m = set()
+    for x, alto in perfil.items():
+        for xx in (x, 39 - x):
+            for y in range(base_y - alto, base_y + 3):
+                m.add((xx, y))
+    perlas = [(14, base_y - 5), (25, base_y - 5), (19, base_y - 6), (20, base_y - 6)]
+    m |= set(perlas)
+    for p in borde_ext(m):
+        g.put(p[0], p[1], O)
+    biselar(g, m - set(perlas), ORO[1], ORO[2], ORO[3])
+    for x in range(13, 27):
+        g.put(x, base_y + 2, ORO[3])                       # el canto de la banda
+        g.put(x, base_y, ORO[0] if x < 20 else ORO[1])     # y su filo de luz
+    for (x, c, c2) in ((15, ROS[2], ROS[1]), (19, AZ[2], AZ[0]), (23, ROS[2], ROS[1])):
+        g.put(x, base_y + 1, c2)
+        g.put(x + 1, base_y + 1, c)                        # rosa, azul, rosa
+    for (x, y) in perlas:
+        g.put(x, y, PERLA[0] if x <= 19 else PERLA[1])
+
+
+# El corazon, donde y de que tamano: lo comparten el dibujo y la capa monocroma.
+CORAZON = (EJE, 23.4, 5.3)
+
+
+def blason():
+    """El blason entero en su rejilla. Devuelve la imagen de N_W x N_H celdas."""
+    g = Rejilla(N_W, N_H)
+    # Las espadas van PRIMERO: el escudo las tapa y solo asoman sus extremos.
+    espada(g, (4, 5), (32, 33))
+    espada(g, (35, 5), (7, 33))
+
+    esc = escudo_m()
+    for p in borde_ext(esc):
+        g.put(p[0], p[1], O)
+    campo = encoger(esc, 2, diag=True)
+    biselar(g, esc - campo, ORO[1], ORO[2], ORO[3])       # el borde de oro, dos celdas
+    biselar(g, campo, AZ[1], AZ[2], AZ[3])
+    # El adamascado: una rejilla de rombos un tono por encima. A 48 px no se ve,
+    # y esta bien: lo que hace es que el campo no parezca un plano de color
+    # cuando el icono se ve grande.
+    for (x, y) in encoger(campo, 1, diag=True):
+        if (x + y) % 4 == 0 and (x - y) % 4 == 0 and g.get(x, y) == AZ[2]:
+            g.put(x, y, AZ[1])
+
+    cor = corazon_m(*CORAZON)
+    for p in borde_ext(cor):
+        g.put(p[0], p[1], O)
+    biselar(g, cor, ROS[1], ROS[2], ROS[3])
+    for p in ((16, 21), (17, 20), (16, 20)):               # el brillo del corazon
+        if p in cor:
+            g.put(p[0], p[1], ROS[0])
+
+    corona(g, 1)
+    return g.imagen()
+
+
+def pixel_art():
+    return blason()
+
+
+# ------------------------------------------------------------ de celdas a pixeles
+def draw_art(size, celda, cx=None, cy=None):
+    """El blason, a `celda` pixeles por celda, centrado en un lienzo de `size`.
+
+    Se amplia con NEAREST a 16 px por celda y se reduce con BOX al tamano
+    exacto (ver la cabecera). Se centra su caja, no la rejilla: la rejilla
+    tiene celdas vacias alrededor y descentraria el dibujo.
     """
     art = pixel_art()
-
-    # Cuantos pixeles de pantalla mide una celda. Se REDONDEA a entero: con un
-    # tamano fraccionario, unas celdas saldrian de 2 px y otras de 3 y el
-    # pixel art se veria sucio.
-    #
-    # ENCAJE: el dibujo llega a 11.3 celdas del centro y la zona segura del
-    # adaptive icon son 132 px de 432, o sea 7.3 celdas. Por eso el arte se
-    # dibuja al 58%: sin esto el launcher recortaba la punta de la espada y
-    # medio escudo. Medido, no a ojo (python tools/icono.py --verificar).
-    ENCAJE = 0.58
-    celda = max(1, int(round((size / float(N)) * scale * ENCAJE)))
-    lado = celda * N
-    grande = art.resize((lado, lado), Image.NEAREST)
-
+    art = art.crop(art.getbbox())
+    grande = art.resize((art.width * 16, art.height * 16), Image.NEAREST)
+    w = max(1, int(round(art.width * celda)))
+    h = max(1, int(round(art.height * celda)))
+    peq = grande.resize((w, h), Image.BOX)
+    cx = size / 2.0 if cx is None else cx
+    cy = size / 2.0 if cy is None else cy
     out = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    # Centrado sobre el punto pedido (o el centro del lienzo)
-    ax = (cx if cx is not None else C / 2.0) / C * lado
-    ay = (cy if cy is not None else C / 2.0) / C * lado
-    out.paste(grande, (int(round(size / 2.0 - ax)), int(round(size / 2.0 - ay))), grande)
-
-    # Halo calido detras, para que el escudo no flote sobre el fondo oscuro.
-    # Esta capa SI es suave: es luz, no dibujo.
-    # El halo va DETRAS y muy suave. Con el anterior (naranja, 30% del lienzo y
-    # al 34% de opacidad) la luz se comia el escudo: se veia borroso y todo
-    # amarillo. Ahora es rosa, mas pequeno y a la mitad de fuerza -- se nota
-    # que hay luz detras sin robarle contraste al dibujo.
-    gl = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    gd = ImageDraw.Draw(gl)
-    r = size * 0.22 * scale
-    gd.ellipse([size / 2 - r, size / 2 - r, size / 2 + r, size / 2 + r], fill=hexc(PAL['glow']))
-    gl = gl.filter(ImageFilter.GaussianBlur(size * 0.13))
-    gl.putalpha(gl.split()[3].point(lambda v: int(v * 0.17)))
-    return Image.alpha_composite(gl, out)
+    out.alpha_composite(peq, (int(round(cx - w / 2.0)), int(round(cy - h / 2.0))))
+    return out
 
 
-def draw_background(size):
-    """Capa de fondo del adaptive icon: radial opaco hasta la ultima esquina.
+def chispa(im, x, y, k, color, brazo):
+    """Destello de cuatro puntas: una cruz de celdas de k pixeles."""
+    d = ImageDraw.Draw(im)
+    for i in range(-brazo, brazo + 1):
+        d.rectangle([x + i * k, y, x + i * k + k - 1, y + k - 1], fill=color)
+        d.rectangle([x, y + i * k, x + k - 1, y + i * k + k - 1], fill=color)
+
+
+# Los destellos del fondo, en fracciones del lienzo. Van a los lados del
+# escudo, a media altura: ahi hay hueco entre el dibujo y el borde, y quedan
+# DENTRO del circulo, asi que tampoco los recorta la mascara redonda.
+CHISPAS = [
+    (0.245, 0.46, 'ffffff', 2),
+    (0.765, 0.40, 'ffe066', 1),
+    (0.275, 0.66, 'ffd0e2', 1),
+    (0.735, 0.64, 'ffffff', 1),
+]
+
+
+def draw_background(size, chispas=True):
+    """Capa de fondo del adaptive icon: radial opaco hasta la ultima esquina,
+    el halo rosa y los destellos.
 
     Nunca puede quedar transparente: la mascara mas permisiva dejaria ver un
-    borde vacio. Sustituye al color plano blanco anterior, sobre el que el rosa
-    caia a 2.9:1 de contraste y el halo era literalmente invisible.
+    borde vacio.
     """
     im = Image.new('RGBA', (size, size), hexc(PAL['bg_out']))
     d = ImageDraw.Draw(im)
-    R = 305 * (size / C)
+    R = size * 0.62
     steps = max(60, int(R))
     for i in range(steps, 0, -1):
         t = i / steps
         r = R * t
         d.ellipse([size / 2 - r, size / 2 - r, size / 2 + r, size / 2 + r],
                   fill=lerp(hexc(PAL['bg_in']), hexc(PAL['bg_out']), t))
+
+    # Halo rosa detras del blason: se nota que hay luz sin robarle contraste
+    # al dibujo. Es luz, no dibujo, asi que esta capa SI es suave.
+    m = Image.new('L', (size, size), 0)
+    r = size * 0.24
+    ImageDraw.Draw(m).ellipse([size / 2 - r, size / 2 - r, size / 2 + r, size / 2 + r],
+                              fill=int(255 * 0.28))
+    m = m.filter(ImageFilter.GaussianBlur(size * 0.10))
+    luz = Image.new('RGBA', (size, size), hexc(PAL['glow']))
+    luz.putalpha(m)
+    im.alpha_composite(luz)
+
+    if chispas:
+        k = max(1, int(round(4 * size / C)))
+        for (x, y, col, brazo) in CHISPAS:
+            chispa(im, int(size * x), int(size * y), k, hexc(col), brazo)
     return im
 
 
 def draw_foreground(size, geo=None):
-    return draw_art(size, geo)
+    return draw_art(size, ESCALA * size / C)
 
 
 def draw_legacy(size, geo=None, round_shape=False):
@@ -301,14 +384,18 @@ def draw_legacy(size, geo=None, round_shape=False):
     else:
         ds.rounded_rectangle([m, m, size - m, size - m], radius=40 * (size / 192.0), fill=255)
 
-    # El arte se REDIBUJA a mayor escala: aqui no hay mascara, el lienzo util es
-    # todo. Se escala por el ALTO del bbox solido para que el tamano percibido
-    # coincida con el del adaptive.
-    ax0, ay0, ax1, ay1 = art_bounds(geo)
-    art = draw_art(size, geo, scale=(inner / size) * (C / (ay1 - ay0)) * 0.88,
-                   cx=(ax0 + ax1) / 2.0, cy=(ay0 + ay1) / 2.0)
+    # El arte se REDIBUJA mas grande: aqui no hay mascara del launcher, el
+    # lienzo util es todo. En el redondo, el alto del blason tiene que caber
+    # en el circulo, y ahi manda la diagonal de las empunaduras: va mas chico.
+    art = pixel_art()
+    bb = art.getbbox()
+    alto = bb[3] - bb[1]
+    llenado = 0.70 if round_shape else 0.80
+    art_im = draw_art(size, inner * llenado / alto)
 
-    comp = Image.alpha_composite(draw_background(size), art)
+    # Sin destellos: en el legacy el blason llena la silueta y se quedaban
+    # pegados al borde del escudo, como manchas.
+    comp = Image.alpha_composite(draw_background(size, chispas=False), art_im)
     out = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     out.paste(comp, (0, 0), sil)          # el halo no puede desbordar la silueta
 
@@ -321,23 +408,28 @@ def draw_legacy(size, geo=None, round_shape=False):
 
 
 def draw_monochrome(size, geo=None):
-    """Capa monocroma (Android 13+): la silueta del escudo y la espada.
+    """Capa monocroma (Android 13+, iconos tematicos): la silueta del blason
+    CON EL CORAZON CALADO.
 
-    Se usa el ALFA del propio pixel art, asi que sigue exactamente la misma
-    forma que el icono de color -- si se dibujara aparte, las dos versiones se
-    irian separando en cuanto se tocara una.
+    La silueta sale del ALFA del propio pixel art, asi que sigue exactamente la
+    forma del icono de color. Pero a una sola tinta el corazon desapareceria
+    dentro del escudo, y es lo que distingue este blason de cualquier otro:
+    por eso se vacia, y se lee como un hueco con forma de corazon.
     """
     art = pixel_art()
-    celda = max(1, int(round(size / float(N))))
-    lado = celda * N
-    alfa = art.split()[3].resize((lado, lado), Image.NEAREST)
-
-    # El escudo, un poco mas chico que el lienzo para que el launcher lo pueda
-    # recortar sin comerse la punta de la espada.
+    cor = corazon_m(*CORAZON)
+    px = art.load()
+    for (x, y) in cor:
+        px[x, y] = (0, 0, 0, 0)
+    bb = art.getbbox()
+    art = art.crop(bb)
+    celda = ESCALA * size / C
+    grande = art.split()[3].resize((art.width * 16, art.height * 16), Image.NEAREST)
+    w = max(1, int(round(art.width * celda)))
+    h = max(1, int(round(art.height * celda)))
+    alfa = grande.resize((w, h), Image.BOX)
     mask = Image.new('L', (size, size), 0)
-    off = (size - lado) // 2
-    mask.paste(alfa, (off, off))
-
+    mask.paste(alfa, (int(round(size / 2.0 - w / 2.0)), int(round(size / 2.0 - h / 2.0))))
     out = Image.new('RGBA', (size, size), (255, 255, 255, 0))
     out.putalpha(mask)
     return out
@@ -434,6 +526,20 @@ def hoja(path):
             o.paste(comp, (0, 0), mask_of(s, kind))
             ims.append(o)
         filas.append((etiqueta, ims))
+    # Los iconos tematicos de Android 13: la capa monocroma, tenida.
+    ims = []
+    for s in sizes:
+        canvas = int(s * 108 / 72)
+        mono = draw_monochrome(canvas)
+        fondo = Image.new('RGBA', (canvas, canvas), (215, 227, 255, 255))
+        tinta = Image.new('RGBA', (canvas, canvas), (40, 56, 110, 255))
+        fondo.paste(tinta, (0, 0), mono.split()[3])
+        off = (canvas - s) // 2
+        fondo = fondo.crop((off, off, off + s, off + s))
+        o = Image.new('RGBA', (s, s), (0, 0, 0, 0))
+        o.paste(fondo, (0, 0), mask_of(s, 'circle'))
+        ims.append(o)
+    filas.append(('tematico (A13+)', ims))
 
     W = sum(s + 20 for s in sizes) + 150
     fila_h = max(sizes) + 34
@@ -469,11 +575,11 @@ def main():
         print('No existe android/. Corre antes:  npx cap add android')
         sys.exit(1)
 
-    print('Generando el icono (marquesina de arcade):')
+    print('Generando el icono (el blason):')
     n = escribir(res)
 
-    # El adaptive icon debe apuntar a la capa de fondo nueva: con el <color>
-    # blanco original el neon se destruia.
+    # El adaptive icon debe apuntar a las capas de aqui: con el <color> blanco
+    # que trae la plantilla de Capacitor, el fondo destruia el dibujo.
     anydpi = os.path.join(res, 'mipmap-anydpi-v26')
     os.makedirs(anydpi, exist_ok=True)
     xml = ('<?xml version="1.0" encoding="utf-8"?>\n'

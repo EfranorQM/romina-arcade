@@ -62,12 +62,14 @@ if (!aapt) {
   // se instala sin pedir nada y el boton falla siempre.
   ok(perms.includes('android.permission.INTERNET'),
      'tiene permiso de INTERNET (lo necesita el boton de actualizar)');
-  // Las fotos del juego GALERIA. Es el permiso ESPECIFICO de imagenes, no el
-  // amplio de almacenamiento.
-  ok(perms.includes('android.permission.READ_MEDIA_IMAGES'),
-     'tiene permiso de FOTOS (lo necesita GALERIA)');
-  ok(!perms.includes('android.permission.WRITE_EXTERNAL_STORAGE'),
-     'NO pide escribir en el almacenamiento (solo lee fotos)');
+  // Las FOTOS (READ_MEDIA_IMAGES, y READ_EXTERNAL_STORAGE en Android 12 o
+  // menos) eran del juego GALERIA. El juego se quito el 15-09-2026 pero el
+  // permiso siguio en el APK hasta el 23-09, cuando Anderson pidio quitarlo:
+  // Android se lo seguia ensenando a ella como "Fotos y videos". Ninguno de
+  // los permisos de fotos o almacenamiento puede volver sin que esto falle.
+  const deFotos = perms.filter(p => /READ_MEDIA_|_EXTERNAL_STORAGE|ACCESS_MEDIA_LOCATION/.test(p));
+  ok(deFotos.length === 0,
+     'NO pide fotos ni almacenamiento' + (deFotos.length ? ' -> pide ' + deFotos.join(', ') : ''));
 }
 
 // --- El nombre y el icono ---
@@ -120,11 +122,12 @@ ok(distintos.length === 0 || soloVersion,
    (soloVersion ? '  [update.js difiere solo por el numero de version: normal tras publicar]'
                 : distintos.length ? ' -> distintos: ' + distintos.join(', ') : ''));
 
-// --- El puente nativo de fotos ---
-// android/ esta en .gitignore y se regenera, asi que el MainActivity con el
-// puente vive en android-src/ y hay que COPIARLO en cada compilacion. Si se
-// olvida, el puente desaparece sin avisar y GALERIA se queda en caratulas
-// para siempre -- un fallo mudo, que es el peor tipo.
+// --- Los puentes nativos ---
+// android/ esta en .gitignore y se regenera, asi que el MainActivity con los
+// puentes vive en android-src/ y hay que COPIARLO en cada compilacion. Si se
+// olvida, el puente del giro desaparece sin avisar -- un fallo mudo, que es el
+// peor tipo. El de FOTOS se quito con su permiso: si vuelve a aparecer, es que
+// se ha compilado un MainActivity viejo.
 console.log('\n== 4b) LOS PUENTES NATIVOS ==');
 {
   const dex = lista.filter(n => n.endsWith('.dex'));
@@ -140,8 +143,52 @@ console.log('\n== 4b) LOS PUENTES NATIVOS ==');
       if (buf.includes('AndroidGiro')) giro = true;
     } catch (e) { /* un dex ilegible no invalida los demas */ }
   }
-  ok(fotos, 'el puente AndroidFotos esta compilado dentro del APK (lo usa GALERIA)');
+  ok(!fotos, 'el puente AndroidFotos ya NO esta (se fue con el permiso de fotos)');
   ok(giro, 'el puente AndroidGiro sigue dentro (la orientacion por escena)');
+}
+
+// --- El icono: el que dibuja tools/icono.py, no el de Capacitor ni uno viejo ---
+// build-apk.ps1 lo redibuja DESPUES de `npx cap sync`. Si ese paso falla o se
+// salta, el APK sale con el icono anterior (o con el de Capacitor) y compila
+// igual: nada lo diria hasta verlo en el telefono. Por eso se comparan los
+// PIXELES de dentro del APK con lo que icono.py dibuja ahora mismo.
+console.log('\n== 4c) EL ICONO ==');
+if (aapt) {
+  const xml = execSync(`"${aapt}" dump xmltree --file res/mipmap-anydpi-v26/ic_launcher.xml "${apk}"`, { encoding: 'utf8' });
+  const res = execSync(`"${aapt}" dump resources "${apk}"`, { encoding: 'utf8', maxBuffer: 64 << 20 });
+  const capas = [...xml.matchAll(/=@(0x[0-9a-f]{8})/g)]
+    .map(m => (res.match(new RegExp('resource ' + m[1] + ' (\\S+)')) || [])[1]);
+  console.log('   capas del icono adaptativo: ' + capas.join(', '));
+  ok(capas.join() === 'mipmap/ic_launcher_background,mipmap/ic_launcher_foreground,mipmap/ic_launcher_monochrome',
+     'el icono adaptativo usa las tres capas de icono.py');
+}
+{
+  let hayPython = true;
+  try { execSync('python -c "import PIL"', { stdio: 'ignore' }); } catch { hayPython = false; }
+  if (!hayPython) {
+    console.log('   (sin python con Pillow: no se pueden comparar los pixeles del icono)');
+  } else {
+    const herr = path.join(raiz, 'tools');
+    for (const [entrada, dibujo] of [
+      ['res/mipmap-xxxhdpi-v4/ic_launcher_foreground.png', 'draw_foreground(432)'],
+      ['res/mipmap-xxxhdpi-v4/ic_launcher_background.png', 'draw_background(432)'],
+      ['res/mipmap-xxxhdpi-v4/ic_launcher.png', 'draw_legacy(192)'],
+    ]) {
+      const tmp = path.join(process.env.TEMP || '/tmp', 'apkicono_' + Date.now() + '.png');
+      fs.writeFileSync(tmp, leeDelApk(entrada));
+      // Se comparan los BYTES de la imagen entera. La primera version usaba
+      // ImageChops.difference(a, b).getbbox(), y en una imagen RGBA getbbox()
+      // solo mira el ALFA: el fondo es opaco entero y el legacy tiene las
+      // mismas esquinas, asi que daba "igual" con los colores cambiados del
+      // todo. Se vio probando el APK VIEJO contra el icono nuevo.
+      const r = execSync(`python -c "import sys; sys.path.insert(0, r'${herr}'); import icono; ` +
+        `from PIL import Image; a = Image.open(sys.argv[1]).convert('RGBA'); b = icono.${dibujo}; ` +
+        `print('igual' if a.size == b.size and a.tobytes() == b.tobytes() else 'distinto')" "${tmp}"`,
+        { encoding: 'utf8' }).trim();
+      fs.unlinkSync(tmp);
+      ok(r === 'igual', `${entrada.split('/').pop()} (xxxhdpi) es el que dibuja icono.py`);
+    }
+  }
 }
 
 // --- El arranque del actualizador ---

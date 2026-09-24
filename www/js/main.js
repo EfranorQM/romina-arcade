@@ -736,10 +736,10 @@ function boot() {
     // reanudara Pausa.salir() cuando ella toque: asi la cancion no arranca sola
     // encima de una pantalla quieta.
     if (!Pausa.activa) resumeAudio();
-    // La escena puede querer enterarse de que volvimos. GALERIA lo usa: si
-    // ella acaba de conceder el permiso de fotos en el dialogo del sistema,
-    // este es el momento en que se puede comprobar (el dialogo es asincrono y
-    // no devuelve nada al JavaScript).
+    // La escena puede querer enterarse de que volvimos, para comprobar algo
+    // que el sistema cambio mientras la app estaba fuera. Hoy ninguna lo usa:
+    // lo usaba GALERIA, para ver si ella habia dado el permiso de fotos, y
+    // con el juego se fue tambien el permiso.
     const esc = sm.cur;
     if (esc && typeof esc.resume === 'function') {
       try { esc.resume(); } catch (e) { /* una escena no puede tumbar la app */ }

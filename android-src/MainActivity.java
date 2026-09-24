@@ -16,22 +16,8 @@
 
 package com.romina.juegos;
 
-import android.Manifest;
-import android.content.ContentUris;
 import android.content.pm.ActivityInfo;
-import android.content.pm.PackageManager;
-import android.database.Cursor;
-import android.graphics.Bitmap;
-import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.provider.MediaStore;
-import android.util.Base64;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-import java.io.ByteArrayOutputStream;
-import org.json.JSONArray;
-import org.json.JSONObject;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
@@ -62,16 +48,6 @@ public class MainActivity extends BridgeActivity {
         // este addJavascriptInterface), o sea que no es un truco: es la via
         // normal. No es un plugin, no toca el manifest y no pide permisos.
         getBridge().getWebView().addJavascriptInterface(new Giro(), "AndroidGiro");
-
-        // El puente de FOTOS, para el juego GALERIA. Mismo mecanismo que el
-        // giro de arriba: addJavascriptInterface, sin plugin y sin dependencias.
-        //
-        // POR QUE NO UN PLUGIN. @capacitor/camera abre un SELECTOR donde hay
-        // que elegir a mano, y eso no sirve para un juego que necesita cuarenta
-        // fotos al azar en cada partida. Los plugins de terceros que si listan
-        // la galeria estan sin mantenimiento (el mas usado va por la v0.0.8).
-        // Cuarenta lineas aqui hacen exactamente lo que hace falta.
-        getBridge().getWebView().addJavascriptInterface(new Fotos(), "AndroidFotos");
 
         // ---------- El boton ATRAS de Android ----------
         // QUE PASABA SIN ESTO. BridgeActivity no toca el atras (no hay ningun
@@ -250,117 +226,6 @@ public class MainActivity extends BridgeActivity {
                     setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_USER);
                 }
             });
-        }
-    }
-    // ---------- Puente de FOTOS (el juego GALERIA) ----------
-    //
-    // Devuelve las N fotos mas recientes de la galeria como MINIATURAS en
-    // base64, listas para que el juego las dibuje en un canvas.
-    //
-    // POR QUE MINIATURAS Y NO LAS FOTOS. Una foto del Note 10 son 12 MP: en el
-    // canvas ocuparia 48 MB descomprimida, y cuarenta de esas revientan la
-    // memoria del WebView. Se piden a 192 px de lado, que es mas de lo que el
-    // juego dibuja (una carta mide 80x106), y se mandan como JPEG al 70%:
-    // unos 8 KB cada una.
-    //
-    // LAS FOTOS NO SALEN DEL TELEFONO. Se leen aqui, se reducen aqui y se
-    // pasan al JavaScript de la propia app. No hay ni una peticion de red en
-    // todo este camino, y el juego tampoco las guarda: viven en memoria
-    // mientras dura la partida.
-    private class Fotos {
-
-        // Que permiso toca segun la version de Android. Desde la 13 el permiso
-        // amplio de almacenamiento ya no existe: es uno especifico de imagenes.
-        private String permiso() {
-            return Build.VERSION.SDK_INT >= 33
-                ? Manifest.permission.READ_MEDIA_IMAGES
-                : Manifest.permission.READ_EXTERNAL_STORAGE;
-        }
-
-        @JavascriptInterface
-        public boolean hayPermiso() {
-            return ContextCompat.checkSelfPermission(MainActivity.this, permiso())
-                   == PackageManager.PERMISSION_GRANTED;
-        }
-
-        // Lanza el dialogo del sistema. El resultado NO se devuelve aqui (el
-        // dialogo es asincrono): el juego vuelve a preguntar con hayPermiso()
-        // cuando la app recupera el foco.
-        @JavascriptInterface
-        public void pedirPermiso() {
-            runOnUiThread(new Runnable() {
-                @Override public void run() {
-                    ActivityCompat.requestPermissions(
-                        MainActivity.this, new String[] { permiso() }, 7001);
-                }
-            });
-        }
-
-        // Las `cuantas` fotos mas recientes, como JSON: [{id, src}, ...]
-        // src es un data: URI que el canvas puede dibujar directamente.
-        //
-        // Devuelve "[]" ante CUALQUIER problema -- sin permiso, sin fotos, o
-        // una galeria que no se deja leer. El juego lo entiende como "no hay
-        // fotos" y se va a las caratulas, que es el respaldo.
-        @JavascriptInterface
-        public String recientes(int cuantas) {
-            JSONArray out = new JSONArray();
-            if (!hayPermiso()) return out.toString();
-            if (cuantas < 1) cuantas = 1;
-            if (cuantas > 80) cuantas = 80;   // tope: mas no cabe en memoria
-
-            Cursor c = null;
-            try {
-                String[] cols = { MediaStore.Images.Media._ID };
-                // Las mas recientes primero. LIMIT no es portable en todas las
-                // versiones del proveedor, asi que se corta al recorrer.
-                c = getContentResolver().query(
-                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                        cols, null, null,
-                        MediaStore.Images.Media.DATE_ADDED + " DESC");
-                if (c == null) return out.toString();
-
-                int idCol = c.getColumnIndexOrThrow(MediaStore.Images.Media._ID);
-                int n = 0;
-                while (c.moveToNext() && n < cuantas) {
-                    long id = c.getLong(idCol);
-                    Bitmap bm = null;
-                    try {
-                        Uri uri = ContentUris.withAppendedId(
-                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
-                        if (Build.VERSION.SDK_INT >= 29) {
-                            // API 29+: el proveedor genera la miniatura.
-                            bm = getContentResolver().loadThumbnail(
-                                uri, new android.util.Size(192, 192), null);
-                        } else {
-                            bm = MediaStore.Images.Thumbnails.getThumbnail(
-                                getContentResolver(), id,
-                                MediaStore.Images.Thumbnails.MINI_KIND, null);
-                        }
-                    } catch (Throwable t) {
-                        // Una foto rota no puede tumbar la partida: se salta.
-                        continue;
-                    }
-                    if (bm == null) continue;
-
-                    ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                    bm.compress(Bitmap.CompressFormat.JPEG, 70, bos);
-                    bm.recycle();
-                    String b64 = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
-
-                    JSONObject o = new JSONObject();
-                    o.put("id", id);
-                    o.put("src", "data:image/jpeg;base64," + b64);
-                    out.put(o);
-                    n++;
-                }
-            } catch (Throwable t) {
-                // Cualquier fallo -> "no hay fotos", y el juego usa caratulas.
-                return new JSONArray().toString();
-            } finally {
-                if (c != null) try { c.close(); } catch (Throwable ignored) {}
-            }
-            return out.toString();
         }
     }
 }
