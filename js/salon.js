@@ -291,7 +291,9 @@ export function drawLetrero(g, VW, t) {
   for (const hx of [fx - 18, fx + fw + 8]) corazon(g, hx, fy + 7, '#ff5c9d', 0.5 + 0.5 * Math.sin(t * 3));
 }
 
-function corazon(g, x, y, col, a) {
+// Tambien lo usa el aviso de actualizacion (aviso-update.js), a los lados de
+// su titulo, como aqui a los lados del cartel.
+export function corazon(g, x, y, col, a) {
   g.globalAlpha = 0.6 + 0.4 * a;
   g.fillStyle = col;
   g.fillRect(x + 1, y, 3, 2); g.fillRect(x + 6, y, 3, 2);

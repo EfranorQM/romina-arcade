@@ -20,7 +20,14 @@ import { GAMES } from './games.js';
 import { cover } from './covers.js';
 import { horneaMaquina, rayasPantalla, drawFondo, drawLetrero, MQ_W, MQ_H, PANTALLA, SUELO_Y,
          text, textCenter } from './salon.js';
-import { Update, buscaActualizacion, versionActual } from './update.js';
+import { Update, buscaActualizacion, compruebaActualizacion, versionActual, recienEstrenada } from './update.js';
+import { Aviso } from './aviso-update.js';
+
+// La comprobacion de actualizaciones del arranque se pide UNA vez por sesion
+// (init() corre cada vez que se vuelve de un juego). Y la celebracion de una
+// version recien estrenada dura unos segundos de menu, tambien una sola vez.
+let comprobacionPedida = false;
+let celebracion = recienEstrenada ? 5 : 0;
 
 // ---------- Geometria del salon ----------
 // El escenario tiene 270 de alto y hay que repartirlo sin que nada se corte:
@@ -71,6 +78,10 @@ export const Menu = {
     // Las maquinas tambien, una por juego (sin la portada, que se pinta encima
     // en cada frame: la de ROMINA llega tarde, cuando cargan sus dibujos).
     this.maquinas = this.maquinas || GAMES.map(G => horneaMaquina(G.meta));
+    // Si hay version nueva, que se entere sin tener que tocar nada: se mira
+    // un rato despues de abrir, para no competir con la carga del salon. Es
+    // muda si no hay red (update.js, compruebaActualizacion).
+    if (!comprobacionPedida) { comprobacionPedida = true; setTimeout(compruebaActualizacion, 2500); }
   },
 
   // El juego elegido: el entero mas cercano, traido al rango 0..N-1.
@@ -78,6 +89,8 @@ export const Menu = {
 
   update(dt) {
     this.t += dt;
+    Aviso.update(dt);
+    if (celebracion > 0) celebracion -= dt;
     if (this.drag) return;                  // con el dedo puesto manda el dedo
     // Muelle criticamente amortiguado hacia la caratula de destino, que se
     // eligio UNA vez al soltar el dedo. Un muelle libre recalculando el objetivo
@@ -191,22 +204,52 @@ export const Menu = {
 
     // ---------- Version y boton de actualizar, abajo a la izquierda ----------
     // Simetrico con el rotulo del sonido. Se toca la version para buscar una
-    // actualizacion; mientras busca o baja, el propio rotulo es el aviso.
+    // actualizacion. Lo que pasa se cuenta en el cartel (aviso-update.js); el
+    // rotulo solo recuerda lo que ella dejo para LUEGO, y parpadea para que
+    // se vea que se puede tocar.
     const est = Update.estado;
+    const parpa = 0.55 + 0.45 * Math.sin(this.t * 4);
     let vtxt, vcol;
-    if (est === 'buscando')      { vtxt = 'BUSCANDO...';  vcol = '#c8b8ff'; }
+    if (Aviso.abierto)           { vtxt = 'v' + versionActual(); vcol = '#5a4a88'; }
+    else if (est === 'hay')      { vtxt = 'NUEVA ' + Update.disponible + ' >'; vcol = fade('#ff5c9d', parpa); }
     else if (est === 'bajando')  { vtxt = 'BAJANDO ' + Math.round(Update.progreso * 100) + '%'; vcol = '#5cffd8'; }
-    else if (est === 'lista')    { vtxt = 'REINICIA LA APP'; vcol = '#5cffd8'; }
-    else if (est === 'aldia')    { vtxt = 'AL DIA  v' + versionActual(); vcol = '#7a6aa8'; }
-    else if (est === 'error')    { vtxt = Update.msg;      vcol = '#ff5c9d'; }
+    else if (est === 'lista')    { vtxt = 'REINICIAR >';    vcol = fade('#5cffd8', parpa); }
+    else if (est === 'buscando') { vtxt = 'BUSCANDO...';    vcol = '#c8b8ff'; }
     else                         { vtxt = 'v' + versionActual(); vcol = '#5a4a88'; }
     text(g, vtxt, 10, VH - 18, vcol, 2);
     this._vw = measure(vtxt, 2);
-    // Barra de progreso mientras baja
-    if (est === 'bajando') {
+    // Barra de progreso mientras baja con el cartel oculto
+    if (est === 'bajando' && !Aviso.abierto) {
       g.fillStyle = '#2a1a58'; g.fillRect(10, VH - 6, 90, 2);
       g.fillStyle = '#5cffd8'; g.fillRect(10, VH - 6, Math.round(90 * Update.progreso), 2);
     }
+
+    // ---------- Recien actualizada ----------
+    // El primer arranque de una version nueva se le dice, unos segundos, bajo
+    // el cartel del salon: si no, "ya esta" solo lo sabria mirando el numero.
+    if (celebracion > 0 && recienEstrenada) this.drawCelebracion(g, celebracion);
+
+    // ---------- El aviso de actualizacion, encima de todo ----------
+    Aviso.draw(g, VW, VH);
+  },
+
+  // Una pastilla con el borde de neon cian, que baja, se queda y se va.
+  drawCelebracion(g, quedan) {
+    const a = clamp(Math.min(quedan, 5 - quedan) * 3, 0, 1);
+    const et = '¡ACTUALIZADA A LA ' + recienEstrenada + '!';
+    const w = measure(et, 2) + 28, h = 24;
+    const x = Math.round(VW / 2 - w / 2), y = Math.round(34 - (1 - a) * 8);
+    g.save();
+    g.globalAlpha = a;
+    g.fillStyle = 'rgba(32,255,200,0.25)';
+    g.fillRect(x - 2, y - 2, w + 4, h + 4);
+    g.fillStyle = '#0c1a24';
+    g.fillRect(x, y, w, h);
+    g.fillStyle = '#5cffd8';
+    g.fillRect(x, y, w, 1); g.fillRect(x, y + h - 1, w, 1);
+    g.fillRect(x, y, 1, h); g.fillRect(x + w - 1, y, 1, h);
+    textCenter(g, et, VW / 2, y + 5, '#b0fff0', 2);
+    g.restore();
   },
 
   // UNA MAQUINA en su ranura: el mueble, su portada en la pantalla con las
@@ -248,15 +291,25 @@ export const Menu = {
 
   // ---------- Arrastre ----------
   onInput(ev) {
+    // Con el aviso de actualizacion abierto, los toques son suyos: el salon de
+    // detras no se toca. Si el cartel salio a mitad de un arrastre, el dedo se
+    // da por soltado, o la fila se quedaria esperando un 'up' que no llega.
+    if (Aviso.onInput(ev)) {
+      if (this.drag) { this.drag = null; this.dest = Math.round(this.pos); }
+      return;
+    }
     if (ev.type === 'down') {
       // El toque en el rotulo de sonido no arrastra.
       if (ev.y > VH - 26 && ev.x > VW - 96) { toggleMute(); SFX.blip(); return; }
       // Ni el de la version: ahi se buscan actualizaciones. La zona de toque
       // es mas ancha que el texto (minimo 70 px) para que se pueda dar con el
-      // pulgar aunque ponga solo 'v1.0.0'.
+      // pulgar aunque ponga solo 'v1.0.0'. Si ya hay algo en marcha (una
+      // version encontrada, bajando o lista), se vuelve a abrir su cartel.
       if (ev.y > VH - 26 && ev.x < Math.max(70, (this._vw || 0) + 16)) {
         SFX.blip();
-        buscaActualizacion();
+        const est = Update.estado;
+        Aviso.abre();
+        if (est !== 'hay' && est !== 'bajando' && est !== 'lista') buscaActualizacion();
         return;
       }
       this.drag = { id: ev.id, x0: ev.x, last: ev.x, pos0: this.pos, moved: 0, t: 0, vx: 0 };

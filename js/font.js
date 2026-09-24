@@ -1,6 +1,6 @@
 import { supersample } from './core.js';
 
-// Fuente bitmap 5x7 — 59 glifos. Sin archivos de fuente, todo dibujado en codigo.
+// Fuente bitmap 5x7 — 60 glifos. Sin archivos de fuente, todo dibujado en codigo.
 export const FONT5x7 = {
 'A':["01110","10001","10001","11111","10001","10001","10001"],
 'B':["11110","10001","10001","11110","10001","10001","11110"],
@@ -46,6 +46,9 @@ export const FONT5x7 = {
 '.':["00000","00000","00000","00000","00000","01100","01100"],
 ',':["00000","00000","00000","00000","01100","01100","01000"],
 '!':["00100","00100","00100","00100","00100","00000","00100"],
+// La de abrir, el '!' dado la vuelta: entro con el aviso de actualizacion,
+// que en espanol se escribe ¡NUEVA VERSION!, no NUEVA VERSION!.
+'¡':["00100","00000","00100","00100","00100","00100","00100"],
 '?':["01110","10001","00001","00010","00100","00000","00100"],
 ':':["00000","01100","01100","00000","01100","01100","00000"],
 ';':["00000","01100","01100","00000","01100","01100","01000"],
