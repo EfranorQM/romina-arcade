@@ -1,6 +1,6 @@
 {
-  "version": "1.0.22",
-  "fecha": "2026-09-23",
+  "version": "1.0.23",
+  "fecha": "2026-09-24",
   "archivos": [
     "img/arena.png",
     "img/bosque.png",
@@ -9,6 +9,7 @@
     "img/romina.png",
     "index.html",
     "js/audio.js",
+    "js/aviso-update.js",
     "js/bloom.js",
     "js/core.js",
     "js/covers.js",
@@ -74,5 +75,9 @@
     "js/pausa.js",
     "js/salon.js",
     "js/update.js"
+  ],
+  "notas": [
+    "NUEVO AVISO DE ACTUALIZACION",
+    "REINICIAR SIN SALIR DE LA APP"
   ]
 }
