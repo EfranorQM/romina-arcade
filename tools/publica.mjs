@@ -3,6 +3,10 @@
 //   node tools/publica.mjs            sube el numero de parche (1.0.3 -> 1.0.4)
 //   node tools/publica.mjs menor      sube el menor          (1.0.4 -> 1.1.0)
 //   node tools/publica.mjs 2.0.0      pone esa version exacta
+//   ... --nota "BOTON DE REINICIAR" --nota "OTRA COSA"
+//                                     las novedades que enseña el aviso de
+//                                     actualizacion (hasta tres, cortas: el
+//                                     cartel las pasa a mayusculas sin tildes)
 //
 // Que hace:
 //   1. Sube el numero de version en www/js/update.js
@@ -31,7 +35,20 @@ const m = src.match(/export const VERSION_APK = '([\d.]+)'/);
 if (!m) { console.error('no encuentro VERSION_APK en update.js'); process.exit(1); }
 const actual = m[1];
 
-const arg = process.argv[2];
+// Las novedades van con --nota; lo demas es la version.
+const notas = [], resto = [];
+for (let i = 2; i < process.argv.length; i++) {
+  if (process.argv[i] === '--nota') {
+    const n = process.argv[++i];
+    if (!n) { console.error('--nota necesita un texto'); process.exit(1); }
+    notas.push(n);
+  } else resto.push(process.argv[i]);
+}
+if (notas.length > 3) { console.error('como mucho tres --nota: el cartel no tiene sitio para mas'); process.exit(1); }
+// El cartel se ensancha hasta que caben 34 letras por linea (aviso-update.js):
+// una nota mas larga se parte en dos y lo hace crecer. Se avisa, no se impide.
+for (const n of notas) if (n.length > 34) console.warn(`OJO: "${n}" tiene ${n.length} letras; en el aviso ocupara dos lineas (caben 34)`);
+const arg = resto[0];
 let nueva;
 if (arg && /^\d+\.\d+\.\d+$/.test(arg)) {
   nueva = arg;
@@ -66,6 +83,7 @@ const manifiesto = {
   fecha: new Date().toISOString().slice(0, 10),
   archivos: archivos.sort(),
 };
+if (notas.length) manifiesto.notas = notas;
 fs.writeFileSync(path.join(www, 'version.json'), JSON.stringify(manifiesto, null, 2));
 console.log(`manifiesto: ${archivos.length} ficheros`);
 

@@ -23,8 +23,26 @@ comprueba por dentro (permisos, icono, juego y actualizador). La primera
 compilación tarda 10-20 minutos (Gradle descarga sus dependencias); las
 siguientes, ~30 segundos.
 
-Después de cambiar cualquier archivo de `www/`, hay que volver a compilar:
-el APK empaqueta una copia, editar `www/` a secas no cambia nada.
+Solo hace falta un APK nuevo para cambios nativos (permisos, icono,
+orientación). Los cambios de `www/` se publican y llegan al teléfono desde la
+propia app, sin reinstalar:
+
+## Publicar una actualización
+
+```
+node tools/publica.mjs --nota "EL DRAGON DESPIERTA" --nota "DOS MAPAS NUEVOS"
+```
+
+Sube el número de versión, reescribe `www/version.json` y lo sube a GitHub
+Pages. En el teléfono, al abrir la app sale solo el aviso **¡NUEVA VERSION!**
+con esas novedades (hasta tres, de hasta 34 letras cada una); ella toca
+ACTUALIZAR, espera la barra y toca REINICIAR, sin salir de la app. Si dice
+LUEGO, el aviso se queda en el rótulo de abajo a la izquierda.
+
+El aviso y el reinicio tienen sus pruebas: `node tools/prueba-aviso.mjs`
+recorre el flujo con toques de verdad y deja fotos en `vistas/aviso/`, y
+`node tools/prueba-reinicio.mjs` comprueba que REINICIAR ejecuta solo el código
+de la versión nueva.
 
 ---
 

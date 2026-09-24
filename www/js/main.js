@@ -6,6 +6,7 @@ import { text, textCenter, measure } from './font.js';
 import { particles, updateParticles, drawParticles } from './gfx.js';
 import { GAMES } from './games.js';
 import { Menu } from './menu.js';
+import { Aviso } from './aviso-update.js';
 import { drawBoton, tocaBoton, drawPantalla, onInputPantalla, olvidaToques } from './pausa.js';
 import { iniciaUpdate, latido, versionActual } from './update.js';
 import { supersample } from './core.js';
@@ -779,6 +780,7 @@ window.__arcade = {
   // El orden es el de un boton de VOLVER, un paso atras cada vez:
   //     jugando        -> pausa          (no se pierde la partida)
   //     en pausa       -> al menu
+  //     aviso de actualizacion abierto -> se cierra, como su boton de salir
   //     en el menu     -> cerrar la app
   //     fin de partida -> al menu        (en vez de cerrar sin querer)
   //
@@ -790,6 +792,7 @@ window.__arcade = {
     // El fin de partida tambien retrocede al menu: es una pantalla intermedia,
     // y cerrar la app desde ahi seria una sorpresa desagradable.
     if (sm.cur && sm.cur.meta && sm.cur.meta.id === '_over') { SFX.blip(); ctx.toMenu(); return 'menu'; }
+    if (sm.cur === Menu && Aviso.atras()) return 'aviso';
     return 'cerrar';
   },
 };

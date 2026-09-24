@@ -54,11 +54,28 @@ export function versionActual() {
 
 // --- Estado visible para el menu ---
 export const Update = {
-  estado: 'reposo',   // reposo | buscando | bajando | lista | aldia | error
+  // reposo | buscando | hay | bajando | lista | reiniciando | aldia | error
+  //   hay:          se encontro una version nueva y AUN NO se ha bajado (la
+  //                 comprobacion de cada arranque; ella decide si la baja)
+  //   reiniciando:  ella toco REINICIAR y la pagina esta a punto de recargar
+  estado: 'reposo',
   msg: '',
   progreso: 0,        // 0..1 mientras baja
   disponible: null,   // version encontrada, si hay uno
+  notas: [],          // las novedades de esa version, si el manifiesto las trae
 };
+
+// La version que se ESTRENA en este arranque, o null. index.html la deja
+// marcada como sospechosa (rom.sosp) hasta que demuestre que va, asi que en
+// el primer arranque de una version nueva las dos marcas coinciden. Se lee al
+// cargar el modulo, antes de que latido() la confirme y borre la marca: el
+// menu lo usa para decirle a ella que ya la tiene.
+export const recienEstrenada = (() => {
+  try {
+    const s = localStorage.getItem('rom.sosp');
+    return s && s === localStorage.getItem('rom.ver') ? s : null;
+  } catch { return null; }
+})();
 
 // ---------- Arranque ----------
 // Se llama UNA vez al cargar la app, antes de nada.
@@ -109,7 +126,8 @@ function manda(msg) {
 // Lo llama el boton del menu. Nunca lanza: los errores se cuentan en
 // Update.estado, porque esto corre en el movil de ella.
 export async function buscaActualizacion() {
-  if (Update.estado === 'buscando' || Update.estado === 'bajando') return;
+  if (Update.estado === 'buscando' || Update.estado === 'bajando' ||
+      Update.estado === 'reiniciando') return;
   Update.estado = 'buscando'; Update.msg = 'BUSCANDO...'; Update.progreso = 0;
 
   try {
@@ -124,6 +142,7 @@ export async function buscaActualizacion() {
       return fallo('RESPUESTA RARA');
     }
     Update.disponible = man.version;
+    Update.notas = notasDe(man);
 
     if (!esMasNueva(man.version, versionActual())) {
       Update.estado = 'aldia'; Update.msg = 'YA ESTAS AL DIA';
@@ -173,6 +192,61 @@ function fallo(msg) {
   Update.estado = 'error'; Update.msg = msg; Update.progreso = 0;
 }
 
+// ---------- La comprobacion de cada arranque ----------
+// Solo MIRA si hay una version nueva: no baja nada. Si la hay, el menu le
+// ensena el aviso y ella decide. Es muda a proposito: sin internet, con el
+// servidor caido o con una respuesta rara no pasa NADA -- no la avisamos de
+// un fallo que ella no ha pedido. Una por arranque, y son ~2 KB.
+let comprobada = false;
+export async function compruebaActualizacion() {
+  if (comprobada) return;
+  comprobada = true;
+  if (Update.estado !== 'reposo') return;          // ya esta en ello por su cuenta
+  try {
+    const man = await pideJSON(ORIGEN + '/version.json?t=' + Date.now());
+    if (!man || !man.version || !Array.isArray(man.archivos)) return;
+    if (Update.estado !== 'reposo') return;        // mientras tanto toco la version
+    if (!esMasNueva(man.version, versionActual())) return;
+    Update.disponible = man.version;
+    Update.notas = notasDe(man);
+    Update.estado = 'hay';
+  } catch { /* muda: ver arriba */ }
+}
+
+// Las novedades del manifiesto (tools/publica.mjs --nota "..."), listas para
+// la fuente del juego, que solo tiene MAYUSCULAS sin tildes (y la Ñ, el ¡):
+// se pasan a mayusculas, se quitan las tildes sin tocar la Ñ, y lo que la
+// fuente no sabe dibujar se cambia por un espacio. Como mucho tres.
+const DIBUJABLE = /[A-ZÑ0-9 .,!¡?:;\-+=/*%()<>"#_]/;
+function notasDe(man) {
+  if (!Array.isArray(man.notas)) return [];
+  return man.notas.filter(n => typeof n === 'string' && n.trim()).slice(0, 3).map(n =>
+    n.toUpperCase().replace(/Ñ/g, '\u0001').normalize('NFD').replace(/[̀-ͯ]/g, '')
+     .replace(/\u0001/g, 'Ñ').split('').map(c => DIBUJABLE.test(c) ? c : ' ').join('')
+     .replace(/\s+/g, ' ').trim());
+}
+
+// ---------- REINICIAR sin salir de la app ----------
+// Recarga la pagina: index.html estrena la version pendiente al arrancar,
+// igual que al abrir la app de cero, y los modulos se piden otra vez.
+//
+// RECARGAR NO ES CERRAR LA APP: el navegador puede reusar de memoria el
+// codigo de la carga anterior y seguir ejecutando el viejo, o una mezcla de
+// dos versiones. Aqui NO pasa, y esta MEDIDO con tools/prueba-reinicio.mjs
+// (todos los modulos de la nueva y ninguno de otra, del APK a una bajada y de
+// una bajada a otra). Pero depende de dos cosas, y si cambia alguna vuelve el
+// problema (lo demuestran los --control de esa prueba):
+//   - Capacitor sirve los ficheros del APK con "Cache-Control: no-cache"
+//     (WebViewLocalServer.java), asi que no se reusan sin preguntar.
+//   - propia() guarda lo bajado SIN cabeceras de cache.
+export function reiniciaApp() {
+  if (Update.estado === 'reiniciando') return;
+  Update.estado = 'reiniciando';
+  // Un instante para que se vea REINICIANDO y el fundido: recargar en seco
+  // parece que la app se ha colgado.
+  setTimeout(() => location.reload(), 450);
+}
+
 // ---------- Lo descargado se guarda como PROPIO ----------
 // Guardada tal cual, la respuesta de GitHub conservaba su direccion
 // (github.io/...), y al servirla el worker el navegador la tomaba por suya: los
@@ -182,6 +256,12 @@ function fallo(msg) {
 // podia pintar). Una respuesta hecha aqui no tiene direccion: el worker la
 // sirve como del propio telefono. Se conserva el Content-Type: un modulo sin
 // el suyo no se ejecuta.
+//
+// Y NADA MAS, a proposito: sin cabeceras de cache, el navegador no puede
+// reusar de memoria estos ficheros al recargar. Es lo que hace que REINICIAR
+// (reiniciaApp) estrene de verdad la version nueva. Si aqui se guardara el
+// "max-age=600" de GitHub, tools/prueba-reinicio.mjs --control=cache muestra
+// lo que pasaria: se seguiria ejecutando la version anterior.
 async function propia(res) {
   const tipo = res.headers.get('Content-Type');
   return new Response(await res.blob(), { status: 200, headers: tipo ? { 'Content-Type': tipo } : {} });

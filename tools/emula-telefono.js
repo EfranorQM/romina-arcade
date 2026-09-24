@@ -3,8 +3,15 @@
 //   node tools/servidor-estatico.js android/app/src/main/assets/public 8090
 //   node tools/servidor-estatico.js www 8091 cors
 //   rm -rf C:/tmp/pt
-//   PERFIL=C:/tmp/pt node tools/ver-app.js x.png "espera2500;archivo:tools/emula-telefono.js;js:location.reload();espera4000;archivo:tools/emula-telefono.js;espera6000" "http://localhost:8090/"
+//   PERFIL=C:/tmp/pt node tools/ver-app.js x.png "espera2500;archivo:tools/emula-telefono.js;js:location.reload();espera4000;archivo:tools/emula-telefono.js;espera9000" "http://localhost:8090/"
 //   PERFIL=C:/tmp/pt node tools/ver-app.js x.png "espera5000;archivo:tools/emula-telefono.js" "http://localhost:8090/"
+//
+// La espera del final de la primera (9 s) NO sobra: Chrome guarda
+// localStorage en disco con retraso, y ver-app.js lo cierra de golpe. Con 6 s
+// se perdia a veces el paso a la fase 2 y la segunda ejecucion repetia la 1
+// (23-09-2026). Tambien hace falta que www/version.json liste los ficheros
+// de AHORA, o la fase 2 no arranca por uno nuevo que falte en la cache: lo
+// rehace tools/publica.mjs al publicar, pero entre publicaciones esta viejo.
 //
 // El paso 2 va en OTRA ejecucion con el mismo PERFIL: es cerrar la app y
 // volver a abrirla. Recargando la pagina, el navegador reusa lo que tiene en
@@ -43,7 +50,14 @@
     __arcade.sm.go(__arcade.GAMES.find(G => G.meta.id === 'caballero'));
     await espera(1500);
     const por = {};
-    for (const r of performance.getEntriesByType('resource')) { const o = new URL(r.name).origin; por[o] = (por[o] || 0) + 1; }
+    // version.json no cuenta: es la comprobacion de actualizaciones del
+    // arranque (update.js), que SI tiene que ir a GitHub. Lo que no puede
+    // venir de fuera es el juego.
+    for (const r of performance.getEntriesByType('resource')) {
+      const u = new URL(r.name);
+      if (u.pathname.endsWith('/version.json')) continue;
+      por[u.origin] = (por[u.origin] || 0) + 1;
+    }
     const S = __arcade.sm.cur;
     return { escena: S.meta.id, fase: S.fase, traje: S.traje, error: LS.getItem('rom.error'), cargadoDe: por };
   }

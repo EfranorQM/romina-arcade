@@ -10,6 +10,7 @@
 //   guion = lista de pasos separados por punto y coma, cada uno:
 //     esperaN        espera N milisegundos
 //     tocaX:Y        toque corto en (X,Y), en pixeles de PANTALLA
+//     tocaen:EXPR    toque corto donde diga EXPR, que devuelve [x, y] de pantalla
 //     arrastraX:Y:X2:Y2   arrastra de (X,Y) a (X2,Y2)
 //     tiroX:Y:X2:Y2  arrastra rapido y suelta (gesto de impulso)
 //     pulsaX:Y       apoya el dedo y lo DEJA puesto
@@ -192,6 +193,17 @@ async function drag(cdp, x1, y1, x2, y2, steps, stepMs) {
       await touch(cdp, +m[1], +m[2], 'mousePressed');
       await sleep(60);
       await touch(cdp, +m[1], +m[2], 'mouseReleased');
+    }
+    // Toque en un sitio que calcula la PAGINA: EXPR devuelve [x, y] en pixeles
+    // de pantalla. Sirve para pulsar algo que se dibuja donde toque (los
+    // botones del aviso de actualizacion) por el mismo camino que un dedo.
+    else if ((m = step.match(/^tocaen:(.+)$/))) {
+      const r = await cdp.send('Runtime.evaluate', { expression: m[1], awaitPromise: true, returnByValue: true });
+      const v = r.result && r.result.result && r.result.result.value;
+      if (!Array.isArray(v)) { console.error('tocaen: la expresion no devolvio [x, y]: ' + m[1]); continue; }
+      await touch(cdp, v[0], v[1], 'mousePressed');
+      await sleep(60);
+      await touch(cdp, v[0], v[1], 'mouseReleased');
     }
     else if ((m = step.match(/^arrastra(-?\d+):(-?\d+):(-?\d+):(-?\d+)$/))) {
       await drag(cdp, +m[1], +m[2], +m[3], +m[4], 14, 16);
