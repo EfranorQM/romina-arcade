@@ -1,11 +1,13 @@
 {
-  "version": "1.0.26",
+  "version": "1.0.27",
   "fecha": "2026-09-25",
   "archivos": [
     "img/arena.png",
     "img/bosque.png",
+    "img/cementerio.png",
     "img/enemigos.png",
     "img/enemigos2.png",
+    "img/enemigos3.png",
     "img/ogro.png",
     "img/romina.png",
     "index.html",
@@ -36,6 +38,8 @@
     "js/games/caba-nivel.js",
     "js/games/caba-partida.js",
     "js/games/caballero.js",
+    "js/games/cementerio-atlas.js",
+    "js/games/cementerio-sprite.js",
     "js/games/enemigos-atlas.js",
     "js/games/enemigos-sprite.js",
     "js/games/furia.js",
@@ -80,8 +84,8 @@
     "js/update.js"
   ],
   "notas": [
-    "TRES ENEMIGOS NUEVOS Y UN JEFE",
-    "LOS AVISOS DICEN QUE BOTON",
-    "LAS HOGUERAS TE CURAN"
+    "NUEVO NIVEL: EL CEMENTERIO",
+    "VAMPIROS Y UNA CONDESA DE JEFA",
+    "LA CAMARA ENCUADRA LA PELEA"
   ]
 }

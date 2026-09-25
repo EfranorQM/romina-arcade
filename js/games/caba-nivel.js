@@ -33,6 +33,11 @@ import * as EN from './caba-enemigos.js';
 // 177..225 del dibujo (x2: 354..450); ella pisa por el centro, en 392.
 export const BOSQUE = {
   id: 'bosque', nombre: 'EL BOSQUE',
+  // Lo que dice la escena (el cartel de entrada, el final y el resultado),
+  // la musica y donde se guarda la mejor nota. El bosque guarda en
+  // caba.bosque2 desde que crecio (24-09-2026).
+  meta: 'LLEGA AL ARBOL DEL FINAL', salisteMsg: 'SALISTE DEL BOSQUE', perdisteMsg: 'EL BOSQUE TE HA PODIDO',
+  superado: 'BOSQUE SUPERADO', musica: 'caballeroBosque', guardado: 'caba.bosque2',
   // Hasta el 24-09-2026 acababa en 7400 (con dos lobos al final). Ahora sigue
   // con los tres nuevos (ver caba-enemigos.js): el cuervo en el tramo de los
   // dos lobos, una hoguera, el yamabushi solo, y el lobo blanco con su manada
@@ -86,10 +91,46 @@ export const BOSQUE = {
   arbol: 11050,
 };
 
+// ---------- El cementerio (25-09-2026) ----------
+// El segundo nivel: el campo de batalla 4 del mismo pack (tools/cementerio-
+// atlas.py). Las tumbas abiertas son los fosos; lo que rueda, calaveras; no
+// caen ramas. Los vampiros se enseñan como en el bosque, de uno en uno: la
+// vampira sola (la zarpa y el mordisco), el vampiro solo (la estocada, el
+// tajo bajo y el salto por encima), luego juntos, y la CONDESA guarda la
+// cripta del final. El ultimo tramo es largo, como el del lobo blanco: es una
+// pelea, y con la camara parada quedaria debajo de los botones.
+export const CEMENTERIO = {
+  id: 'cementerio', nombre: 'EL CEMENTERIO',
+  meta: 'LLEGA A LA CRIPTA', salisteMsg: 'SALISTE DEL CEMENTERIO', perdisteMsg: 'EL CEMENTERIO TE HA PODIDO',
+  superado: 'CEMENTERIO SUPERADO', musica: 'caballeroCementerio', guardado: 'caba.cementerio',
+  ancho: 10100,
+  suelo: 392,
+  fosos: [[1250, 1360], [2700, 2810], [4300, 4410], [5500, 5780], [7300, 7410]],
+  tocones: [[5600, 5680, 16]],
+  troncos: [[2000, 2500, 2.6], [4520, 4950, 2.4]],
+  ramas: [],
+  hogueras: [3950, 7500],
+  enemigos: [['vampira', 1750, undefined, { ataques: ['zarpa', 'muerde'] }],
+             ['vampiro', 3300],
+             ['vampira', 4800, undefined, { ataques: ['zarpa', 'muerde'] }], ['vampiro', 5250, 5050],
+             ['vampira', 6250], ['vampiro', 6850, 6550],
+             ['condesa', 8700]],
+  // el arbol del cristal, de hito
+  hitos: [3000, 6300],
+  salida: 9750,
+  // la cripta, al final: la salida
+  arbol: 9750,
+};
+
+export const NIVELES = { bosque: BOSQUE, cementerio: CEMENTERIO };
+export const ORDEN_NIVELES = ['bosque', 'cementerio'];
+
 // Lo que se aparta del borde de su tramo cada uno: el lobo 300 y la kitsune
 // 150 (ver makeNivel). El cuervo, 200: esquivar su picado junto al borde era
-// caerse al foso.
-const MARGEN = { lobo: 300, alfa: 300, kitsune: 150, karasu: 200, yamabushi: 150 };
+// caerse al foso. Los vampiros, 300, como el lobo: al mordisco se le esquiva
+// hacia atras, y con 200 se peleaba a 100 px del borde de la tumba.
+const MARGEN = { lobo: 300, alfa: 300, kitsune: 150, karasu: 200, yamabushi: 150,
+                 vampira: 300, vampiro: 300, condesa: 150 };
 
 // ---------- Los troncos ----------
 // Con 30 de radio a 330 px/s, saltarlo solo salvaba pulsando en 117 ms: el
@@ -133,6 +174,10 @@ export function makeNivel(def, rnd = Math.random, dif = {}) {
     const s = suelo.find(t => x >= t.x0 && x <= t.x1);
     const m = MARGEN[tipo];
     const E = EN.makeEnemigo(tipo, x, def.suelo, Math.max(s.x0, 0) + m, Math.min(s.x1, def.ancho) - m, enemigos.length + 1, dif, [s.x0, s.x1], ataques);
+    // Y NADIE PELEA DEBAJO DE LOS BOTONES: con la camara parada al final del
+    // nivel, lo que pasa de ancho - (LIENZO - LIBRE) queda debajo de los
+    // medallones (la condesa podia acorralarse alli, a 9950).
+    E.x1 = Math.min(E.x1, def.ancho - (LIENZO - LIBRE) - E.T.ancho - 30);
     enemigos.push(E);
     return E;
   };
@@ -201,9 +246,26 @@ export function jefeVivo(N) { return N.enemigos.find(E => E.T.jefe && E.vivo) ||
 // ---------- La camara ----------
 // Va un poco por delante de hacia donde mira: se ve lo que viene. Suave, para
 // que girarse en una pelea no la haga dar bandazos, y sin salirse del nivel.
-export const CAM_DELANTE = 0.38;
+// Y EN UNA PELEA ENCUADRA A QUIEN VA A POR ELLA: cada enemigo despierto de su
+// tramo, dentro de la pantalla y a la izquierda de los botones (de LIBRE a la
+// derecha, los medallones). Mirando solo hacia donde miraba ella, los que
+// atacan de lejos se quedaban con medio cuerpo bajo los botones: mientras
+// avisaba, la kitsune tenia tapado el 17 % (el fuego rastrero) y la condesa el
+// 4 %, y a quien peleaba de lejos se la tapaba GUARDIA entera (una captura de
+// la app). Ahora, 3 % y 0 (tools/pantalla-avisos.mjs). Los mas cercanos mandan
+// (se encuadran los ultimos); ella, siempre fuera de los botones y lejos del
+// borde.
+// (LIENZO: el ancho del lienzo de ROMINA, fijo: ver meta.vw en caballero.js.)
+export const CAM_DELANTE = 0.38, LIBRE = 920, LIENZO = 1200;
 export function camara(N, K, VW, dt, instantanea = false) {
-  const obj = K.x - VW * (K.dir >= 0 ? CAM_DELANTE : 1 - CAM_DELANTE);
+  let obj = K.x - VW * (K.dir >= 0 ? CAM_DELANTE : 1 - CAM_DELANTE);
+  const pelea = N.enemigos.filter(E => E.vivo && E.despierto && !E.oculto &&
+    Math.abs(E.x - K.x) < 900 && K.x >= E.tramo[0] && K.x <= E.tramo[1]);
+  pelea.sort((a, b) => Math.abs(b.x - K.x) - Math.abs(a.x - K.x));
+  // (60 px mas alla de su cuerpo: el dibujo es mas ancho; con 30, el vestido
+  // de la condesa rozaba el anillo de GUARDIA)
+  for (const E of pelea) obj = Math.max(E.x + E.T.ancho + 60 - LIBRE, Math.min(E.x - E.T.ancho - 40, obj));
+  obj = Math.max(K.x - LIBRE + 80, Math.min(K.x - 140, obj));
   const max = N.def.ancho - VW;
   const dest = Math.max(0, Math.min(max, obj));
   N.camX = instantanea ? dest : N.camX + (dest - N.camX) * (1 - Math.exp(-dt * 3.2));
