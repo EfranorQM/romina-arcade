@@ -6,10 +6,12 @@
 // medallon con aro de oro (como los candelabros del salon), cara de su color
 // y un icono en pixel art, con el nombre debajo:
 //
-//   ATACAR   rojo, una espada          el grande: es el que mas se pulsa
-//   SALTAR   azul (su capa), dos flechas hacia arriba
+//   ATACAR   rojo, una espada          grande, con SALTAR: los dos que mas
+//   SALTAR   azul (su capa), dos flechas hacia arriba           se pulsan
 //   ESQUIVAR violeta, un salto en arco con su flecha
 //   GUARDIA  acero, la espada de traves parando un golpe
+//
+// Donde va cada uno y a quien le toca cada toque lo dice caba-mandos.js.
 //
 // Y cuentan lo que pasa, no solo que se han pulsado: se hunden al apretarlos
 // y sueltan un aro; ESQUIVAR se tapa y se vuelve a llenar mientras recarga;

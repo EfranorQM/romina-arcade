@@ -23,14 +23,19 @@ import * as C from './caba-cuerpo.js';
 import * as P from './caba-partida.js';
 import * as N from './caba-nivel.js';
 import * as BT from './caba-botones.js';
+import * as MD from './caba-mandos.js';
+import * as FX from './caba-efectos.js';
 import { drawRomina } from './romi-sprite.js';
 import { drawBosque, drawHoguera, drawTroncos, drawSombrasRamas, drawRamas, sombra, P as PB } from './bosque-sprite.js';
 import { drawEnemigo, drawFuego, P as PE } from './enemigos-sprite.js';
 
 const ALTO = 540;
 const ENTRADA_T = 2.4, FINAL_T = 2.4, CAE_T = 0.9;
-const NADA = { dx: 0, salta: false, golpea: false, esquiva: false, saltaAbajo: false, bloquea: false };
+const NADA = { dx: 0, salta: false, golpea: false, esquiva: false, bloquea: false };
 const ORO = '#ffe066', ROSA = '#ef4a84', BLANCO = '#fff4fa';
+// El polvo de los EFECTOS (saltar, caer): mas claro que el del bosque. Con el
+// suyo (#cecb85) sobre el camino (#adaa6d) el aro y las nubes no se veian.
+const POLVO_FX = ['#fff8d8', '#ece6b8', PB.polvo3];
 
 // Empezar el bosque (desde el principio, o desde la hoguera si ya llego).
 export function empieza(S, desdeHoguera = false) {
@@ -44,7 +49,9 @@ export function empieza(S, desdeHoguera = false) {
   S.av = {
     N: L, fase: 'entrada', faseT: 0, t: 0, tJuego: 0,
     golpes: 0, caidas: 0, desdeHoguera, gano: false, acabada: false, res: null, funde: 0,
-    msg: '', msgT: 0, hitstop: 0, chispa: 0, chispaX: 0, chispaY: 0,
+    msg: '', msgT: 0, hitstop: 0,
+    // Los EFECTOS de lo que hace ella: los mismos que en la pelea.
+    fx: FX.makeEfectos(POLVO_FX),
   };
   S.salta = false; S.golpea = false; S.esquiva = false;
   S.combo = 0; S.comboT = 0; S.leccion = null;
@@ -57,12 +64,12 @@ export function empieza(S, desdeHoguera = false) {
 export function update(S, dt) {
   const A = S.av;
   A.faseT += dt; A.t += dt;
-  if (A.chispa > 0) A.chispa -= dt;
   if (A.msgT > 0) A.msgT -= dt;
   if (A.funde > 0) A.funde = Math.max(0, A.funde - dt * 2.5);
   if (A.fase === 'entrada') return entrada(S, dt);
-  if (A.fase === 'resultado') { C.stepCaballero(S.K, NADA, dt, N.mundo(A.N)); return; }
+  if (A.fase === 'resultado') { FX.step(A.fx, dt); C.stepCaballero(S.K, NADA, dt, N.mundo(A.N)); return; }
   if (A.fase === 'cae') {
+    FX.step(A.fx, dt);
     // Sigue cayendo, y a mitad del fundido vuelve al ultimo sitio seguro.
     C.stepCaballero(S.K, NADA, dt, N.mundo(A.N));
     if (A.faseT >= CAE_T) {
@@ -97,15 +104,17 @@ function empiezaJuego(S) {
 function juego(S, dt) {
   const A = S.av, K = S.K, L = A.N;
   if (A.hitstop > 0) { A.hitstop -= dt; return; }
+  FX.step(A.fx, dt);
   const activo = A.fase === 'juego';
   if (activo) A.tJuego += dt;
   const inp = activo ? {
-    dx: S.stick.dx,
-    salta: S.salta, saltaAbajo: S.bSalta.pressed,
+    dx: MD.curvaStick(S.stick.dx),
+    salta: S.salta,
     golpea: S.golpea, esquiva: S.esquiva, bloquea: S.bGuardia.pressed,
   } : (A.gano ? { ...NADA, dx: 1 } : NADA);
   S.salta = false; S.golpea = false; S.esquiva = false;
   const antesSuelo = K.enSuelo, antesSt = K.st, antesTajo = K.tajoId, antesCd = K.esqCd;
+  const antesY = K.y, antesVy = K.vy;
 
   const M = N.mundo(L);
   C.stepCaballero(K, inp, dt, M);
@@ -121,11 +130,14 @@ function juego(S, dt) {
   if (antesCd > 0 && K.esqCd <= 0) S.pulsos.esquivar = 1;
   if (!antesSuelo && K.enSuelo) {
     burst(K.x - L.camX, K.y, 9, { rnd: Math.random, colors: [PB.polvo1, PB.polvo2], speed: 120, life: 0.32, size: 4, grav: 520 });
+    FX.aterriza(A.fx, K.x, K.y, antesVy / 1100);
     SFX.aterriza(); cam.shake(1.5, 0.08);
   }
-  if (antesSt !== C.SALTA && K.st === C.SALTA) { SFX.salto(); vibrate(6); }
+  if (antesSt !== C.SALTA && K.st === C.SALTA) { SFX.salto(); vibrate(6); FX.despega(A.fx, K.x, antesY); }
+  if (K.st === C.ESQUIVA) { const [ep, ef] = C.pose(K); FX.estela(A.fx, K, ep, ef, C.invulnerable(K)); }
   if (antesSt !== C.ESQUIVA && K.st === C.ESQUIVA) {
-    SFX.rodar(); vibrate(8);
+    SFX.esquiva(); vibrate(8);
+    FX.esquiva(A.fx, K.x, antesY, K.esqDir);
     burst(K.x - L.camX, K.y, 10, { rnd: Math.random, colors: [PB.polvo1, PB.polvo3], speed: 140, life: 0.3, size: 4, grav: 400 });
   }
   if (K.st === C.CORRE && K.enSuelo && ((A.t * 12) | 0) % 3 === 0) {
@@ -199,10 +211,11 @@ function enemigo(S, e, ex) {
     // LA PARADA: el golpe rebota; con la bola, se la devuelve
     A.hitstop = 9 / 60; cam.shake(4, 0.14); SFX.clang(); vibrate(26);
     A.msg = e.tipo === 'parada' ? 'PARADA!' : 'DEVUELTA!'; A.msgT = 0.9;
-    A.chispa = 0.25; A.chispaX = K.x + K.dir * 44; A.chispaY = K.y - 112;
+    FX.para(A.fx, K.x + K.dir * 44, K.y - 110);
     burst(K.x - A.N.camX + K.dir * 44, K.y - 110, 18, { rnd: Math.random, colors: [ORO, BLANCO, '#ffffff'], speed: 320, life: 0.5, size: 4, grav: 120 });
   } else if (e.tipo === 'bloqueo' || e.tipo === 'apagado') {
     A.hitstop = 4 / 60; cam.shake(2.5, 0.1); SFX.clang(); vibrate(14);
+    FX.bloquea(A.fx, K.x + K.dir * 40, K.y - 110, K.dir);
     const col = e.tipo === 'apagado' ? [PE.fuego1, PE.fuego3] : ['#d4dcf0', '#8a97b8'];
     burst(K.x - A.N.camX + K.dir * 40, K.y - 110, 10, { rnd: Math.random, colors: col, speed: 220, life: 0.35, size: 3, grav: 300 });
   } else if (e.tipo === 'tajo') {
@@ -211,6 +224,7 @@ function enemigo(S, e, ex) {
     A.hitstop = (e.contra ? 11 : e.fuerte ? 8 : 5) / 60;
     cam.shake(e.contra ? 6 : e.fuerte ? 4 : 3, 0.12);
     SFX.corta(); vibrate(e.fuerte || e.contra ? 22 : 14);
+    FX.acierta(A.fx, E.x - K.dir * 12, e.y, K.dir, e.contra ? 3 : e.fuerte ? 2 : K.combo);
     const cols = E.tipo === 'lobo' ? [PE.lobo1, PE.lobo2, PE.sangre] : [PE.kitsune1, PE.kitsune2, PE.fuego1];
     burst(ex, e.y, e.muere ? 26 : 14, { rnd: Math.random, colors: cols, speed: e.muere ? 340 : 260, life: 0.5, size: 4, grav: 620 });
     if (e.contra) {
@@ -227,6 +241,7 @@ function enemigo(S, e, ex) {
 // Le entra un golpe: congelacion, temblor, sonido y el rojo de su falda.
 function duele(S) {
   const K = S.K, A = S.av;
+  FX.herida(A.fx);
   A.hitstop = 7 / 60; cam.shake(5, 0.16); SFX.hurt(); vibrate(34);
   burst(K.x - A.N.camX, K.y - 90, 12, { rnd: Math.random, colors: ['#c41c5a', '#ef4a84'], speed: 240, life: 0.45, size: 4, grav: 500 });
 }
@@ -298,6 +313,8 @@ export function draw(S, g) {
   // Los enemigos, por detras de ella (ella queda delante, mas cerca).
   for (const E of L.enemigos) drawEnemigo(g, E, cx, A.t);
 
+  // Lo que los efectos dejan en el suelo y las copias de la esquiva.
+  FX.drawDetras(g, A.fx, cx);
   // Su sombra, sobre lo que tenga debajo (sobre un foso, ninguna).
   const bajo = C.sueloBajo(K.x, K.y, N.mundo(L));
   if (bajo !== Infinity) {
@@ -311,20 +328,16 @@ export function draw(S, g) {
   const desde = K.vivo ? K.t - K.hurtIni : K.muereT;
   const blanco = (K.st === C.DOLOR || K.st === C.MUERTO) ? Math.max(0, 1 - desde / 0.1) : 0;
   const parpadea = A.fase === 'juego' && !blanco && K.iframe > 0 && K.iframe < 1e8 && (((K.iframe * 14) | 0) & 1);
-  const rastro = K.st === C.ESQUIVA && C.invulnerable(K) ? 1 : 0;
-  if (!parpadea) drawRomina(g, K.x - cx, K.y, K.dir, p, f, rastro, blanco, K.st === C.ESQUIVA ? K.esqDir : K.dir);
+  const [ex, ey] = FX.escala(A.fx);
+  if (!parpadea) drawRomina(g, K.x - cx, K.y, K.dir, p, f, 0, blanco, K.dir, ex, ey);
+  FX.drawGuardia(g, K, cx, A.t, K.bloqT >= C.BLOQ_SUBE && K.bloqT < C.BLOQ_SUBE + K.paradaVent);
 
   drawRamas(g, L, cx, A.t);
   // Las bolas de fuego, por delante de todo: le vienen a ella.
   for (const F of L.fuegos) drawFuego(g, F, cx);
-  // LA CHISPA DE LA PARADA: una estrella de oro que se encoge.
-  if (A.chispa > 0) {
-    const u = A.chispa / 0.25, sx = Math.round(A.chispaX - cx), sy = Math.round(A.chispaY);
-    const Lr = Math.round(10 + 22 * u), D = Math.round(Lr * 0.6);
-    g.fillStyle = BLANCO; g.fillRect(sx - Lr, sy - 2, Lr * 2, 4); g.fillRect(sx - 2, sy - Lr, 4, Lr * 2);
-    g.fillStyle = ORO;
-    for (let i = -D; i <= D; i += 2) { g.fillRect(sx + i - 1, sy + i - 1, 3, 3); g.fillRect(sx + i - 1, sy - i - 1, 3, 3); }
-  }
+  // Los cortes, las estrellas y las chispas de los efectos.
+  FX.drawDelante(g, A.fx, cx);
+  if (A.fase === 'juego' || A.fase === 'final') FX.drawPantalla(g, A.fx, VW, ALTO);
 
   // El fundido de la caida (se oscurece mientras cae y se aclara al volver).
   const oscuro = A.fase === 'cae' ? Math.min(1, Math.max(0, (A.faseT - 0.25) / 0.5)) : A.funde;

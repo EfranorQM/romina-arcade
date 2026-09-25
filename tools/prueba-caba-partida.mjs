@@ -20,7 +20,7 @@ const AU = await import(G('audio.js'));
 const DT = 1 / 60;
 let fallos = 0;
 const ok = (cond, msg) => { console.log((cond ? '   ok  ' : '   MAL ') + msg); if (!cond) fallos++; };
-const nada = { dx: 0, salta: false, golpea: false, esquiva: false, saltaAbajo: false, bloquea: false };
+const nada = { dx: 0, salta: false, golpea: false, esquiva: false, bloquea: false };
 const ms = v => v.toFixed(0) + ' ms';
 
 // Un ataque del ogro contra ella, con la regla REAL de la escena (golpeaA,

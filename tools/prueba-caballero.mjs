@@ -22,7 +22,7 @@ const DT = 1 / 60;
 const fmt = v => (Math.round(v * 10) / 10).toFixed(1);
 let fallos = 0;
 function ok(cond, msg) { console.log((cond ? '   ok  ' : '   MAL ') + msg); if (!cond) fallos++; }
-const nada = { dx: 0, salta: false, golpea: false, esquiva: false, saltaAbajo: false, bloquea: false };
+const nada = { dx: 0, salta: false, golpea: false, esquiva: false, bloquea: false };
 function corre(K, secs, inp) {
   const n = Math.round(secs / DT);
   for (let i = 0; i < n; i++) stepCaballero(K, inp || nada, DT);
@@ -53,32 +53,33 @@ console.log('== 1) ANDAR ==');
 
 console.log('== 2) SALTAR ==');
 {
+  // UN TOQUE: el flanco de SALTAR y nada mas, como un pulgar en el movil
+  // (un toque dura 50-100 ms). Hasta el 24-09-2026 soltar antes de 90 ms
+  // recortaba el salto a 43-75 px, y los fosos no se cruzaban; este arnes no
+  // lo veia porque MANTENIA el boton.
   const K = makeCaballero(300);
   let apex = SUELO, t = 0;
-  stepCaballero(K, { ...nada, salta: true, saltaAbajo: true }, DT);
+  stepCaballero(K, { ...nada, salta: true }, DT);
   while (!K.enSuelo && t < 3) {
-    stepCaballero(K, { ...nada, saltaAbajo: true }, DT);
+    stepCaballero(K, nada, DT);
     apex = Math.min(apex, K.y); t += DT;
   }
   const alto = SUELO - apex;
-  console.log(`salto completo: ${fmt(alto)} px de alto, ${fmt(t)} s en el aire`);
+  console.log(`salto de un toque: ${fmt(alto)} px de alto, ${fmt(t)} s en el aire`);
   // Los umbrales van en la escala del juego: Romina mide 180 px, asi que un
   // salto util son 100-132 (0.6-0.7 de su altura).
-  ok(alto >= 100 && alto <= 132, 'el salto completo sube entre 100 y 132 px (0.6-0.7 de su altura)');
+  ok(alto >= 100 && alto <= 132, 'un toque sube entre 100 y 132 px (0.6-0.7 de su altura)');
   ok(t >= 0.45 && t <= 0.62, 'el vuelo dura entre 0.45 y 0.62 s');
-
-  // Cortado: se suelta el boton enseguida
+  // Y es el MISMO salto lo dure lo que dure el toque: el salto ya no depende
+  // de cuanto se aprieta (ver JUMP_V en caba-cuerpo.js).
   const K2 = makeCaballero(300);
-  let apex2 = SUELO, t2 = 0;
-  stepCaballero(K2, { ...nada, salta: true, saltaAbajo: true }, DT);
-  while (!K2.enSuelo && t2 < 3) {
-    stepCaballero(K2, { ...nada, saltaAbajo: false }, DT);
-    apex2 = Math.min(apex2, K2.y); t2 += DT;
-  }
-  const alto2 = SUELO - apex2;
-  console.log(`salto cortado: ${fmt(alto2)} px de alto, ${fmt(t2)} s`);
-  ok(alto2 < alto * 0.75, 'soltar pronto deja el salto por debajo del 75% del completo');
-  ok(alto2 > 30, 'pero sube algo util (mas de 30 px)');
+  let apex2 = SUELO;
+  stepCaballero(K2, { ...nada, salta: true }, DT);
+  for (let i = 0; i < 40 && !K2.enSuelo; i++) { stepCaballero(K2, nada, DT); apex2 = Math.min(apex2, K2.y); }
+  const K3 = makeCaballero(300);
+  let apex3 = SUELO;
+  for (let i = 0; i < 40; i++) { stepCaballero(K3, { ...nada, salta: i === 0 }, DT); apex3 = Math.min(apex3, K3.y); }
+  ok(Math.abs(apex2 - apex3) < 0.01, 'un toque de 17 ms y uno de 670 ms saltan lo mismo');
 }
 
 console.log('== 3) COYOTE Y BUFFER ==');
@@ -87,15 +88,15 @@ console.log('== 3) COYOTE Y BUFFER ==');
   const K = makeCaballero(300);
   K.enSuelo = false; K.y = SUELO - 1; K.vy = 0; K.coyote = 0.08;
   corre(K, 3 * DT);
-  stepCaballero(K, { ...nada, salta: true, saltaAbajo: true }, DT);
+  stepCaballero(K, { ...nada, salta: true }, DT);
   ok(K.vy < -300, 'el coyote deja saltar justo despues de salir del borde');
   // Pulsar en el aire justo antes de aterrizar: el buffer lo guarda.
   const K2 = makeCaballero(300);
-  stepCaballero(K2, { ...nada, salta: true, saltaAbajo: true }, DT);
-  while (K2.y < SUELO - 30 || K2.vy < 0) stepCaballero(K2, { ...nada, saltaAbajo: true }, DT);
+  stepCaballero(K2, { ...nada, salta: true }, DT);
+  while (K2.y < SUELO - 30 || K2.vy < 0) stepCaballero(K2, nada, DT);
   stepCaballero(K2, { ...nada, salta: true }, DT);   // pulsa en el aire
   let saltoOtraVez = false;
-  for (let i = 0; i < 12; i++) { stepCaballero(K2, { ...nada, saltaAbajo: true }, DT); if (K2.vy < -300) saltoOtraVez = true; }
+  for (let i = 0; i < 12; i++) { stepCaballero(K2, nada, DT); if (K2.vy < -300) saltoOtraVez = true; }
   ok(saltoOtraVez, 'el buffer guarda un salto pulsado justo antes de tocar suelo');
 }
 
@@ -142,9 +143,9 @@ console.log('== 4) ESQUIVAR ==');
   ok(Math.abs(K2.x - x1) < 40, 'no se puede encadenar una esquiva con otra');
   // Y solo desde el suelo
   const K3 = makeCaballero(500);
-  stepCaballero(K3, { ...nada, salta: true, saltaAbajo: true }, DT);
-  corre(K3, 0.1, { ...nada, saltaAbajo: true });
-  stepCaballero(K3, { ...nada, esquiva: true, saltaAbajo: true }, DT);
+  stepCaballero(K3, { ...nada, salta: true }, DT);
+  corre(K3, 0.1, nada);
+  stepCaballero(K3, { ...nada, esquiva: true }, DT);
   ok(K3.st !== C.ESQUIVA, 'en mitad de un salto no se puede esquivar');
 }
 
@@ -225,7 +226,7 @@ console.log('== 7) POSES ==');
   const vistas = new Set();
   vistas.add(pose(K)[0]);
   corre(K, 0.8, { ...nada, dx: 1 }); vistas.add(pose(K)[0]);
-  stepCaballero(K, { ...nada, salta: true, saltaAbajo: true }, DT); corre(K, 0.1, { ...nada, saltaAbajo: true }); vistas.add(pose(K)[0]);
+  stepCaballero(K, { ...nada, salta: true }, DT); corre(K, 0.1, nada); vistas.add(pose(K)[0]);
   corre(K, 0.6); vistas.add(pose(K)[0]);
   corre(K, 0.4, { ...nada, bloquea: true }); vistas.add(pose(K)[0]);
   corre(K, 0.4);
@@ -244,7 +245,7 @@ console.log('== 7) POSES ==');
   const vistos = {};
   for (let i = 0; i < 4000; i++) {
     const inp = { dx: Math.sin(i / 17), salta: i % 53 === 0, golpea: i % 29 === 0,
-                  esquiva: i % 71 === 0, saltaAbajo: i % 53 < 8, bloquea: i % 97 < 30 };
+                  esquiva: i % 71 === 0, bloquea: i % 97 < 30 };
     stepCaballero(K2, inp, DT);
     const [p, f] = pose(K2);
     if (!(p in CUENTA)) malo = ['pose desconocida', p];
@@ -315,8 +316,8 @@ console.log('== 7) POSES ==');
   {
     const K = makeCaballero(300);
     jugar(K, 90, { ...nada, dx: 1 });                       // correr
-    jugar(K, 1, { ...nada, dx: 1, salta: true, saltaAbajo: true });
-    jugar(K, 40, { ...nada, dx: 1, saltaAbajo: true });     // salto entero
+    jugar(K, 1, { ...nada, dx: 1, salta: true });
+    jugar(K, 40, { ...nada, dx: 1 });                       // el salto entero
     jugar(K, 15, nada);                                     // y el aterrizaje
     jugar(K, 1, { ...nada, esquiva: true });
     jugar(K, 30, nada);                                     // la esquiva
@@ -328,10 +329,10 @@ console.log('== 7) POSES ==');
   // GUION 4: un tajo EN EL AIRE (tiene su propia animacion), y la derrota.
   {
     const K = makeCaballero(300);
-    jugar(K, 1, { ...nada, salta: true, saltaAbajo: true });
-    jugar(K, 6, { ...nada, saltaAbajo: true });
-    jugar(K, 1, { ...nada, golpea: true, saltaAbajo: true });
-    jugar(K, 20, { ...nada, saltaAbajo: true });            // el tajo aereo entero
+    jugar(K, 1, { ...nada, salta: true });
+    jugar(K, 6, nada);
+    jugar(K, 1, { ...nada, golpea: true });
+    jugar(K, 20, nada);                                     // el tajo aereo entero
     jugar(K, 40, nada);
     for (let i = 0; i < HP0; i++) { K.iframe = 0; herir(K, K.x + 60); }
     jugar(K, 90, nada);            // sale despedida, cae y se queda de rodillas

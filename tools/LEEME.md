@@ -172,7 +172,8 @@ leía como estar de rodillas resbalando.
 ## Los botones de ROMINA: ATACAR, SALTAR, ESQUIVAR, GUARDIA
 
 ```
-node tools/ver.js tools/ver-botones.html vistas/botones.png 1440 900   # todos sus estados
+node tools/prueba-mandos.mjs                                 # tamaño, zonas de toque y stick, medidos
+node tools/ver.js tools/ver-botones.html vistas/botones.png 1200 1050  # antes/ahora, zonas y estados
 python tools/gif.py escena:parada vistas/parada.gif          # parada y contraataque, en el juego
 python tools/gif.py escena:barrido vistas/barrido.gif        # esquiva hacia atrás
 python tools/gif.py escena:embestida vistas/embestida.gif    # esquiva atravesándolo
@@ -192,6 +193,24 @@ paraba todo y, de cerca, ni siquiera paraba el garrotazo (comprobaba "de
 frente" contra el punto donde cae el garrote, que con ella pegada al ogro queda
 a su espalda). Por eso QUÉ le pega al ogro vive en `OG.golpeaA` y no en la
 escena: el arnés mide la misma regla con la que se juega.
+
+**Donde van y a quien le toca cada toque** (`caba-mandos.js`, sin DOM, rehecho
+el 24-09-2026 porque "el tamaño o posición de los botones no es lo
+suficientemente rápido o cómodo"). Dos columnas: la ESPADA a la izquierda
+(GUARDIA sobre ATACAR: de la parada al contraataque se baja el pulgar) y las
+PIERNAS a la derecha (ESQUIVAR sobre SALTAR); abajo, grandes, los dos que más
+se pulsan. Cada toque va al botón de **borde** más cercano (`MD.aQuien`, hasta
+64 px fuera de él): no hay huecos entre botones ni uno que se quede los toques
+de otro. `prueba-mandos.mjs` lo cuenta punto a punto con la misma función que
+usa la escena. Medido contra los de antes (v1.0.23): medallones de 7,7-9,7 mm
+en el teléfono de ella (ahora 10,2-11,6; una yema mide 10-14), un 30 % de la
+esquina de los botones que no era de ninguno (ahora 0) y GUARDIA, que se miraba
+primero, se quedaba el 8 % de la zona de SALTAR.
+
+**El stick** corre a tope con 36 px de pulgar (4,4 mm; antes 80 px, casi 1 cm,
+y la velocidad iba en proporción: con el pulgar a medias corría a medias, y
+ningún foso se cruza corriendo al 70 %). Es el mismo `Stick` de `input.js` con
+radio 60 y la curva `MD.curvaStick`.
 
 Los medallones se hornean una vez (`caba-botones.js`); los iconos son una
 rejilla de 15 px que se contornea sola. Dos que no se leían y se rehicieron
@@ -317,9 +336,20 @@ Dónde está cada cosa, todo sin DOM salvo el dibujo:
 
 Lo que miden las secciones de `prueba-nivel.mjs`:
 
-- **Fosos.** El salto de Romina cruza 170 px como mucho (esquivando hacia
-  delante, 260). Un foso de 120 deja 233 ms para despegar; uno de 150, 117
-  (injusto con el pulgar). Por eso van de 100 a 120, y el ancho lleva un tocón.
+- **Fosos.** El salto de Romina cruza 190 px como mucho (esquivando hacia
+  delante, 280). Un foso de 120 deja 350 ms para despegar. Por eso van de 100
+  a 120, y el ancho lleva un tocón. Con el borde que perdona (`AGARRE`, 16 px:
+  si cae un poco antes del otro lado, se sube; solo por el lado HACIA el que
+  va, o haría de pared invisible al salir andando de un borde).
+- **El pulgar (1b).** Hasta el 24-09-2026 todo esto se medía MANTENIENDO el
+  botón y con el stick a tope, y un pulgar TOCA y mueve el stick unos
+  milímetros. Con un toque (el salto se recortaba si se soltaba antes de 90
+  ms) y el stick de entonces, el foso de 120 se cruzaba 1 vez de cada 9, y
+  ninguna por debajo de 8 mm de stick: "morimos fácilmente con los huecos".
+  Ahora el salto es siempre entero, el coyote dura 0,12 s y el stick corre a
+  tope con 4,4 mm; esta sección juega con el `Stick` real, un toque de un
+  frame y un pulgar que apunta al borde con ±90 ms de error: 93-98 % de saltos
+  buenos (±120 ms: 84-93 %). Contra el código de antes, 22 fallos.
 - **Troncos.** Con 30 de radio a 330 px/s, saltarlos solo salvaba pulsando en
   117 ms; a 24 y 380 px/s son 250 ms. La guardia no los para.
 - **Ramas.** Avisan con su sombra 1,2 s antes de llegar al suelo.
@@ -328,7 +358,10 @@ Lo que miden las secciones de `prueba-nivel.mjs`:
 - **Kitsune.** La bola de fuego se para (1,4 s de margen) y con una PARADA se
   devuelve y le quema; saltar no la libra. Del corro se libra apartándose.
 - **El piloto** (`tools/piloto-aventura.mjs`, el mismo que usa la grabadora):
-  reacciona 0,25 s después de ver cada cosa, nunca antes. Con reflejos de
+  reacciona 0,25 s después de ver cada cosa, nunca antes, y salta con un
+  TOQUE (hasta el 24-09-2026 mantenía el botón 40 frames: nadie juega así, y
+  por eso nunca vio que con toques no se cruzaba ningún foso; con toques y el
+  código de antes no llegaba al final en ninguna dificultad). Con reflejos de
   persona normal (0,35 s) pasa el bosque en PASEO y NORMAL, y FURIA muerde más.
   Un MACHACÓN que salta y ataca pero no se defiende no pasa (0 de 12), y el
   que solo corre se cae en el primer foso.
@@ -382,6 +415,36 @@ El arte:
   packs no están en el repo, solo lo horneado.
 - La música del bosque es `SONGS.caballeroBosque`, en Fa lidio (el modo que
   suena a encantado y cabe entero en el secuenciador).
+
+## Los efectos de ROMINA
+
+```
+python tools/gif.py aventura:foso vistas/efectos-salto.gif     # despegar y caer (el polvo)
+python tools/gif.py escena:embestida vistas/efectos-esquiva.gif # las copias de la esquiva
+python tools/gif.py escena:parada vistas/efectos-parada.gif    # el arco de la guardia y la parada
+python tools/gif.py escena:victoria vistas/efectos-combo.gif   # los cortes del combo
+```
+
+`caba-efectos.js` pinta lo que hace ella, igual en la pelea y en la aventura
+(24-09-2026: "sus efectos son tan básicos"): el aro de polvo y las nubes al
+despegar y al caer (y se estira y se aplasta, alrededor de los pies), las
+COPIAS violetas y las rayas de la esquiva, el CORTE que cruza al enemigo en el
+sentido de cada golpe con su estrella y sus chispas, el arco de la guardia (de
+oro en la ventana de la parada), el aro de oro de la parada y el borde rojo al
+recibir. Todo en coordenadas del mundo, con `fillRect` a pixel entero. Lo que
+salió mirándolo a escala de teléfono y no leyendo el código:
+
+- **El polvo del color del camino no se ve**: el del bosque (#cecb85) sobre
+  el camino (#adaa6d). En la aventura va uno más claro (`POLVO_FX`).
+- **El corte crecía desde cero**, y el golpe congela el mundo (hitstop) con
+  los efectos dentro: el frame del impacto, el que más dura, no enseñaba nada.
+  Sale entero desde el primer frame.
+- **Blanco sobre blanco**: el enemigo destella en blanco al recibir, justo
+  cuando sale el corte. Cortes, estrellas y aros llevan contorno oscuro.
+- Puntos sueltos (aros de 10 puntos) no se leen: los aros van seguidos.
+
+Coste, con el pintado forzado y todo a la vez (esquiva, remate, parada,
+aterrizaje y borde rojo): 0,3 ms; la escena pasa de 0,7 a 1,0 ms.
 
 ## Las actualizaciones: estrenar, confirmar y volver atrás
 

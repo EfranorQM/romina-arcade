@@ -1,20 +1,25 @@
 <!doctype html>
 <!-- LOS BOTONES DE ROMINA en todos sus estados, pintados con el modulo real
-     (www/js/games/caba-botones.js) sobre el salon del juego, a tamaño de juego
-     y a x3 para ver el pixel:
+     (www/js/games/caba-botones.js) sobre el salon del juego:
 
-       node tools/ver.js tools/ver-botones.html vistas/botones.png 1440 900
+       node tools/ver.js tools/ver-botones.html vistas/botones.png 1200 1050
 
-     Fila de arriba a tamaño real (el lienzo del juego es 1200x540 y en el
-     telefono se estira x1.95). Debajo, cada estado a x3: en reposo, apretado,
-     ESQUIVAR recargando, GUARDIA en la ventana de la parada y ATACAR con el
-     contraataque listo. -->
+     Arriba, ANTES y AHORA: la esquina de abajo a la derecha del juego (x1.2;
+     en el telefono el lienzo se estira x1.95), y debajo la misma esquina con
+     la ZONA DE TOQUE de cada boton pintada de su color: lo que queda sin
+     pintar es un toque que no pulsa nada. Los de ahora salen de caba-mandos.js,
+     los mismos que usa el juego (antes esta pagina copiaba los sitios a mano y
+     se podia quedar vieja).
+
+     Abajo, cada estado a x1.5: en reposo, apretado, ATACAR con el contraataque
+     listo, ESQUIVAR recargando, GUARDIA en la ventana de la parada y SALTAR. -->
 <meta charset="utf-8">
 <style>body{margin:0;background:#000}canvas{display:block}</style>
-<canvas id="c" width="1440" height="900"></canvas>
+<canvas id="c" width="1200" height="1050"></canvas>
 <script type="module">
-import { Button, Stick } from '../www/js/input.js';
+import { Button } from '../www/js/input.js';
 import * as BT from '../www/js/games/caba-botones.js';
+import * as MD from '../www/js/games/caba-mandos.js';
 import { drawSalon, cargaArena } from '../www/js/games/arena-sprite.js';
 import { text } from '../www/js/font.js';
 
@@ -23,28 +28,47 @@ const cv = document.getElementById('c');
 const g = cv.getContext('2d');
 g.imageSmoothingEnabled = false;
 
-// Los mismos sitios y radios que en caballero.js
-const B = {
-  saltar: new Button(1096, 300, 34, 20), atacar: new Button(1132, 428, 40, 20),
-  esquivar: new Button(1016, 452, 32, 20), guardia: new Button(1016, 336, 32, 20),
-};
-const H = BT.hornea(B);
+// AHORA: los de caba-mandos.js. ANTES: los de la v1.0.23, que se miraban por
+// orden (ESQUIVAR, GUARDIA, ATACAR, SALTAR) y llegaban a r + 20.
+const B = {}, VIEJOS = {};
+for (const k in MD.BOTONES) { const b = MD.BOTONES[k]; B[k] = new Button(b.x, b.y, b.r, MD.ZONA); }
+const ANTES = { esquivar: [1016, 452, 32], guardia: [1016, 336, 32], atacar: [1132, 428, 40], saltar: [1096, 300, 34] };
+for (const k in ANTES) VIEJOS[k] = new Button(ANTES[k][0], ANTES[k][1], ANTES[k][2], 20);
+const H = BT.hornea(B), HV = BT.hornea(VIEJOS);
 const NOM = { atacar: 'ATACAR', saltar: 'SALTAR', esquivar: 'ESQUIVAR', guardia: 'GUARDIA' };
+const COL = { atacar: '#b8204e', saltar: '#3a6cc0', esquivar: '#7a48b4', guardia: '#71829c' };
+const quienAntes = (x, y) => ['esquivar', 'guardia', 'atacar', 'saltar'].find(k => Math.hypot(x - ANTES[k][0], y - ANTES[k][1]) <= ANTES[k][2] + 20) || null;
+const quienAhora = (x, y) => MD.aQuien(x, y);
 
-// 1. A tamaño real, sobre el salon: el trozo de la derecha del juego.
-g.save();
-g.beginPath(); g.rect(0, 0, 1200, 540); g.clip();
-drawSalon(g, 0);
-for (const k in B) BT.boton(g, H, k, B[k], { nombre: NOM[k] });
-const st = new Stick(80, 14);
-BT.stick(g, H, st, 150, 490);
-const st2 = new Stick(80, 14);
-st2.down({ id: 1, x: 330, y: 470 }); st2.move({ id: 1, x: 380, y: 470 });
-BT.stick(g, H, st2, 0, 0);
-g.restore();
-text(g, 'a tamaño de juego', 8, 8, '#ffe066', 2);
+// La esquina de los botones: x 820..1200, y 230..540 del juego.
+const X0 = 820, Y0 = 230, AW = 380, AH = 310, Z = 1.2, EW = AW * Z, EH = AH * Z;
+function esquina(dx, dy, botones, Hh, quien) {
+  g.save();
+  g.translate(dx, dy);
+  g.beginPath(); g.rect(0, 0, EW, EH); g.clip();
+  g.scale(Z, Z); g.translate(-X0, -Y0);
+  drawSalon(g, 0);
+  if (quien) {
+    g.globalAlpha = 0.5;
+    for (let y = Y0; y < Y0 + AH; y += 2) for (let x = X0; x < X0 + AW; x += 2) {
+      const k = quien(x, y);
+      if (k) { g.fillStyle = COL[k]; g.fillRect(x, y, 2, 2); }
+    }
+    g.globalAlpha = 1;
+  }
+  for (const k in botones) BT.boton(g, Hh, k, botones[k], { nombre: NOM[k] });
+  g.restore();
+}
+const C1 = 20, C2 = 40 + EW, F1 = 36, F2 = F1 + EH + 40;
+esquina(C1, F1, VIEJOS, HV, null);
+esquina(C2, F1, B, H, null);
+esquina(C1, F2, VIEJOS, HV, quienAntes);
+esquina(C2, F2, B, H, quienAhora);
+text(g, 'ANTES (v1.0.23)', C1, 12, '#ffe066', 2);
+text(g, 'AHORA', C2, 12, '#ffe066', 2);
+text(g, 'ZONAS DE TOQUE (SIN COLOR: NO PULSA NADA)', C1, F2 - 24, '#ffe066', 2);
 
-// 2. Los estados a x3.
+// Los estados, a x1.5, en una tira debajo.
 const estados = [
   ['reposo', 'atacar', { nombre: 'ATACAR' }],
   ['apretado', 'atacar', { apretado: true, pulso: 0.6, nombre: 'ATACAR' }],
@@ -53,17 +77,16 @@ const estados = [
   ['parada', 'guardia', { apretado: true, brillo: 1, nombre: 'GUARDIA' }],
   ['saltar', 'saltar', { nombre: 'SALTAR' }],
 ];
-const TAM = 240;
+const TW = 190, TH = 196, FY = F2 + EH + 16;
 estados.forEach(([rot, k, e], i) => {
-  const cx = i * TAM, cy = 560;
+  const cx = C1 + i * TW;
   g.save();
-  g.beginPath(); g.rect(cx, cy, TAM - 6, 330); g.clip();
-  g.translate(cx, cy); g.scale(3, 3);
+  g.beginPath(); g.rect(cx, FY, TW - 6, TH); g.clip();
+  g.translate(cx, FY); g.scale(1.5, 1.5);
   g.save(); g.translate(-980, -250); drawSalon(g, 0); g.restore();
-  const b = { x: 40, y: 48, r: B[k].r };
-  BT.boton(g, H, k, b, e);
+  BT.boton(g, H, k, { x: 62, y: 64, r: B[k].r }, e);
   g.restore();
-  text(g, rot, cx + 6, cy + 310, "#ffe066", 2);
+  text(g, rot, cx + 6, FY + 4, '#ffe066', 2);
 });
 document.title = 'listo';
 </script>

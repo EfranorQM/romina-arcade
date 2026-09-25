@@ -21,7 +21,7 @@ import * as C from '../www/js/games/caba-cuerpo.js';
 import * as EN from '../www/js/games/caba-enemigos.js';
 
 export const REAC = 15;
-const NADA = { dx: 0, salta: false, golpea: false, esquiva: false, saltaAbajo: false, bloquea: false };
+const NADA = { dx: 0, salta: false, golpea: false, esquiva: false, bloquea: false };
 
 // `m` es la memoria del piloto (se crea vacia: {}). `sem` varia un poco la
 // distancia a la que despega en los fosos, como una persona. `reac`: sus
@@ -36,7 +36,6 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
   m.visto = m.visto || new Map();
   const ve = (clave) => { if (!m.visto.has(clave)) m.visto.set(clave, n); return n - m.visto.get(clave); };
   const inp = { ...NADA, dx: 1 };
-  if (m.salto > 0) { inp.saltaAbajo = true; m.salto--; }
 
   // --- Lo que viene, visto hace REAC frames o mas.
   // Cada ataque se sigue desde que empieza su aviso hasta que acaba el golpe:
@@ -130,7 +129,11 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
   const enTocon = K.enSuelo && K.y < def.suelo - 1;
   const tronco = L.troncos.find(T => n - m.visto.get('t' + T.id) >= reac && T.x > K.x && T.x - K.x < 170 && !T.cae);
   const toconSalta = enTocon && L.tocones.some(T => K.x > T.x1 - 20);
-  if (K.enSuelo && (foso || tronco || toconSalta)) { inp.salta = true; inp.saltaAbajo = true; m.salto = 40; return inp; }
+  // Un TOQUE, como un pulgar: hasta el 24-09-2026 este piloto MANTENIA el
+  // boton 40 frames, y el salto se recortaba si se soltaba antes de 90 ms.
+  // Nadie juega asi en un movil, y por eso el arnes no vio que con un toque
+  // no se cruzaba ningun foso. Ahora el salto es siempre entero.
+  if (K.enSuelo && (foso || tronco || toconSalta)) { inp.salta = true; return inp; }
 
   // --- Enemigos: el mas cercano delante (o detras, si esta encima).
   let blanco = null;

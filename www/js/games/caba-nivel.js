@@ -121,10 +121,17 @@ export function makeNivel(def, rnd = Math.random, dif = {}) {
   };
 }
 
+// EL BORDE PERDONA: si al saltar un foso cae hasta 16 px antes del otro lado,
+// aterriza igual y se sube (ver `agarra` en caba-cuerpo.js). Medido con un
+// pulgar que apunta al borde con +-90 ms de error (tools/prueba-nivel.mjs,
+// seccion 1b): el foso de 120 pasa del 79 % al 93 % de saltos buenos. Lo que
+// fallaba era despegar un poco pronto: el salto se quedaba a un paso del borde.
+export const AGARRE = 16;
+
 // Lo que la fisica de ella necesita (ver caba-cuerpo.js, `mundo`).
 export function mundo(N) {
   return {
-    sinSuelo: true,
+    sinSuelo: true, agarra: AGARRE,
     x0: 60, x1: N.def.ancho - 40,
     repisas: [],
     bloques: N.tocones.length ? N.suelo.concat(N.tocones) : N.suelo,

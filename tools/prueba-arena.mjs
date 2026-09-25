@@ -22,7 +22,7 @@ const REACCION = 0.25;
 let fallos = 0;
 const ok = (cond, msg) => { console.log((cond ? '   ok  ' : '   MAL ') + msg); if (!cond) fallos++; };
 const f1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
-const nada = { dx: 0, salta: false, golpea: false, esquiva: false, saltaAbajo: false, bloquea: false };
+const nada = { dx: 0, salta: false, golpea: false, esquiva: false, bloquea: false };
 function semilla(s) {
   let x = s >>> 0;
   return function () { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; };
@@ -34,14 +34,14 @@ console.log('== 1) LAS REPISAS SE ALCANZAN SALTANDO, Y SE BAJA ANDANDO ==');
   const R = AR.REPISAS[0];
   const M = AR.mundo(AR.makeArena());
   const K = C.makeCaballero((R.x0 + R.x1) / 2);
-  C.stepCaballero(K, { ...nada, salta: true, saltaAbajo: true }, DT, M);
-  corre(K, 60, { ...nada, saltaAbajo: true }, M);
-  ok(K.enSuelo && Math.abs(K.y - R.y) < 0.01, 'un salto completo desde debajo la deja DE PIE en la repisa (y=' + f1(K.y) + ')');
-  // El salto cortado no llega: subir es una decision.
-  const K2 = C.makeCaballero((R.x0 + R.x1) / 2);
-  C.stepCaballero(K2, { ...nada, salta: true, saltaAbajo: true }, DT, M);
-  corre(K2, 60, nada, M);
-  ok(Math.abs(K2.y - C.SUELO) < 0.01, 'el salto CORTADO no llega a la repisa (vuelve al suelo)');
+  C.stepCaballero(K, { ...nada, salta: true }, DT, M);
+  corre(K, 60, nada, M);
+  // Un TOQUE basta. (Hasta el 24-09-2026 aqui se pedia ademas que un salto
+  // cortado NO llegara, para que subir fuera una decision; pero cortado era
+  // cualquier toque de pulgar de menos de 90 ms, y a la repisa no subia casi
+  // nadie. El salto ya es siempre entero: subir es saltar debajo, y bajar es
+  // salir andando por el borde.)
+  ok(K.enSuelo && Math.abs(K.y - R.y) < 0.01, 'un toque de SALTAR desde debajo la deja DE PIE en la repisa (y=' + f1(K.y) + ')');
   // Andar hasta el borde: cae al suelo
   corre(K, 80, { ...nada, dx: 1 }, M);
   ok(Math.abs(K.y - C.SUELO) < 0.01 && K.x > R.x1, 'andando hacia fuera se cae por el borde y aterriza en el suelo');
@@ -62,8 +62,8 @@ console.log('== 2) LOS ESCOMBROS CORTAN EL PASO, SE SALTAN Y SE PISAN ==');
   corre(K, 90, { ...nada, dx: 1 }, M);
   ok(K.x <= b.x0 - C.CUERPO_K + 0.01, 'andando contra el escombro se para en su borde (x=' + f1(K.x) + ', borde ' + f1(b.x0 - C.CUERPO_K) + ')');
   // saltando se pasa por encima
-  C.stepCaballero(K, { ...nada, dx: 1, salta: true, saltaAbajo: true }, DT, M);
-  corre(K, 50, { ...nada, dx: 1, saltaAbajo: true }, M);
+  C.stepCaballero(K, { ...nada, dx: 1, salta: true }, DT, M);
+  corre(K, 50, { ...nada, dx: 1 }, M);
   ok(K.x > b.x1, 'con un salto completo corriendo, lo pasa por encima (x=' + f1(K.x) + ')');
   // y se puede quedar encima
   const K2 = C.makeCaballero(600);

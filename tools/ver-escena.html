@@ -47,13 +47,14 @@ const GUIONES = {
       // repisa avanza unos 95 px. Saltando justo debajo se pasaba de largo.
       const meta = R.x0 + 8 + 95 - 70;
       E.stick.dx = K.x < meta ? 1 : 0;
-      // Pulsar SALTA en el juego es a la vez el flanco (salta) y el boton
-      // apretado (bSalta.pressed): sin lo segundo el salto se corta en el
-      // mismo paso y se queda en 43 px, que no llegan a la repisa (88).
+      // Un toque de SALTAR (el flanco). Hasta el 24-09-2026 hacia falta ademas
+      // mantener el boton (bSalta.pressed): soltado, el salto se cortaba en el
+      // mismo paso y se quedaba en 43 px, que no llegan a la repisa (88). Ya
+      // no: pressed solo pinta el boton hundido.
       if (K.x >= meta && K.enSuelo) { E.salta = true; E.bSalta.pressed = true; m.fase = 1; m.salto = n; }
     } else if (m.fase === 1) {
       E.stick.dx = 0;
-      E.bSalta.pressed = n - m.salto < 20;             // salto completo
+      E.bSalta.pressed = n - m.salto < 6;              // el dedo, un instante
       if (K.enSuelo && K.y < 400) { m.fase = 2; m.arriba = n; }
     } else if (m.fase === 2) {
       // 2. arriba de la repisa: el ogro pisotea

@@ -15,10 +15,12 @@ import * as C from '../www/js/games/caba-cuerpo.js';
 import * as N from '../www/js/games/caba-nivel.js';
 import * as EN from '../www/js/games/caba-enemigos.js';
 import * as P from '../www/js/games/caba-partida.js';
+import * as MD from '../www/js/games/caba-mandos.js';
+import { Stick } from '../www/js/input.js';
 import { piloto as decide, REAC } from './piloto-aventura.mjs';
 
 const DT = 1 / 60, VW = 1200;
-const NADA = { dx: 0, salta: false, golpea: false, esquiva: false, saltaAbajo: false, bloquea: false };
+const NADA = { dx: 0, salta: false, golpea: false, esquiva: false, bloquea: false };
 let fallos = 0;
 const ok = (c, msg) => { console.log((c ? '  ok   ' : '  MAL  ') + msg); if (!c) fallos++; };
 const ms = s => Math.round(s * 1000) + ' ms';
@@ -33,14 +35,15 @@ function nivelCon(extra) {
 
 // ============================================================
 console.log('\n1. EL SALTO: el foso mas ancho que se cruza, y el margen de cada foso del bosque');
-// Corre a tope desde lejos y salta en el frame k (mantiene el boton). ¿Llega?
-function cruza(def, k, conEsquiva = false) {
+// Corre desde lejos (a tope, o con el stick a `dx`) y salta en el frame k,
+// con un TOQUE: el flanco de un frame, como un pulgar. ¿Llega?
+function cruza(def, k, conEsquiva = false, dx = 1) {
   const L = N.makeNivel(def, semilla(1));
   const [a] = def.fosos[0];
   const K = C.makeCaballero(a - 520, { y: def.suelo });
   const M = N.mundo(L);
   for (let f = 0; f < 400; f++) {
-    const inp = { ...NADA, dx: 1, saltaAbajo: true };
+    const inp = { ...NADA, dx };
     if (f === k) { if (conEsquiva) inp.esquiva = true; else inp.salta = true; }
     C.stepCaballero(K, inp, DT, M);
     if (K.y > def.suelo + 40) return false;                       // se ha caido
@@ -72,6 +75,61 @@ for (const [a, b] of N.BOSQUE.fosos) {
 }
 
 // ============================================================
+console.log('\n1b. EL PULGAR: un toque, el stick a medias y pulsando cerca del borde');
+// POR QUE EXISTE (24-09-2026): "morimos facilmente con los huecos, porque al
+// oprimir el boton de saltar no es suficiente para pasar el hueco". La
+// seccion 1 decia que todo iba bien porque MANTENIA el boton y el stick a
+// tope, y un pulgar hace otra cosa: TOCA (50-100 ms; el salto se recortaba si
+// se soltaba antes de 90) y mueve el stick unos milimetros (la velocidad iba
+// en proporcion, y hacian falta ~10 mm para correr a tope). Con aquello el
+// foso de 120 se cruzaba 1 vez de cada 9 con el stick a tope y NINGUNA por
+// debajo de 8 mm. Aqui se juega como el pulgar: el stick REAL (input.js) con
+// la curva de la escena (caba-mandos.js), un toque de un frame, y pulsando
+// alrededor del borde con +-90 ms de error (una persona que apunta al borde).
+{
+  const stickA = mm => {
+    const S = new Stick(MD.STICK_R, MD.STICK_MUERTO);
+    S.down({ id: 1, x: 0, y: 0 }); S.move({ id: 1, x: mm / MD.MM, y: 0 });
+    return MD.curvaStick(S.dx);
+  };
+  console.log('  el stick: ' + [1, 2, 3, 4, 4.5, 6].map(mm => mm + ' mm -> ' + Math.round(stickA(mm) * 100) + '%').join(', '));
+  ok(stickA(1) === 0, 'con el pulgar apoyado (1 mm de temblor) no se mueve');
+  ok(stickA(4.5) === 1, 'con 4.5 mm de pulgar ya corre a tope');
+  ok(stickA(3) >= 0.6, 'con 3 mm corre al menos al 60 %');
+  // Pulsando alrededor del frame en que su centro cruza el borde, con peso
+  // normal (sigma 90 ms): la fraccion de toques que cruzan.
+  const pulgar = (w, dx, sigma) => {
+    const def = nivelCon({ fosos: [[2000, 2000 + w]] });
+    const L = N.makeNivel(def, semilla(1)), K = C.makeCaballero(2000 - 520, { y: def.suelo }), M = N.mundo(L);
+    let kB = 0;
+    for (let f = 0; f < 400; f++) { C.stepCaballero(K, { ...NADA, dx }, DT, M); if (K.x >= 2000) { kB = f; break; } }
+    let p = 0, tot = 0;
+    for (let k = kB - 40; k <= kB + 40; k++) {
+      const peso = Math.exp(-0.5 * (((k - kB) * DT) / sigma) ** 2);
+      tot += peso; if (cruza(def, k, false, dx)) p += peso;
+    }
+    return p / tot;
+  };
+  for (const [a, b] of N.BOSQUE.fosos) {
+    const w = b - a;
+    if (N.BOSQUE.tocones.some(([t0, t1]) => t0 > a && t1 < b)) continue;
+    const pa = pulgar(w, stickA(5), 0.09), pb = pulgar(w, stickA(3), 0.09), pc = pulgar(w, stickA(5), 0.12);
+    console.log('  foso de ' + w + ' px: con 5 mm de stick lo cruza el ' + Math.round(pa * 100) + ' % de los toques; con 3 mm, el ' +
+                Math.round(pb * 100) + ' %; con +-120 ms de error, el ' + Math.round(pc * 100) + ' %');
+    ok(pa >= 0.9, 'el foso de ' + w + ' px se cruza con un toque 9 de cada 10 veces (' + Math.round(pa * 100) + ' %)');
+    ok(pc >= 0.8, '   y con un pulso peor (+-120 ms), 8 de cada 10 (' + Math.round(pc * 100) + ' %)');
+  }
+  // EL BORDE PERDONA: cayendo un poco antes del otro lado, se sube. Pero solo
+  // por el lado HACIA el que va: por el que se aleja seria una pared invisible
+  // (medido al hacerlo: se quedaba clavada a 24 px del borde, sin caerse).
+  const def = nivelCon({ fosos: [[2000, 2120]] });
+  const L = N.makeNivel(def, semilla(1)), M = N.mundo(L);
+  const K = C.makeCaballero(1900, { y: def.suelo });
+  for (let f = 0; f < 90; f++) C.stepCaballero(K, { ...NADA, dx: 1 }, DT, M);
+  ok(K.y > def.suelo + 40, 'andando sin saltar se cae al foso: el agarre no es una pared en el borde de salida');
+}
+
+// ============================================================
 console.log('\n2. EL FOSO ANCHO Y SU TOCON: dos saltos');
 {
   const [a, b] = N.BOSQUE.fosos.find(([a, b]) => N.BOSQUE.tocones.some(([t0, t1]) => t0 > a && t1 < b));
@@ -86,7 +144,7 @@ console.log('\n2. EL FOSO ANCHO Y SU TOCON: dos saltos');
     const K = C.makeCaballero(a - 520, { y: L.def.suelo }), M = N.mundo(L);
     let llego = false;
     for (let f = 0; f < 300 && !llego; f++) {
-      C.stepCaballero(K, { ...NADA, dx: f < k + 20 ? 1 : 0, salta: f === k, saltaAbajo: true }, DT, M);
+      C.stepCaballero(K, { ...NADA, dx: f < k + 20 ? 1 : 0, salta: f === k }, DT, M);
       if (K.y > L.def.suelo + 40) break;
       if (f > k && K.enSuelo && K.x >= t0 - C.PIES_R && K.x <= t1 + C.PIES_R && K.y < L.def.suelo - 1) llego = true;
     }
@@ -101,7 +159,7 @@ console.log('\n2. EL FOSO ANCHO Y SU TOCON: dos saltos');
     const K = C.makeCaballero((t0 + t1) / 2, { y: L.def.suelo - alto }), M = N.mundo(L);
     let llego = false;
     for (let f = 0; f < 300 && !llego; f++) {
-      C.stepCaballero(K, { ...NADA, dx: 1, salta: f === k, saltaAbajo: true }, DT, M);
+      C.stepCaballero(K, { ...NADA, dx: 1, salta: f === k }, DT, M);
       if (K.y > L.def.suelo + 40) break;
       if (f > k && K.enSuelo && K.x > b) llego = true;
     }
@@ -121,7 +179,7 @@ function contraTronco(k, que, dxResp) {
   const M = N.mundo(L);
   L.troncos.push({ id: 1, x: 1700, y: def.suelo, vy: 0, giro: 0, cae: false });
   for (let f = 0; f < 240; f++) {
-    const inp = { ...NADA, saltaAbajo: que === 'salta' };
+    const inp = { ...NADA };
     if (f === k) { inp[que] = true; inp.dx = dxResp; }
     const hp = K.hp;
     C.stepCaballero(K, inp, DT, M);
@@ -379,7 +437,6 @@ function contraLobo(atk, resp, k) {
         if (resp === 'esquivaAtras') inp.esquiva = true;
         if (resp === 'salta') inp.salta = true;
       }
-      if (resp === 'salta') inp.saltaAbajo = true;
     }
     const hp = K.hp;
     C.stepCaballero(K, inp, DT, N.mundo(L));
@@ -444,7 +501,6 @@ function contraKitsune(atk, resp, k) {
         if (resp === 'esquivaAtras') inp.esquiva = true;
         if (resp === 'salta') inp.salta = true;
       }
-      if (resp === 'salta') inp.saltaAbajo = true;
     }
     const hp = K.hp;
     C.stepCaballero(K, inp, DT, N.mundo(L));

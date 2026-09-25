@@ -403,9 +403,12 @@ export const SFX = {
   espadazo: () => sfx({ type: 'noise', f0: 3200, f1: 900, dur: 0.07, vol: 0.18 }),
   corta:    () => { sfx({ type: 'noise', f0: 1800, f1: 300, dur: 0.12, vol: 0.34 }); sfx({ type: 'saw', f0: 240, f1: 90, dur: 0.10, vol: 0.20 }); },
   clang:    () => { sfx({ type: 'pulse', duty: 0.125, f0: 1900, f1: 1400, dur: 0.07, vol: 0.30 }); sfx({ type: 'noise', f0: 2600, f1: 1200, dur: 0.10, vol: 0.16 }); },
-  salto:    () => sfx({ type: 'pulse', duty: 0.25, f0: 200, f1: 420, dur: 0.10, vol: 0.16 }),
+  salto:    () => { sfx({ type: 'pulse', duty: 0.25, f0: 200, f1: 460, dur: 0.11, vol: 0.2 }); sfx({ type: 'noise', f0: 1400, f1: 400, dur: 0.07, vol: 0.1 }); },
   aterriza: () => sfx({ type: 'noise', f0: 420, f1: 110, dur: 0.09, vol: 0.20 }),
   rodar:    () => sfx({ type: 'noise', f0: 700, f1: 260, dur: 0.20, vol: 0.16 }),
+  // la esquiva de ROMINA: un zas de aire que sube (antes sonaba como el tronco
+  // que rueda, con rodar)
+  esquiva:  () => sfx({ type: 'noise', f0: 600, f1: 3400, dur: 0.16, vol: 0.22 }),
   // LA MASA
   tajo:     () => sfx({ type: 'noise', f0: 2400, f1: 300, dur: 0.09, vol: 0.30 }),
   muda:     () => { sfx({ type: 'tri', f0: 160, f1: 45, dur: 0.8, vol: 0.4 }); sfx({ type: 'noise', f0: 900, f1: 80, dur: 0.6, vol: 0.28 }); },

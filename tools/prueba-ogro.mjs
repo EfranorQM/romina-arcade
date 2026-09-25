@@ -35,7 +35,7 @@ function semilla(s) {
   let x = s >>> 0;
   return function () { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; };
 }
-const nada = { dx: 0, salta: false, golpea: false, esquiva: false, saltaAbajo: false, bloquea: false };
+const nada = { dx: 0, salta: false, golpea: false, esquiva: false, bloquea: false };
 
 console.log('== 1) LOS TELEGRAFOS DAN TIEMPO A REACCIONAR ==');
 {
@@ -77,7 +77,7 @@ console.log('== 2) LA ONDA SE SALTA, Y LA VENTANA ES ANCHA ==');
     const tPulsa = k * DT;                 // pulsa en el frame k
     let t = 0, tocado = false;
     for (let n = 0; n < 240; n++) {
-      const inp = Object.assign({}, nada, { salta: Math.abs(t - tPulsa) < DT / 2, saltaAbajo: t >= tPulsa });
+      const inp = Object.assign({}, nada, { salta: Math.abs(t - tPulsa) < DT / 2 });
       C.stepCaballero(K, inp, DT);
       onda.x += O.ONDA_V * DT; onda.rec += O.ONDA_V * DT;
       if (onda.rec > O.ONDA_ALCANCE) break;
@@ -125,22 +125,23 @@ console.log('== 3) QUIETA, LA ONDA SI PEGA (el test anterior no es un falso verd
   ok(tocado, 'quieta en el suelo, la onda la alcanza');
 }
 
-console.log('== 4) EL SALTO CORTADO NO SALVA (la decision tiene precio) ==');
+console.log('== 4) SALTAR DEMASIADO PRONTO NO SALVA (el precio es el momento) ==');
 {
-  // Soltar el boton pronto recorta el salto. Si el salto corto salvase igual,
-  // CORTE_F no serviria de nada y saltar seria un boton gratis.
+  // Hasta el 24-09-2026 aqui se comprobaba que un salto CORTADO (soltar el
+  // boton antes de 90 ms) no salvaba de la onda. Pero soltar pronto es lo que
+  // hace cualquier pulgar en un movil: la onda no se saltaba con un toque y el
+  // consejo decia SALTALAS. El salto ya es siempre entero; lo que tiene precio
+  // es CUANDO: saltando en cuanto nace la onda, ya ha aterrizado cuando llega.
   const K = C.makeCaballero(O.CUERPO_R + 300);
   const onda = { x: 0, dir: 1, rec: 0, vivo: true };
-  let tocado = false, t = 0;
+  let tocado = false;
   for (let n = 0; n < 240; n++) {
-    const inp = Object.assign({}, nada, { salta: n === 0, saltaAbajo: t < 0.05 });
-    C.stepCaballero(K, inp, DT);
+    C.stepCaballero(K, Object.assign({}, nada, { salta: n === 0 }), DT);
     onda.x += O.ONDA_V * DT; onda.rec += O.ONDA_V * DT;
     if (onda.rec > O.ONDA_ALCANCE) break;
     if (onda.rec >= O.ONDA_CIEGA && Math.abs(K.x - onda.x) <= 30 && (C.SUELO - K.y) <= O.ONDA_ALTO) { tocado = true; break; }
-    t += DT;
   }
-  ok(tocado, 'el salto CORTADO no salva de la onda (por eso soltar pronto cuesta)');
+  ok(tocado, 'saltando en cuanto nace la onda, aterriza antes y le da (saltar no es gratis)');
 }
 
 console.log('== 5) LOS TRES TAJOS DEL COMBO ALCANZAN AL OGRO ==');
@@ -219,7 +220,7 @@ console.log('== 6) CADA ATAQUE PIDE SU RESPUESTA, Y SE PUEDE DAR A TIEMPO ==');
   // BARRIDO: ESQUIVAR. La guardia se rompe y el salto no llega.
   for (const d of [90, 150, 250]) {
     ok(ataque(O.BARRIDO, d, mantiene(-1)).rota > 0, 'barrido a ' + d + ' px: le ROMPE la guardia');
-    const salta = ventana(O.BARRIDO, d, tp => t => ({ ...nada, salta: Math.abs(t - tp) < DT / 2, saltaAbajo: t >= tp }));
+    const salta = ventana(O.BARRIDO, d, tp => t => ({ ...nada, salta: Math.abs(t - tp) < DT / 2 }));
     ok(salta < 250, '   saltar no es la respuesta (salva en ' + ms(salta) + ')');
     const at = ventana(O.BARRIDO, d, tp => pulsa(tp, ATRAS)), ha = ventana(O.BARRIDO, d, tp => pulsa(tp, HACIA));
     ok(Math.max(at, ha) >= 250, '   ESQUIVAR salva: hacia atras en ' + ms(at) + ', atravesandolo en ' + ms(ha));
@@ -435,7 +436,7 @@ console.log('== 14) EL OGRO QUE APRENDE: CADA CONTRAMEDIDA TIENE RESPUESTA ==');
     let pierde = 0, ondas = 0;
     for (let n = 0; n * DT < 3; n++) {
       const cerca = og.ondas.some(w => w.vivo && w.rec >= O.ONDA_CIEGA && (w.x - K.x) * w.dir < 0 && Math.abs(w.x - K.x) <= D);
-      C.stepCaballero(K, { ...nada, salta: cerca && K.enSuelo, saltaAbajo: true }, DT);
+      C.stepCaballero(K, { ...nada, salta: cerca && K.enSuelo }, DT);
       O.stepOgro(og, K, DT, () => 0.99);
       if (og.ondas.length > ondas) ondas = og.ondas.length;
       const w = O.ondaGolpea(og, K);

@@ -7,6 +7,7 @@
        python tools/gif.py aventura:inicio vistas/bosque-inicio.gif
 
      Guiones (?s=): inicio (el cartel, echa a andar y salta el primer foso),
+     foso (solo el primer foso, de cerca: el salto, la caida y sus efectos),
      lobo (el primer hombre lobo), troncos (la primera zona de troncos y el
      segundo foso), kitsune (la primera kitsune: bolas y corro), ramas (las
      ramas que caen, un lobo debajo y la hoguera), tocon (el foso ancho en dos
@@ -32,7 +33,7 @@ await Promise.all([cargaRomina(), cargaOgro(), cargaArena(), cargaBosque(), carg
 const DT = 1 / 60;
 
 // Donde empieza cada guion (null: desde el principio, con su cartel).
-const DESDE = { inicio: null, lobo: 1400, troncos: 1900, kitsune: 2920, ramas: 3500, tocon: 5480, final: 6100 };
+const DESDE = { inicio: null, foso: 1000, lobo: 1400, troncos: 1900, kitsune: 2920, ramas: 3500, tocon: 5480, final: 6100 };
 
 // EL PILOTO, el mismo del arnes (tools/piloto-aventura.mjs): decide que
 // pulsar y aqui se pulsa en los botones de la escena, como un pulgar.
@@ -42,7 +43,7 @@ function piloto(n, E, m) {
   const inp = decide(n, E.K, E.av.N, m, 2);
   E.stick.dx = inp.dx;
   if (inp.salta) { E.salta = true; E.pulsos.saltar = 1; }
-  E.bSalta.pressed = inp.saltaAbajo;
+  E.bSalta.pressed = !!inp.salta;         // (solo para el dibujo del boton)
   if (inp.golpea) { E.golpea = true; E.pulsos.atacar = 1; }
   if (inp.esquiva) { E.esquiva = true; E.pulsos.esquivar = 1; }
   if (inp.bloquea && !E.bGuardia.pressed) E.pulsos.guardia = 1;

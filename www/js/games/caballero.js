@@ -1,11 +1,12 @@
 // ROMINA - la pelea contra el ogro, en el salon del castillo.
 //
-// Se juega de LADO. Pulgar izquierdo = mover. Cuatro botones a la derecha:
-// ATACAR (el grande), SALTAR, ESQUIVAR y GUARDIA (que se mantiene). Cada uno
-// es la respuesta a un ataque del ogro: la guardia para el garrotazo (y a
-// tiempo es una PARADA que da CONTRAATAQUE), el salto libra la onda del
-// pisoton y la esquiva, el barrido y la embestida. Se dibujan en
-// caba-botones.js.
+// Se juega de LADO. Pulgar izquierdo = mover. Cuatro botones a la derecha, en
+// dos columnas: la ESPADA (GUARDIA, que se mantiene, sobre ATACAR) y las
+// PIERNAS (ESQUIVAR sobre SALTAR). Cada uno es la respuesta a un ataque del
+// ogro: la guardia para el garrotazo (y a tiempo es una PARADA que da
+// CONTRAATAQUE), el salto libra la onda del pisoton y la esquiva, el barrido y
+// la embestida. Donde va cada uno y a quien le toca cada toque, en
+// caba-mandos.js; como se dibujan, en caba-botones.js.
 //
 // LA PARTIDA tiene cinco fases (this.fase):
 //   elige      la dificultad (paseo, normal, furia), sobre el salon quieto
@@ -37,6 +38,8 @@ import * as C from './caba-cuerpo.js';
 import * as P from './caba-partida.js';
 import { drawRomina, vestir, P as PR } from './romi-sprite.js';
 import * as BT from './caba-botones.js';
+import * as MD from './caba-mandos.js';
+import * as FX from './caba-efectos.js';
 import * as AR from './caba-arena.js';
 import { drawSalon, drawRepisas, drawEscombros, drawSombrasPiedras, drawPiedras, P as PA } from './arena-sprite.js';
 import * as OG from './ogro-cuerpo.js';
@@ -56,7 +59,7 @@ const PC = {
 
 const SUELO = C.SUELO;
 const ALTO = 540;
-const NADA = { dx: 0, salta: false, golpea: false, esquiva: false, saltaAbajo: false, bloquea: false };
+const NADA = { dx: 0, salta: false, golpea: false, esquiva: false, bloquea: false };
 // Lo que dura cada cosa de la partida, en segundos de reloj (no de pelea).
 const ENTRADA_T = 2.6, FINAL_T = 2.6;
 // La camara lenta: la del primer aviso de cada ataque (la pelea que enseña) y
@@ -76,15 +79,16 @@ export default {
 
   init(ctx, args) {
     this.ctx = ctx;
-    this.stick = new Stick(80, 14);
-    // Cuatro botones en la esquina de abajo a la derecha, en el mismo sitio
-    // que los de antes (medidos para el pulgar). Los radios son de DIBUJO; el
-    // area de toque es r+pad. GUARDIA es el unico que se mantiene apretado;
-    // los otros tres son toques.
-    this.bSalta = new Button(1096, 300, 34, 20);
-    this.bAtaca = new Button(1132, 428, 40, 20);
-    this.bEsquiva = new Button(1016, 452, 32, 20);
-    this.bGuardia = new Button(1016, 336, 32, 20);
+    this.stick = new Stick(MD.STICK_R, MD.STICK_MUERTO);
+    // Los cuatro botones, donde dice caba-mandos.js. Los radios son de DIBUJO;
+    // a quien le toca un toque lo decide MD.aQuien (el mas cercano, sin
+    // huecos), y el pad solo tiene que llegar hasta alli. GUARDIA es el unico
+    // que se mantiene apretado; los otros tres son toques.
+    const Bt = (k) => new Button(MD.BOTONES[k].x, MD.BOTONES[k].y, MD.BOTONES[k].r, MD.ZONA);
+    this.bSalta = Bt('saltar');
+    this.bAtaca = Bt('atacar');
+    this.bEsquiva = Bt('esquivar');
+    this.bGuardia = Bt('guardia');
     // Los tres del resultado, debajo del panel.
     this.bOtra = new Button(600, 474, 40, 14);
     this.bDif = new Button(452, 480, 32, 14);
@@ -144,7 +148,9 @@ export default {
     this.msg = ''; this.msgT = 0;
     this.combo = 0; this.comboT = 0;
     this.flashO = 0;          // el destello blanco del ogro al recibir un tajo
-    this.chispa = 0;          // la estrella de oro de la PARADA
+    // Los EFECTOS de lo que hace ella (saltar, caer, esquivar, acertar,
+    // parar): caba-efectos.js, los mismos que en la aventura.
+    this.fx = FX.makeEfectos([PA.polvo1, PA.polvo2, PA.polvo3]);
     this.destello = 0;        // el fogonazo blanco del golpe que lo tumba
     this.grietas = [];        // las marcas que deja el pisoton en el suelo
     // Lo que se cuenta para la nota.
@@ -189,6 +195,7 @@ export default {
   // cayo, se queda de rodillas; si cayo el ogro, se queda tumbado).
   quietos(dt) {
     const K = this.K, O = this.O;
+    FX.step(this.fx, dt);
     C.stepCaballero(K, NADA, dt, AR.mundo(this.A));
     OG.stepOgro(O, K, dt);
     if (O.st === OG.ESPERA || O.st === OG.ANDA) { O.st = OG.ESPERA; O.esperaT = 999; }
@@ -198,6 +205,7 @@ export default {
   // LA ENTRADA: ella llega corriendo, el cartel, el ogro ruge y A PELEAR.
   entrada(dt) {
     const K = this.K, O = this.O, t = this.faseT;
+    FX.step(this.fx, dt);
     C.stepCaballero(K, { ...NADA, dx: K.x < 170 ? 1 : 0 }, dt, AR.mundo(this.A));
     // El reloj del ogro corre para sus poses, pero todavia no decide nada.
     O.t += dt; O.animT += dt;
@@ -315,16 +323,16 @@ export default {
     // Despues del hitstop a proposito: el destello dura TODA la congelacion
     // del golpe y se apaga cuando el mundo vuelve a moverse.
     if (this.flashO > 0) this.flashO -= dt;
-    if (this.chispa > 0) this.chispa -= dt;
+    FX.step(this.fx, dt);
 
     const K = this.K, Mae = this.maestro;
     const inp = activo ? {
-      dx: this.stick.dx,
-      salta: this.salta, saltaAbajo: this.bSalta.pressed,
+      dx: MD.curvaStick(this.stick.dx),
+      salta: this.salta,
       golpea: this.golpea, esquiva: this.esquiva, bloquea: this.bGuardia.pressed,
     } : NADA;
     const antesSuelo = K.enSuelo, antesSt = K.st, antesTajo = K.tajoId;
-    const antesCd = K.esqCd;
+    const antesCd = K.esqCd, antesY = K.y, antesVy = K.vy;
     this.salta = false; this.golpea = false; this.esquiva = false;
 
     const M = AR.mundo(this.A);
@@ -357,13 +365,20 @@ export default {
     // El polvo sale de DONDE PISA (el suelo, una repisa o un escombro), no
     // siempre de la linea del suelo.
     if (!antesSuelo && K.enSuelo) {
-      // Aterrizaje: polvo y un temblor chiquito
+      // Aterrizaje: polvo, su aro en el suelo, se aplasta, y un temblor chiquito
       burst(K.x, K.y, 9, { rnd: Math.random, colors: [PA.polvo1, PA.polvo2], speed: 120, life: 0.32, size: 4, grav: 520 });
+      FX.aterriza(this.fx, K.x, K.y, antesVy / 1100);
       SFX.aterriza(); cam.shake(1.5, 0.08);
     }
-    if (antesSt !== C.SALTA && K.st === C.SALTA) { SFX.salto(); this.saltos++; vibrate(6); }
+    if (antesSt !== C.SALTA && K.st === C.SALTA) {
+      SFX.salto(); this.saltos++; vibrate(6);
+      FX.despega(this.fx, K.x, antesY);
+    }
+    // La esquiva deja copias de ella detras mientras vuela.
+    if (K.st === C.ESQUIVA) { const [ep, ef] = C.pose(K); FX.estela(this.fx, K, ep, ef, C.invulnerable(K)); }
     if (antesSt !== C.ESQUIVA && K.st === C.ESQUIVA) {
-      SFX.rodar(); this.esquivas++; vibrate(8);
+      SFX.esquiva(); this.esquivas++; vibrate(8);
+      FX.esquiva(this.fx, K.x, antesY, K.esqDir);
       P.anota(Mae, 'esquiva');
       // Para el ogro que aprende: ¿se fue hacia el o lejos de el?
       if (activo) OG.anotaHabito(this.O, Math.sign(K.esqDir) === Math.sign(this.O.x - K.x) ? 'hacia' : 'atras');
@@ -485,6 +500,7 @@ export default {
                                                        speed: 340, life: 0.5, size: 4, grav: 200 });
           }
           SFX.corta(); vibrate(fuerte ? 22 : 14);
+          FX.acierta(this.fx, O.x - K.dir * 30, SUELO - 120, K.dir, K.contra ? 3 : K.combo);
           burst(O.x + K.dir * -30, SUELO - 120, 14,
                 { rnd: Math.random, colors: [POG.pie3, POG.pie2, '#8b1a2b'],
                   speed: 260, life: 0.5, size: 4, grav: 620 });
@@ -505,13 +521,14 @@ export default {
         this.paradas++; P.anota(Mae, 'para'); OG.anotaHabito(O, 'guardia');
         this.hitstop = 9 / 60; cam.shake(4, 0.14); SFX.clang(); vibrate(26);
         this.msg = 'PARADA!'; this.msgT = 0.8;
-        this.chispa = 0.25;
+        FX.para(this.fx, K.x + K.dir * 44, K.y - 110);
         burst(K.x + K.dir * 44, K.y - 110, 18,
               { rnd: Math.random, colors: [PC.oro3, PC.bla2, PC.ace4],
                 speed: 320, life: 0.5, size: 4, grav: 120 });
       } else if (r === 'bloqueado') {
         P.anota(Mae, 'para'); OG.anotaHabito(O, 'guardia');
         this.hitstop = 4 / 60; cam.shake(2.5, 0.1); SFX.clang(); vibrate(14);
+        FX.bloquea(this.fx, K.x + K.dir * 40, K.y - 110, K.dir);
         burst(K.x + K.dir * 40, K.y - 110, 8,
               { rnd: Math.random, colors: [PC.ace3, PC.ace2], speed: 200,
                 life: 0.35, size: 3, grav: 300 });
@@ -653,13 +670,16 @@ export default {
   },
 
   // LOS MANDOS de la pelea, que son tambien los de la aventura: el stick a la
-  // izquierda y los cuatro botones a la derecha.
+  // izquierda y los cuatro botones a la derecha. Un toque va al boton mas
+  // cercano (MD.aQuien): antes se miraban por orden y con huecos entre ellos,
+  // y GUARDIA se quedaba toques que eran de SALTAR.
   mandos(ev) {
     if (ev.type === 'down') {
-      if (this.bEsquiva.down(ev)) { this.esquiva = true; this.pulsos.esquivar = 1; return; }
-      if (this.bGuardia.down(ev)) { this.pulsos.guardia = 1; return; }
-      if (this.bAtaca.down(ev)) { this.golpea = true; this.pulsos.atacar = 1; return; }
-      if (this.bSalta.down(ev)) { this.salta = true; this.pulsos.saltar = 1; return; }
+      const k = MD.aQuien(ev.x, ev.y, this.botones());
+      if (k === 'esquivar') { if (this.bEsquiva.down(ev)) { this.esquiva = true; this.pulsos.esquivar = 1; } return; }
+      if (k === 'guardia') { if (this.bGuardia.down(ev)) this.pulsos.guardia = 1; return; }
+      if (k === 'atacar') { if (this.bAtaca.down(ev)) { this.golpea = true; this.pulsos.atacar = 1; } return; }
+      if (k === 'saltar') { if (this.bSalta.down(ev)) { this.salta = true; this.pulsos.saltar = 1; } return; }
       if (ev.x < VW * 0.45 && ev.y > 240) { this.stick.down(ev); return; }
     } else if (ev.type === 'move') {
       this.stick.move(ev);
@@ -667,6 +687,7 @@ export default {
       this.stick.up(ev); this.bSalta.up(ev); this.bAtaca.up(ev); this.bEsquiva.up(ev); this.bGuardia.up(ev);
     }
   },
+  botones() { return { guardia: this.bGuardia, esquivar: this.bEsquiva, atacar: this.bAtaca, saltar: this.bSalta }; },
   // Fuera de juego solo se sueltan (un dedo que se levanta no se queda pegado).
   sueltaMandos(ev) {
     if (ev.type !== 'down') { this.stick.up(ev); this.bSalta.up(ev); this.bAtaca.up(ev); this.bEsquiva.up(ev); this.bGuardia.up(ev); }
@@ -675,6 +696,7 @@ export default {
   // Le entra un golpe de verdad (el ogro o un cascote): congelacion, temblor,
   // sonido y la sangre en el rojo de su falda.
   duele(K) {
+    FX.herida(this.fx);
     this.hitstop = 7 / 60; cam.shake(5, 0.16); SFX.golpe ? SFX.golpe() : SFX.clang();
     vibrate(34);
     burst(K.x, K.y - 90, 12, { rnd: Math.random, colors: [PR.ves2, PR.ves3],
@@ -760,6 +782,9 @@ export default {
       if (!parpadea) drawOgro(g, this.SO, O.x - cx + tiembla, SUELO, O.dir, po, Math.max(0, this.flashO) / 0.1 * 0.75);
     }
 
+    // Lo que los efectos dejan en el suelo y las copias de la esquiva: detras.
+    FX.drawDetras(g, this.fx, cx);
+
     // Sombra de Romina. Era un fillRect: un rectangulo negro de 5 px que se
     // veia como una barra debajo de los pies, y saltando aun peor. Ahora es
     // una ELIPSE rasterizada a la rejilla -- se dibuja por bandas de pixeles
@@ -799,23 +824,18 @@ export default {
     const desde = K.vivo ? K.t - K.hurtIni : K.muereT;
     const blanco = (K.st === C.DOLOR || K.st === C.MUERTO) ? Math.max(0, 1 - desde / 0.1) : 0;
     const parpadea = this.fase === 'pelea' && !blanco && K.iframe > 0 && (((K.iframe * 14) | 0) & 1);
-    // La estela de sombras de la ESQUIVA, detras de hacia donde se mueve.
-    const rastro = K.st === C.ESQUIVA && C.invulnerable(K) ? 1 : 0;
-    if (!parpadea) drawRomina(g, K.x - cx, K.y, K.dir, p, f, rastro, blanco, K.st === C.ESQUIVA ? K.esqDir : K.dir);
-    // LA CHISPA DE LA PARADA: una estrella de oro donde la espada para el
-    // garrote. Dura un cuarto de segundo y se encoge.
-    if (this.chispa > 0) {
-      const u = this.chispa / 0.25, sx = Math.round(K.x + K.dir * 44 - cx), sy = Math.round(K.y - 112);
-      const L = Math.round(10 + 22 * u);
-      g.fillStyle = PC.bla2;
-      g.fillRect(sx - L, sy - 2, L * 2, 4); g.fillRect(sx - 2, sy - L, 4, L * 2);
-      g.fillStyle = PC.oro3;
-      const D = Math.round(L * 0.6);
-      for (let i = -D; i <= D; i += 2) { g.fillRect(sx + i - 1, sy + i - 1, 3, 3); g.fillRect(sx + i - 1, sy - i - 1, 3, 3); }
-    }
+    // Estirada al despegar y aplastada al caer (FX.escala). La esquiva ya no
+    // pinta sus dos sombras fijas: deja copias de verdad (FX.drawDetras).
+    const [ex, ey] = FX.escala(this.fx);
+    if (!parpadea) drawRomina(g, K.x - cx, K.y, K.dir, p, f, 0, blanco, K.dir, ex, ey);
+    // La guardia: su arco delante, de oro en la ventana de la parada.
+    FX.drawGuardia(g, K, cx, this.t, K.bloqT >= C.BLOQ_SUBE && K.bloqT < C.BLOQ_SUBE + K.paradaVent);
 
     // Lo que cae de la boveda, por delante de todo: le cae ENCIMA.
     drawPiedras(g, this.A, this.t);
+    // Los cortes, las estrellas y las chispas de los efectos.
+    FX.drawDelante(g, this.fx, cx);
+    FX.drawPantalla(g, this.fx, VW, ALTO);
 
     // El fogonazo del golpe que lo tumba.
     if (this.destello > 0) {
@@ -912,11 +932,13 @@ export default {
     // ATACAR: tras una parada late en oro y dice CONTRA.
     BT.boton(g, this.H, 'atacar', this.bAtaca, { apretado: this.bAtaca.pressed, pulso: Pu.atacar,
       brillo: contra ? late : 0, nombre: contra ? 'CONTRA!' : 'ATACAR', colorNombre: contra ? PC.oro3 : undefined });
-    // Las marcas del COMBO encima de ATACAR: una por golpe encadenado.
+    // Las marcas del COMBO a la izquierda de ATACAR, una por golpe encadenado,
+    // llenandose de abajo arriba. (Encima, con GUARDIA justo arriba desde el
+    // 24-09-2026, pisaban su nombre.)
     if (this.comboT > 0 && this.combo > 0) {
       const b = this.bAtaca;
       for (let i = 0; i < 3; i++) {
-        const x = b.x - 16 + i * 16, y = b.y - b.r - 14;
+        const x = b.x - b.r - 14, y = b.y + 16 - i * 16;
         g.fillStyle = '#1a0e14';
         g.fillRect(x - 5, y - 2, 10, 5); g.fillRect(x - 2, y - 5, 5, 11);
         g.fillStyle = i < this.combo ? (this.combo === 3 ? PC.oro3 : PC.ves4) : '#4a2a38';

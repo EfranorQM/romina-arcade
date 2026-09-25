@@ -27,7 +27,7 @@ const g = cv.getContext('2d');
 g.imageSmoothingEnabled = false;
 const SO = bakeOgro();
 const DT = 1 / 60;
-const nada = { dx: 0, salta: false, golpea: false, esquiva: false, saltaAbajo: false, bloquea: false };
+const nada = { dx: 0, salta: false, golpea: false, esquiva: false, bloquea: false };
 
 // Cada accion: cuanto dura, que se pulsa en cada paso de 1/60 s y, si hace
 // falta, que le pasa (un golpe que le entra) en un paso concreto.
@@ -37,7 +37,7 @@ const SEC = {
   // el arnes. Pulsar mas tarde empieza otro combo desde el primero.
   combo: { dura: 1.25, inp: n => ({ ...nada, golpea: n === 0 || n === 12 || n === 24 }) },
   corre: { dura: 1.0, inp: () => ({ ...nada, dx: 1 }) },
-  salto: { dura: 0.95, inp: n => ({ ...nada, salta: n === 0, saltaAbajo: n < 20 }) },
+  salto: { dura: 0.95, inp: n => ({ ...nada, salta: n === 0 }) },
   // La esquiva sin stick: hacia atras, mirando al ogro. Arranca cerca de el.
   esquiva: { dura: 0.65, x0: 250, inp: n => ({ ...nada, esquiva: n === 2 }) },
   // Con el stick hacia el ogro: lo atraviesa por encima.
@@ -49,7 +49,7 @@ const SEC = {
   parada: { dura: 1.2, inp: n => ({ ...nada, bloquea: n < 24, golpea: n === 30 }),
             evento: (n, K) => { if (n === 12) C.herir(K, K.x + K.dir * 80, 'garrote'); } },
   dolor: { dura: 0.6, x0: 200, inp: () => nada, evento: (n, K) => { if (n === 4) C.herir(K, K.x + K.dir * 80); } },
-  aire: { dura: 0.9, inp: n => ({ ...nada, salta: n === 0, saltaAbajo: n < 20, golpea: n === 10 }) },
+  aire: { dura: 0.9, inp: n => ({ ...nada, salta: n === 0, golpea: n === 10 }) },
   derrota: { dura: 1.0, x0: 200, inp: () => nada,
              evento: (n, K) => { if (n === 6) for (let i = 0; i < C.HP0; i++) { K.iframe = 0; C.herir(K, K.x + 80); } } },
 };
