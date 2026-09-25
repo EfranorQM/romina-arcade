@@ -1,5 +1,5 @@
 {
-  "version": "1.0.27",
+  "version": "1.0.28",
   "fecha": "2026-09-25",
   "archivos": [
     "img/arena.png",
@@ -50,7 +50,9 @@
     "js/games/masa-mente.js",
     "js/games/masa-pelea.js",
     "js/games/masa.js",
+    "js/games/moto-3d.js",
     "js/games/moto-art.js",
+    "js/games/moto-modelo.js",
     "js/games/moto-world.js",
     "js/games/neonfist.js",
     "js/games/ogro-atlas.js",
@@ -81,11 +83,12 @@
     "js/menu.js",
     "js/pausa.js",
     "js/salon.js",
-    "js/update.js"
+    "js/update.js",
+    "js/vendor/three-moto.js"
   ],
   "notas": [
-    "NUEVO NIVEL: EL CEMENTERIO",
-    "VAMPIROS Y UNA CONDESA DE JEFA",
-    "LA CAMARA ENCUADRA LA PELEA"
+    "FURIA NUEVA: LA MOTO EN 3D",
+    "SE JUEGA CON EL TELEFONO DE LADO",
+    "LA MOTO YA NO REBOTA"
   ]
 }

@@ -17,7 +17,18 @@
 // LO UNICO que un juego puede decir es meta.pausaY, y solo dos lo necesitan.
 // Ver posBoton().
 
-import { textCenter, measure } from './font.js';
+import { text, measure } from './font.js';
+import { supersample } from './core.js';
+
+// font.js divide el texto entre el sobremuestreo (SURVIVAL cuenta con ello en
+// su HUD), asi que aqui se le pide ya multiplicado y se centra con el ancho
+// virtual, como hace salon.js. Sin esto, en los juegos con ss:2 (SURVIVAL y
+// FURIA) el cartel de pausa salia a la mitad de tamano y corrido a la
+// izquierda: el textCenter de font.js centraba con el ancho entero y pintaba
+// la mitad. El panel ya estaba medido con el tamano entero.
+function textCenter(g, s, cx, y, color, esc) {
+  text(g, s, Math.round(cx - measure(String(s), esc) / 2), y, color, esc * supersample());
+}
 
 // ---------- El tamano del boton no puede ser una constante ----------
 // Se mide en px VIRTUALES, y esos valen distinto en cada juego. Medido contra
