@@ -474,12 +474,15 @@ export function invulnerable(K) {
 //   'garrote'                      la guardia lo para (y si es a tiempo, PARADA)
 //   'barrido' 'embestida' 'pisoton' 'onda'   le ROMPEN la guardia
 //   'piedra'                       cae del techo: la guardia ni se entera
-// En la aventura (caba-enemigos.js) se paran tambien el ZARPAZO del lobo y
-// el FUEGO de la kitsune; el corro de fuego y los troncos la rompen.
+// En la aventura (caba-enemigos.js) se paran tambien el ZARPAZO del lobo (y
+// el hacia arriba del jefe), el FUEGO de la kitsune y la KATANA de los
+// tengus (el tajo y el desenvaine); el corro de fuego, los troncos, el
+// barrido bajo del lobo, el fuego rastrero, el picado y el relampago la
+// rompen.
 // Devuelve 'parada' o 'bloqueado' si la guardia lo para, 'rota' si entra
 // rompiendole la guardia, true si entra sin mas, y false si no le entra
 // (esquivando o recien golpeada). `dano`: cuantos corazones quita.
-export const PARABLES = new Set(['garrote', 'zarpazo', 'fuego']);
+export const PARABLES = new Set(['garrote', 'zarpazo', 'fuego', 'katana']);
 export function herir(K, sx, tipo = 'garrote', dano = 1) {
   if (!K.vivo) return false;
   const enGuardia = K.st === BLOQUEA && K.bloqT >= BLOQ_SUBE && (sx - K.x) * K.dir > 0;

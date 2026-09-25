@@ -21,6 +21,11 @@
 //              ventana de la PARADA, de oro (lo mismo que dice su boton)
 //   PARADA     un aro de oro que se abre, la estrella y chispas por todos lados
 //   LE DAN     el borde de la pantalla se enrojece un instante
+//   EL AVISO   de un ataque enemigo: un destello del color del BOTON que lo
+//              contesta (azul SALTAR, violeta ESQUIVAR, acero GUARDIA) y, en
+//              PASEO, el boton mismo encima del que ataca
+//   UNO CAE    un enemigo derrotado: el polvo al tocar el suelo y, al final,
+//              se deshace en humo (o en chispas de su fuego)
 //
 // Todo vive en coordenadas del MUNDO y se pinta con la camara (cx). Solo
 // fillRect a pixel entero, sin degradados: en el Redmi un degradado cuesta 15
@@ -107,6 +112,37 @@ export function bloquea(F, x, y, dir) {
 // Le entra un golpe a ella.
 export function herida(F) { F.rojo = 1; }
 
+// EL AVISO de un ataque: sobre la cabeza del que ataca, en (x, y), un destello
+// y un aro del color del boton que lo contesta (`resp`: guardia, esquivar o
+// saltar). Con `icono` (un medallon pequeño, caba-botones.js horneaMini) el
+// boton sale ademas encima mientras dura el aviso (`dur`): es lo que se hace
+// en PASEO. El color es el de la cara de cada boton, aclarado para que se lea
+// sobre el bosque y el salon.
+export const COLOR_RESPUESTA = { guardia: '#d8e4ff', esquivar: '#c49cff', saltar: '#78b4ff' };
+export function aviso(F, x, y, resp, dur, icono) {
+  const col = COLOR_RESPUESTA[resp] || BLANCO;
+  F.cosas.push({ tipo: 'estrella', x, y, t: 0, dur: 0.3, L: 22, s: 5, col });
+  F.cosas.push({ tipo: 'anillo', x, y, t: 0, dur: 0.35, r0: 8, r1: 46, col, s: 3 });
+  if (icono) F.cosas.push({ tipo: 'icono', x, y: y - 36, t: 0, dur: Math.max(0.45, dur), img: icono });
+}
+
+// UN ENEMIGO CAE en (x, y): el polvo cuando toca el suelo (el salto hacia
+// atras lo pinta enemigos-sprite.js) y, cuando se va apagando, humo que sube
+// (el lobo) o chispas de su fuego azul (la kitsune).
+export const CAE_T = 0.36;               // lo que tarda en tocar el suelo
+export function muerte(F, x, y, tipo) {
+  F.cosas.push({ tipo: 'aro', x, y, t: -CAE_T, dur: 0.32, r0: 18, r1: 70, col: F.polvo[0], s: 4 });
+  nubes(F, x, y, 120, 8, 17, 0.42, CAE_T);
+  // (El humo del lobo, gris violeta claro: del color de su pelo, #3c3450, no
+  // se veia sobre el verde oscuro del bosque.)
+  const cols = tipo === 'kitsune' ? ['#6be8ff', '#e8ffff', '#1e9cd8'] : ['#9a90b0', '#c8c0dc', '#6a6080'];
+  for (let i = 0; i < 20; i++) {
+    F.chispas.push({ x: x + (Math.random() - 0.5) * 70, y: y - 8 - Math.random() * 70, vx: (Math.random() - 0.5) * 50,
+                     vy: -50 - Math.random() * 70, grav: -40, t: -(1.1 + Math.random() * 0.5), dur: 0.7,
+                     s: Math.random() < 0.5 ? 6 : 4, col: cols[i % 3], humo: true });
+  }
+}
+
 // ---------------------------------------------------------------- el paso
 export function step(F, dt) {
   F.t += dt;
@@ -115,7 +151,9 @@ export function step(F, dt) {
   for (const c of F.copias) c.t += dt;
   F.copias = F.copias.filter(c => c.t < c.dur);
   for (const p of F.chispas) {
-    p.t += dt; p.vy += p.grav * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+    p.t += dt;
+    if (p.t < 0) continue;                  // con retraso: todavia no ha salido
+    p.vy += p.grav * dt; p.x += p.vx * dt; p.y += p.vy * dt;
     if (p.nube) { p.vx *= Math.pow(0.02, dt); p.vy *= Math.pow(0.02, dt); }
   }
   F.chispas = F.chispas.filter(p => p.t < p.dur);
@@ -140,7 +178,7 @@ export function drawDetras(g, F, cx) {
     drawSilueta(g, c.x - cx, c.y, c.dir, c.pose, c.frame, VIOLETA, 0.55 * (1 - u));
   }
   for (const c of F.cosas) {
-    if (c.tipo !== 'aro') continue;
+    if (c.tipo !== 'aro' || c.t < 0) continue;
     const u = c.t / c.dur, r = c.r0 + (c.r1 - c.r0) * sale(u);
     g.globalAlpha = 0.85 * (1 - u); g.fillStyle = c.col;
     elipse(g, c.x - cx, c.y + 1, r, r * 0.2, c.s);
@@ -151,7 +189,17 @@ export function drawDetras(g, F, cx) {
 // Lo que va DELANTE de todo: cortes, estrellas, aros, rayas y chispas.
 export function drawDelante(g, F, cx) {
   for (const c of F.cosas) {
+    if (c.t < 0) continue;
     const u = c.t / c.dur, x = c.x - cx, y = c.y;
+    if (c.tipo === 'icono') {
+      // El boton que lo contesta: entra de golpe (un poco grande), flota y se
+      // va al final del aviso.
+      const e = c.t < 0.1 ? 1.35 - 0.35 * c.t / 0.1 : 1, w = c.img.width * e;
+      g.globalAlpha = Math.min(1, (c.dur - c.t) / 0.12);
+      g.drawImage(c.img, Math.round(x - w / 2), Math.round(y - w / 2 + Math.sin(c.t * 9) * 2), Math.round(w), Math.round(w));
+      g.globalAlpha = 1;
+      continue;
+    }
     if (c.tipo === 'corte') {
       // ENTERO DESDE EL PRIMER FRAME: el golpe congela el mundo (hitstop) y
       // los efectos con el, asi que el frame del impacto es el que mas dura en
@@ -187,8 +235,9 @@ export function drawDelante(g, F, cx) {
     }
   }
   for (const p of F.chispas) {
+    if (p.t < 0) continue;
     const u = p.t / p.dur, s = u < 0.6 ? p.s : Math.max(2, p.s - 1);
-    g.globalAlpha = p.nube ? 0.7 * (1 - u) : 1; g.fillStyle = p.col;
+    g.globalAlpha = p.nube ? 0.7 * (1 - u) : p.humo ? 0.75 * (1 - u) : 1; g.fillStyle = p.col;
     const lado = p.nube ? Math.round(p.s + (p.s1 - p.s) * u) : s;
     g.fillRect(Math.round(p.x - cx - lado / 2), Math.round(p.y - lado / 2), lado, lado);
   }
@@ -239,11 +288,11 @@ export function drawPantalla(g, F, VW, VH) {
 function sale(u) { return 1 - (1 - u) * (1 - u); }
 
 // Dos nubes de polvo que salen a los lados por el suelo, cada una de cuatro bolas.
-function nubes(F, x, y, vel, s0, s1, dur) {
+function nubes(F, x, y, vel, s0, s1, dur, retraso = 0) {
   for (const lado of [-1, 1]) {
     for (let i = 0; i < 4; i++) {
       F.chispas.push({ nube: true, x: x + lado * (4 + i * 8), y: y - 4 - (i % 2) * 6, vx: lado * vel * (1 - i * 0.18), vy: -18 - i * 8,
-                       grav: 0, t: 0, dur: dur * (1 - i * 0.1), s: s0, s1: s1 - i * 2, col: F.polvo[i === 2 ? 1 : 0] });
+                       grav: 0, t: -retraso, dur: dur * (1 - i * 0.1), s: s0, s1: s1 - i * 2, col: F.polvo[i === 2 ? 1 : 0] });
     }
   }
 }

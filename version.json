@@ -1,10 +1,11 @@
 {
-  "version": "1.0.25",
+  "version": "1.0.26",
   "fecha": "2026-09-25",
   "archivos": [
     "img/arena.png",
     "img/bosque.png",
     "img/enemigos.png",
+    "img/enemigos2.png",
     "img/ogro.png",
     "img/romina.png",
     "index.html",
@@ -79,8 +80,8 @@
     "js/update.js"
   ],
   "notas": [
-    "PELEAS MAS JUSTAS EN ROMINA",
-    "EL OGRO AVISA ANTES DE PEGAR",
-    "EL PISOTON YA SE PUEDE SALTAR"
+    "TRES ENEMIGOS NUEVOS Y UN JEFE",
+    "LOS AVISOS DICEN QUE BOTON",
+    "LAS HOGUERAS TE CURAN"
   ]
 }

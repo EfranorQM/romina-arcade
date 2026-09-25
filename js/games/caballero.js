@@ -106,6 +106,8 @@ export default {
       for (const pr of P.ARMARIO[parte]) this.muestras[parte + '/' + pr.id] = BT.muestra(carasDe(parte, pr));
     }
     this.medallaImg = BT.horneaMedallas();
+    // Los botones pequeños que en PASEO salen encima del que ataca.
+    this.mini = BT.horneaMini();
     this.candado = BT.horneaCandado();
     this.aroElegido = BT.aroElegido(26 + 6);
     this.SO = bakeOgro();
@@ -413,7 +415,13 @@ export default {
     // LA PELEA QUE ENSEÑA: cuando empieza un ataque, el maestro decide si hay
     // consejo; mientras dura, se apunta lo que ella hace; y al acabar (con sus
     // ondas ya idas), si lo aprendio.
-    if (activo && O.st === OG.ATACA && (stAntes !== OG.ATACA || O.atk !== atkAntes)) this.empiezaAtaque(O.atk);
+    if (activo && O.st === OG.ATACA && (stAntes !== OG.ATACA || O.atk !== atkAntes)) {
+      this.empiezaAtaque(O.atk);
+      // EL AVISO BRILLA DEL COLOR DEL BOTON que lo contesta (y en PASEO, el
+      // boton sale encima), como el de los enemigos del bosque.
+      const resp = RESP_OGRO[O.atk];
+      FX.aviso(this.fx, O.x, SUELO - 252, resp, OG.ATAQUES[O.atk][1] / OG.ritmoDe(O, O.atk), this.dif === 'paseo' ? this.mini[resp] : null);
+    }
     // Una onda que le pasa por DEBAJO: la ha saltado.
     for (const w of O.ondas) {
       if (!w.vivo) continue;
@@ -963,7 +971,7 @@ export default {
     }
     // NUEVO, sobre la pestaña de la aventura, hasta que la juegue una vez: la
     // primera vez que se publico, no la encontro.
-    if (!Save.dato('caba.aventuraVista', false) && Math.sin(this.t * 6) > -0.4) {
+    if (!Save.dato(AV.VISTA, false) && Math.sin(this.t * 6) > -0.4) {
       const c = this.pestana('aventura');
       BT.rotulo(g, 'NUEVO!', c.x - 76, c.y + 14, '#5cffd8', 3);
     }
@@ -979,7 +987,7 @@ export default {
       if (this.modo === 'aventura') {
         // En la aventura no hay puntos: el lema del bosque y la mejor nota.
         textCenter(g, LEMA_BOSQUE[key], mx, c.y + 118, '#e8d8e8', 2);
-        const B = Save.dato('caba.bosque', null), nota = B && B.notas && B.notas[key];
+        const B = Save.dato(AV.GUARDADO, null), nota = B && B.notas && B.notas[key];
         textCenter(g, nota ? 'MEJOR NOTA ' + nota : 'SIN NOTA AUN', mx, c.y + 150, nota ? '#ffd76a' : '#8a7ab8', 2);
       } else {
         textCenter(g, D.lema, mx, c.y + 118, '#e8d8e8', 2);
@@ -990,7 +998,7 @@ export default {
     if (this.modo === 'aventura') {
       // La aventura: que nivel es, y su mejor tiempo.
       BT.rotulo(g, NV.BOSQUE.nombre + ': LLEGA AL ARBOL DEL FINAL', VW / 2, 438, '#c8e8a0', 2);
-      const B = Save.dato('caba.bosque', null);
+      const B = Save.dato(AV.GUARDADO, null);
       if (B && B.mejorT) BT.rotulo(g, 'MEJOR TIEMPO ' + reloj(B.mejorT), VW / 2, 464, '#c8b8ff', 2);
     } else {
       // Si todavia le queda que aprender, se le dice: la primera pelea enseña.
@@ -1188,6 +1196,10 @@ export default {
 
   destroy() { this.A = null; this.av = null; },
 };
+
+// Que boton contesta cada ataque del ogro (garrote, pisoton, barrido,
+// embestida): el color de su aviso.
+const RESP_OGRO = ['guardia', 'saltar', 'esquivar', 'esquivar'];
 
 // Como se llama cada parte del traje en pantalla.
 const NOMBRE_PARTE = { capa: 'CAPA', falda: 'FALDA', estela: 'ESTELA' };
