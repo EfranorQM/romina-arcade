@@ -232,8 +232,9 @@ sin récord (era el único juego del arcade que no guardaba ninguno).
 - **Tres dificultades** (paseo, normal, furia): corazones, margen de la
   parada, vida del ogro, lo que tarda en AVISAR (solo el aviso: estirar
   también el golpe haría más difícil esquivar en la fácil) y lo que descansa.
-  El arnés juega las tres con la regla real: en furia el aviso más corto es
-  0,33 s y la guardia se puede levantar en 250 ms.
+  El arnés juega las tres con la regla real. Cada dificultad declara los
+  REFLEJOS que pide (0,60 / 0,45 / 0,35 s) y `prueba-peleas.mjs` comprueba
+  que todos los ataques los cumplen (ver "Las peleas de ROMINA").
 - **La nota** (S A B C) sale de los puntos ANTES de la dificultad, para que
   una S cueste lo mismo en paseo que en furia; los puntos (con el multiplicador
   de la dificultad) van al récord del menú, con los mensajitos del arcade
@@ -248,6 +249,51 @@ sin récord (era el único juego del arcade que no guardaba ninguno).
   sostenidos); en la furia del ogro, `caballeroFuria`; y al final, fanfarria o
   lamento. El arnés revisa TODAS las canciones del arcade: una nota que el
   secuenciador no conoce no suena y no avisa.
+
+## Las peleas de ROMINA: reflejos de persona
+
+```
+node tools/prueba-peleas.mjs      # plazos por ataque, la pelea entera y el bosque, en las tres dificultades
+```
+
+"Es muy difícil incluso en el modo fácil" (24-09-2026). Los arneses medían
+cada ataque suelto con reflejos de 0,25 s (los de un pulgar entrenado que ya
+espera el golpe) y contaban la ventana desde el instante cero, y nadie jugaba
+la pelea ENTERA. Una persona tarda en VER el ataque, elegir entre cuatro
+botones y pulsar: 0,35 s quien juega mucho, 0,45 una persona normal, 0,55-0,65
+quien juega poco. `piloto-ogro.mjs` juega la pelea entera así (reflejos que
+varían, saltos cronometrados con error) y con los números de la v1.0.24 salió:
+
+- el garrotazo daba 0,42 / 0,32 / 0,23 s para levantar la guardia (paseo,
+  normal, furia) y el barrido 0,48 / 0,38 / 0,30 para esquivarlo;
+- en NORMAL una persona normal no ganaba NINGUNA pelea (0 de 40), en FURIA
+  nadie, y en PASEO quien se defendía con 0,6 s ganaba el 20 % y el que machacaba
+  ATACAR sin defenderse, el 77 %;
+- el pisotón de cerca no lo libraba nada (el pie no miraba la altura: dos
+  corazones fijos aunque saltara, como dice el consejo), y la estocada del
+  barrido avanzaba 34 px y alcanzaba por 3 px a quien ya la había esquivado.
+
+Ahora cada dificultad declara sus `reflejos` y tres ritmos de aviso
+(`caba-partida.js`): el del ogro, el del bosque (un lobo muere en tres tajos:
+con el aviso del ogro, en paseo pasaba el bosque hasta el que no se defendía) y
+el de los ataques de CARRERA (embestida y acometida), que no se alarga: se
+esquivan atravesándolos cuando vienen, y con más aviso quien reacciona rápido
+salta antes de que arranquen. Con sus reflejos se gana el 100 % en paseo y
+normal y el 63 % en furia, y el bosque se pasa siempre; sin defenderse no se
+gana en normal ni en furia y en paseo se gana la mitad y casi sin vida.
+
+Trampas del propio piloto, que parecían del juego (medir con un piloto tonto
+es medir al piloto):
+
+- Esquivaba la embestida en cuanto la veía; de lejos eso es caer delante del
+  ogro antes de que arranque. Una persona espera a que venga.
+- Solo pegaba con el ogro abierto: la pelea duraba el doble y recibía más.
+- Durante todo el pisotón no miraba el techo y se comía los cascotes.
+- En el bosque, aterrizando en el borde (x 2887-2899, el tramo de la kitsune
+  empieza en 2900) la kitsune no la veía y el piloto le guardaba la distancia:
+  se esperaban las dos 300 s.
+- Una cuenta que decía "estaba en mitad de un tajo" miraba los reflejos del
+  ataque ANTERIOR: el piloto registra el ataque un frame después de que empiece.
 
 ## Medallas, armario y el ogro que aprende (ROMINA)
 

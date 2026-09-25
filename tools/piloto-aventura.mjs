@@ -25,7 +25,9 @@ const NADA = { dx: 0, salta: false, golpea: false, esquiva: false, bloquea: fals
 
 // `m` es la memoria del piloto (se crea vacia: {}). `sem` varia un poco la
 // distancia a la que despega en los fosos, como una persona. `reac`: sus
-// reflejos, en frames (15 = 0.25 s, una persona rapida; 21 = 0.35 s, normal).
+// reflejos, en frames (15 = 0.25 s; 21 = 0.35 s), o una funcion que da unos
+// reflejos NUEVOS cada vez que ve algo: una persona no tarda siempre lo mismo
+// (tools/prueba-peleas.mjs la usa con una normal, ver caba-partida.js).
 // `machacon`: salta y ataca, pero no se defiende nunca (ni guardia, ni
 // esquiva, ni se aparta): es la prueba de que los enemigos piden los cuatro
 // botones.
@@ -35,6 +37,13 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
   const sinFoso = dx => (dx && def.fosos.some(([a, b]) => dx > 0 ? a - K.x > 0 && a - K.x < 60 : K.x - b > 0 && K.x - b < 60)) ? 0 : dx;
   m.visto = m.visto || new Map();
   const ve = (clave) => { if (!m.visto.has(clave)) m.visto.set(clave, n); return n - m.visto.get(clave); };
+  // Lo que tarda en reaccionar a ESTA cosa (una vez por cosa si varia).
+  const reacDe = (clave) => {
+    if (typeof reac !== 'function') return reac;
+    m.reacs = m.reacs || new Map();
+    if (!m.reacs.has(clave)) m.reacs.set(clave, reac());
+    return m.reacs.get(clave);
+  };
   const inp = { ...NADA, dx: 1 };
 
   // --- Lo que viene, visto hace REAC frames o mas.
@@ -51,7 +60,7 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
     if (enAtaque && (!a || a.fin || a.atk !== E.atk)) m.ataque[E.id] = { atk: E.atk, desde: n };
     if (!enAtaque) { if (a) a.fin = true; continue; }
     const hace = n - m.ataque[E.id].desde;
-    if (hace < reac) continue;
+    if (hace < reacDe('a' + E.id + ':' + m.ataque[E.id].desde)) continue;
     const d = E.x - K.x;
     if (E.atk === 'zarpazo' && Math.abs(d) < 240) guardia = true;
     // la bola creciendo en la mano: ya sabe que viene una (no hay que
@@ -70,7 +79,7 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
     const hace = ve('f' + F.id);
     const viene = (F.x - K.x) * Math.sign(F.vx) < 0;
     const llega = (Math.abs(F.x - K.x) - EN.FUEGO_R - 22) / Math.abs(F.vx);
-    if (viene && (hace >= reac || m.anticipa) && llega < 0.22) guardia = true;
+    if (viene && (hace >= reacDe('f' + F.id) || m.anticipa) && llega < 0.22) guardia = true;
   }
   if (!bolas && !L.enemigos.some(E => E.atk === 'lanza' && E.st === EN.AVISO)) m.anticipa = false;
 
@@ -100,7 +109,7 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
   // dentro de medio segundo quede mas lejos de la mas cercana (con una sola,
   // al apartarse de una se metia debajo de otra).
   for (const R of L.ramas) ve('r' + R.id);
-  const sombras = machacon ? [] : L.ramas.filter(R => n - m.visto.get('r' + R.id) >= reac).map(R => R.x);
+  const sombras = machacon ? [] : L.ramas.filter(R => n - m.visto.get('r' + R.id) >= reacDe('r' + R.id)).map(R => R.x);
   if (sombras.some(x => Math.abs(x - K.x) < 110)) {
     let mejor = 0, lejos = -1;
     for (const dx of [1, 0, -1].filter(d => sinFoso(d) === d)) {
@@ -127,7 +136,7 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
   // px en el aire y el foso de 120 no se cruza despegando a 24 del borde.)
   const foso = def.fosos.find(([a]) => a - K.x > -8 && a - K.x < 6 + (sem % 4) * 4);
   const enTocon = K.enSuelo && K.y < def.suelo - 1;
-  const tronco = L.troncos.find(T => n - m.visto.get('t' + T.id) >= reac && T.x > K.x && T.x - K.x < 170 && !T.cae);
+  const tronco = L.troncos.find(T => n - m.visto.get('t' + T.id) >= reacDe('t' + T.id) && T.x > K.x && T.x - K.x < 170 && !T.cae);
   const toconSalta = enTocon && L.tocones.some(T => K.x > T.x1 - 20);
   // Un TOQUE, como un pulgar: hasta el 24-09-2026 este piloto MANTENIA el
   // boton 40 frames, y el salto se recortaba si se soltaba antes de 90 ms.
@@ -148,6 +157,12 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
     // apartarse). Se le guarda la distancia, se le devuelven las bolas (arriba)
     // y se le pega si se queda agotada o dolida cerca.
     if (blanco.tipo === 'kitsune' && !machacon) {
+      // Fuera de SU tramo la kitsune no ataca (espera), y guardarle la
+      // distancia era esperarse las dos para siempre: aterrizando del foso en
+      // el mismo borde (x 2887-2899, el tramo empieza en 2900) el piloto se
+      // quedaba ahi 300 s (24-09-2026, con reflejos de 0.45 s). Una persona
+      // sigue andando.
+      if (K.x < blanco.tramo[0] || K.x > blanco.tramo[1]) { inp.dx = hacia; return inp; }
       const abierta = blanco.st === EN.AGOTADA || blanco.st === EN.DOLOR;
       if (blanco.st === EN.ATACA) { inp.dx = sinFoso(-hacia); return inp; }
       if (!abierta || ad > 260) { inp.dx = ad > 480 ? hacia : ad < 360 ? sinFoso(-hacia) : 0; return inp; }

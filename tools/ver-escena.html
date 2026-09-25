@@ -79,9 +79,14 @@ const GUIONES = {
     suelta(E);
     if (n === 0) { coloca(E, 480, 1, 700, -1); }
     if (n === 12) ataca(O, OG.GARROTE);
-    E.bGuardia.pressed = n >= 26 && n < 46;
-    if (n === 26) E.pulsos.guardia = 1;
-    if (n === 58) pulsa(E, 'golpea', 'atacar');
+    // La guardia 0.2 s antes del golpe (la PARADA) y el contraataque tras el.
+    // El golpe llega al acabar el aviso, que depende de la dificultad: con
+    // frames fijos, al alargarse los avisos (24-09-2026) soltaba la guardia
+    // antes de que bajara el garrote.
+    const golpe = 12 + Math.round(60 * OG.ATAQUES[OG.GARROTE][1] / O.ritmoCarga), sube = golpe - 12;
+    E.bGuardia.pressed = n >= sube && n < golpe + 8;
+    if (n === sube) E.pulsos.guardia = 1;
+    if (n === golpe + 12) pulsa(E, 'golpea', 'atacar');
   },
 
   // EL BARRIDO: la guardia no lo para; se esquiva hacia atras (sin stick).

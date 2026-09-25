@@ -9,10 +9,14 @@
 // LAS DOS TRAMPAS QUE ESTE ARNES EVITA A PROPOSITO:
 //  1. EL PILOTO QUE HACE TRAMPA. Si el piloto de prueba reacciona en el mismo
 //     frame en que empieza el telegrafo, cualquier ataque parece esquivable.
-//     Aqui el piloto tiene un RETARDO DE REACCION humano (0.25 s en movil) y
-//     ademas se prueba la VENTANA entera: en cuantos instantes distintos
-//     puede empezar a esquivar y salvarse. Un ataque que solo se esquiva en
-//     un instante exacto esta roto aunque el test pase.
+//     Aqui el piloto tiene un RETARDO DE REACCION de 0.25 s y ademas se prueba
+//     la VENTANA entera: en cuantos instantes distintos puede empezar a
+//     esquivar y salvarse. Un ataque que solo se esquiva en un instante
+//     exacto esta roto aunque el test pase.
+//     OJO: 0.25 s son los reflejos de un pulgar entrenado que ya ESPERA el
+//     ataque, y esto mide los ataques a su ritmo base. Lo que cada dificultad
+//     le pide a una PERSONA (0.60 / 0.45 / 0.35 s) y la pelea entera los mide
+//     tools/prueba-peleas.mjs: con solo esto, en NORMAL no se ganaba nunca.
 //  2. LA SEMILLA. stepOgro() recibe el rnd por parametro, asi que aqui se le
 //     inyecta uno determinista. Un jefe que llama a Math.random() por dentro
 //     no se puede probar dos veces igual.

@@ -34,9 +34,9 @@ export const LOBO = {
   // Se despierta cuando ya casi sale en pantalla: con 900 se despertaban dos
   // o tres a la vez, antes de verlos.
   despierta: 700,
-  // El aviso del zarpazo, 0.5: con 0.42, reaccionar a los 0.35 s (una
-  // persona normal) y levantar la guardia (0.10) llegaba tarde. En FURIA
-  // (ritmo 1.2) queda en 0.42: para reflejos rapidos, que es lo que promete.
+  // El aviso del zarpazo, 0.5 (con la dificultad, 0.71 / 0.56 / 0.45 s: ver
+  // ritmoBosque en caba-partida.js). Hay que levantar la guardia (0.10) antes
+  // de que baje la garra: con 0.42 no llegaba ni reaccionando en 0.35 s.
   zarpazo: { aviso: 0.50, activo: 0.10, recupera: 0.40, alcance: 108, dano: 1, tipo: 'zarpazo' },
   acomete: { aviso: 0.50, vuelo: 0.42, vel: 620, recupera: 0.45, dano: 1, tipo: 'embestida', alto: 92 },
   recarga: [1.0, 1.5],
@@ -68,10 +68,13 @@ export const FUEGO_MANO = 74;          // de su centro a la mano
 // avisos y la pausa estira lo que descansan entre ataque y ataque (y lo que
 // se queda agotada la kitsune). Se hace una copia del tipo ya escalada: asi
 // todo lo que lee E.T (la logica y las poses) va al ritmo de la dificultad.
+// La ACOMETIDA lleva su propio ritmo (`ritmoCarrera`, como la embestida del
+// ogro): se contesta atravesandola cuando viene, y con un aviso mas largo quien
+// reacciona rapido esquiva antes de que salte y cae delante de el.
 function escala(T, o) {
-  const ritmo = o.ritmo || 1, pausa = o.pausa || 1;
+  const ritmo = o.ritmo || 1, pausa = o.pausa || 1, carrera = o.ritmoCarrera || ritmo;
   const E = JSON.parse(JSON.stringify(T));
-  for (const k of ['zarpazo', 'acomete', 'lanza', 'corro']) if (E[k]) E[k].aviso = T[k].aviso / ritmo;
+  for (const k of ['zarpazo', 'acomete', 'lanza', 'corro']) if (E[k]) E[k].aviso = T[k].aviso / (k === 'acomete' ? carrera : ritmo);
   for (const k of ['recarga', 'recargaAcomete']) if (E[k]) E[k] = T[k].map(v => v * pausa);
   if (E.agotada) E.agotada = T.agotada * pausa;
   return E;
