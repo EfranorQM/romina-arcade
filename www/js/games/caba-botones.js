@@ -370,6 +370,20 @@ export function hornea(btns) {
   return H;
 }
 
+// Los MEDALLONES PEQUEÑOS: el boton que contesta un ataque, que en PASEO sale
+// encima del que ataca (caba-efectos.js aviso). El mismo medallon con su
+// icono, a r 22 y el icono a x2.
+export function horneaMini(r = 22) {
+  const out = {};
+  for (const k of ['atacar', 'saltar', 'esquivar', 'guardia']) {
+    const m = medallon(r, CARAS[k], false);
+    const R = ICONOS[k](), lado = R.n * 2;
+    pintaRejilla(m.cv.getContext('2d'), R, Math.round(m.M + r - lado / 2), Math.round(m.M + r - lado / 2), 2);
+    out[k] = m.cv;
+  }
+  return out;
+}
+
 // ---------- Dibujar ----------
 // Un boton. `e` = { apretado, pulso (0..1, el aro que se abre al apretar),
 // recarga (0..1, lo que le falta), brillo (0..1), frio (no se puede usar),

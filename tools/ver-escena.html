@@ -151,6 +151,9 @@ const g = initCanvas(lienzo);
 setVirtual(1200, 540);
 escena.init({}, {});
 const nombre = params.get('s') || 'arena';
+// &dif=paseo: la pelea en esa dificultad (en PASEO sale el boton que contesta
+// cada ataque encima del ogro).
+if (params.get('dif')) escena.dif = params.get('dif');
 if (!DE_PARTIDA.includes(nombre)) {
   escena.maestro = P.makeMaestro({ aprendidas: [0, 1, 2, 3], pasadas: [] });
   escena.comenzar();

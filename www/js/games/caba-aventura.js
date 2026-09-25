@@ -22,6 +22,7 @@ import { vibrate } from '../input.js';
 import * as C from './caba-cuerpo.js';
 import * as P from './caba-partida.js';
 import * as N from './caba-nivel.js';
+import * as EN from './caba-enemigos.js';
 import * as BT from './caba-botones.js';
 import * as MD from './caba-mandos.js';
 import * as FX from './caba-efectos.js';
@@ -191,9 +192,13 @@ function camara(S, dt, instantanea = false) {
 function enemigo(S, e, ex) {
   const A = S.av, K = S.K;
   if (e.tipo === 'aviso') {
-    if (e.atk === 'zarpazo' || e.atk === 'acomete') SFX.grune();
-    else if (e.atk === 'lanza') SFX.crece();
+    if (e.atk === 'zarpazo' || e.atk === 'acomete' || e.atk === 'barre') SFX.grune();
+    else if (e.atk === 'lanza' || e.atk === 'rastrero') SFX.crece();
     else if (e.atk === 'corro') SFX.alarm();
+    // EL AVISO BRILLA DEL COLOR DEL BOTON que lo contesta; en PASEO, el boton
+    // sale encima (para quien todavia no se sabe cada ataque de memoria).
+    const E = e.enemigo, resp = EN.RESPUESTA[e.atk];
+    if (E && resp) FX.aviso(A.fx, E.x, E.y - E.T.alto - 28, resp, E.T[e.atk].aviso, S.dif === 'paseo' ? S.mini[resp] : null);
   } else if (e.tipo === 'fuego') {
     SFX.dash();
   } else if (e.tipo === 'corro') {
@@ -202,8 +207,12 @@ function enemigo(S, e, ex) {
   } else if (e.tipo === 'golpe' || e.tipo === 'quema') {
     A.golpes++;
     duele(S);
-    if (e.r === 'rota') {
-      const atk = e.enemigo && e.enemigo.atk;
+    const atk = e.rastrero ? 'rastrero' : e.enemigo && e.enemigo.atk;
+    // Los que se SALTAN lo dicen siempre (no es lo que se espera de un zarpazo
+    // ni de un fuego); los demas, solo si le rompen la guardia.
+    if (atk === 'barre' || atk === 'rastrero') {
+      A.msg = atk === 'barre' ? 'SALTA EL BARRIDO' : 'SALTA EL FUEGO'; A.msgT = 1.2;
+    } else if (e.r === 'rota') {
       A.msg = atk === 'acomete' ? 'ESQUIVALO' : atk === 'corro' ? 'APARTATE DEL FUEGO' : 'GUARDIA ROTA';
       A.msgT = 1.2;
     }
@@ -231,7 +240,7 @@ function enemigo(S, e, ex) {
       A.msg = 'CONTRAATAQUE'; A.msgT = 0.8;
       burst(ex, e.y, 14, { rnd: Math.random, colors: [ORO, BLANCO], speed: 340, life: 0.5, size: 4, grav: 200 });
     }
-    if (e.muere) SFX.explode();
+    if (e.muere) { SFX.explode(); FX.muerte(A.fx, E.x + K.dir * 22, E.y, E.tipo); }
   } else if (e.tipo === 'quemado') {
     SFX.corta(); cam.shake(3, 0.12);
     burst(ex, e.y, 18, { rnd: Math.random, colors: [ORO, PE.fuego1, PE.fuego3], speed: 300, life: 0.5, size: 4, grav: 200 });

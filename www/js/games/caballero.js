@@ -106,6 +106,8 @@ export default {
       for (const pr of P.ARMARIO[parte]) this.muestras[parte + '/' + pr.id] = BT.muestra(carasDe(parte, pr));
     }
     this.medallaImg = BT.horneaMedallas();
+    // Los botones pequeños que en PASEO salen encima del que ataca.
+    this.mini = BT.horneaMini();
     this.candado = BT.horneaCandado();
     this.aroElegido = BT.aroElegido(26 + 6);
     this.SO = bakeOgro();
@@ -413,7 +415,13 @@ export default {
     // LA PELEA QUE ENSEÑA: cuando empieza un ataque, el maestro decide si hay
     // consejo; mientras dura, se apunta lo que ella hace; y al acabar (con sus
     // ondas ya idas), si lo aprendio.
-    if (activo && O.st === OG.ATACA && (stAntes !== OG.ATACA || O.atk !== atkAntes)) this.empiezaAtaque(O.atk);
+    if (activo && O.st === OG.ATACA && (stAntes !== OG.ATACA || O.atk !== atkAntes)) {
+      this.empiezaAtaque(O.atk);
+      // EL AVISO BRILLA DEL COLOR DEL BOTON que lo contesta (y en PASEO, el
+      // boton sale encima), como el de los enemigos del bosque.
+      const resp = RESP_OGRO[O.atk];
+      FX.aviso(this.fx, O.x, SUELO - 252, resp, OG.ATAQUES[O.atk][1] / OG.ritmoDe(O, O.atk), this.dif === 'paseo' ? this.mini[resp] : null);
+    }
     // Una onda que le pasa por DEBAJO: la ha saltado.
     for (const w of O.ondas) {
       if (!w.vivo) continue;
@@ -1188,6 +1196,10 @@ export default {
 
   destroy() { this.A = null; this.av = null; },
 };
+
+// Que boton contesta cada ataque del ogro (garrote, pisoton, barrido,
+// embestida): el color de su aviso.
+const RESP_OGRO = ['guardia', 'saltar', 'esquivar', 'esquivar'];
 
 // Como se llama cada parte del traje en pantalla.
 const NOMBRE_PARTE = { capa: 'CAPA', falda: 'FALDA', estela: 'ESTELA' };

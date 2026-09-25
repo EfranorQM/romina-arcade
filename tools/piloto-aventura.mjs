@@ -52,7 +52,7 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
   // golpe pareceria otro ataque recien empezado y soltaria la guardia justo
   // cuando llega la garra.
   m.ataque = m.ataque || {};
-  let guardia = false, esquivaHacia = 0, aparta = 0;
+  let guardia = false, esquivaHacia = 0, aparta = 0, salta = false;
   for (const E of L.enemigos) {
     if (!E.vivo || !E.despierto) continue;
     const enAtaque = E.st === EN.AVISO || E.st === EN.ATACA;
@@ -68,6 +68,9 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
     if (E.atk === 'lanza' && E.st === EN.AVISO) m.anticipa = true;
     if (E.atk === 'acomete' && E.st === EN.AVISO && Math.abs(d) < 420) esquivaHacia = Math.sign(d) || 1;
     if (E.atk === 'corro' && Math.abs(d) < 260) aparta = -(Math.sign(d) || 1);
+    // EL BARRIDO BAJO: se salta justo antes de que barra (lo que una persona
+    // cronometra mirando como se echa atras), nunca antes de verlo.
+    if (E.atk === 'barre' && E.st === EN.AVISO && E.t >= E.T.barre.aviso - 0.17 && Math.abs(d) < 220) salta = true;
   }
   // LAS BOLAS: la guardia se levanta cuando le faltan 0.22 s para llegar,
   // que es la PARADA: se la devuelve. (Con la guardia puesta desde el aviso,
@@ -75,6 +78,13 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
   let bolas = 0;
   for (const F of L.fuegos) {
     if (F.propio || F.fin) continue;
+    // LA LLAMA RASTRERA: se salta cuando le va a llegar (como la onda del ogro).
+    if (F.rastrero) {
+      const viene = (F.x - K.x) * Math.sign(F.vx) < 0;
+      const llega = (Math.abs(F.x - K.x) - EN.RASTRERO_R - 16) / Math.abs(F.vx);
+      if (viene && ve('f' + F.id) >= reacDe('f' + F.id) && llega < 0.17) salta = true;
+      continue;
+    }
     bolas++;
     const hace = ve('f' + F.id);
     const viene = (F.x - K.x) * Math.sign(F.vx) < 0;
@@ -83,7 +93,9 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
   }
   if (!bolas && !L.enemigos.some(E => E.atk === 'lanza' && E.st === EN.AVISO)) m.anticipa = false;
 
-  if (machacon) { guardia = false; esquivaHacia = 0; aparta = 0; m.aparta = 0; }
+  if (machacon) { guardia = false; esquivaHacia = 0; aparta = 0; m.aparta = 0; salta = false; }
+  // Saltar lo que va por el suelo manda: si llega y esta en el suelo, salta.
+  if (salta && K.enSuelo && K.st !== C.ESQUIVA) { inp.dx = 0; inp.salta = true; return inp; }
   // Por orden: del corro solo libra apartarse; la acometida se atraviesa (y
   // esquivando tambien pasa cualquier bola); lo demas, con la guardia.
   if (aparta) { inp.dx = sinFoso(aparta); m.aparta = 12; m.dirAparta = aparta; return inp; }

@@ -475,7 +475,8 @@ export function invulnerable(K) {
 //   'barrido' 'embestida' 'pisoton' 'onda'   le ROMPEN la guardia
 //   'piedra'                       cae del techo: la guardia ni se entera
 // En la aventura (caba-enemigos.js) se paran tambien el ZARPAZO del lobo y
-// el FUEGO de la kitsune; el corro de fuego y los troncos la rompen.
+// el FUEGO de la kitsune; el corro de fuego, los troncos, el barrido bajo del
+// lobo y el fuego rastrero la rompen.
 // Devuelve 'parada' o 'bloqueado' si la guardia lo para, 'rota' si entra
 // rompiendole la guardia, true si entra sin mas, y false si no le entra
 // (esquivando o recien golpeada). `dano`: cuantos corazones quita.

@@ -400,9 +400,26 @@ Lo que miden las secciones de `prueba-nivel.mjs`:
   117 ms; a 24 y 380 px/s son 250 ms. La guardia no los para.
 - **Ramas.** Avisan con su sombra 1,2 s antes de llegar al suelo.
 - **Lobo.** El zarpazo se para con la guardia (433 ms de margen; PARADA, 167 ms)
-  y la acometida se atraviesa esquivando (650 ms).
+  y la acometida se atraviesa esquivando (650 ms). El BARRIDO BAJO (24-09-2026,
+  su Attack_2 que no se usaba) va a ras de suelo: rompe la guardia y se SALTA.
 - **Kitsune.** La bola de fuego se para (1,4 s de margen) y con una PARADA se
-  devuelve y le quema; saltar no la libra. Del corro se libra apartándose.
+  devuelve y le quema; saltar no la libra. Del corro se libra apartándose. El
+  FUEGO RASTRERO (su Attack_1: le brotan llamas a los pies y las manda por el
+  suelo) no lo apaga la guardia: se SALTA cuando llega.
+- **Tres botones por enemigo, y el aviso del color del que contesta.** Cada
+  enemigo pide GUARDIA, ESQUIVAR y SALTAR (`EN.RESPUESTA`). El aviso de cada
+  ataque (y el del ogro) suelta un destello del color del botón (acero, violeta,
+  azul) y en PASEO el botón mismo sale encima del que ataca
+  (`caba-efectos.js aviso`, `caba-botones.js horneaMini`). Qué ataques sabe
+  cada uno lo dice el nivel (`ataques`, el cuarto dato de cada enemigo): el
+  bosque los enseña de uno en uno. Un lobo acometía sin saber (la acometida se
+  elegía por distancia sin mirar el repertorio): lo delató una grabación y la
+  sección 8 lo vigila.
+- **Golpes y muertes con peso** (`enemigos-sprite.js`): al recibir, se aplasta
+  mientras destella; al morir, el lobo sale despedido, cae con su polvo y se
+  deshace en humo (la kitsune, en chispas de su fuego). Grabar con
+  `python tools/gif.py aventura:barrido vistas/x.gif` (y `aventura:rastrero`;
+  `&dif=paseo` en la URL de la página para ver el botón encima).
 - **El piloto** (`tools/piloto-aventura.mjs`, el mismo que usa la grabadora):
   reacciona 0,25 s después de ver cada cosa, nunca antes, y salta con un
   TOQUE (hasta el 24-09-2026 mantenía el botón 40 frames: nadie juega así, y

@@ -8,6 +8,9 @@
 
      Guiones (?s=): inicio (el cartel, echa a andar y salta el primer foso),
      foso (solo el primer foso, de cerca: el salto, la caida y sus efectos),
+     barrido (el lobo que barre a ras de suelo: se salta), rastrero (la
+     kitsune que manda el fuego por el suelo: se salta). Con &dif=paseo se
+     graba en PASEO (el boton que contesta sale encima del que ataca),
      lobo (el primer hombre lobo), troncos (la primera zona de troncos y el
      segundo foso), kitsune (la primera kitsune: bolas y corro), ramas (las
      ramas que caen, un lobo debajo y la hoguera), tocon (el foso ancho en dos
@@ -33,7 +36,7 @@ await Promise.all([cargaRomina(), cargaOgro(), cargaArena(), cargaBosque(), carg
 const DT = 1 / 60;
 
 // Donde empieza cada guion (null: desde el principio, con su cartel).
-const DESDE = { inicio: null, foso: 1000, lobo: 1400, troncos: 1900, kitsune: 2920, ramas: 3500, tocon: 5480, final: 6100 };
+const DESDE = { inicio: null, foso: 1000, lobo: 1400, troncos: 1900, kitsune: 2920, ramas: 3500, barrido: 3780, rastrero: 4800, tocon: 5480, final: 6100 };
 
 // EL PILOTO, el mismo del arnes (tools/piloto-aventura.mjs): decide que
 // pulsar y aqui se pulsa en los botones de la escena, como un pulgar.
@@ -58,7 +61,7 @@ const lienzo = document.createElement('canvas');
 const g = initCanvas(lienzo);
 setVirtual(1200, 540);
 escena.init({ toMenu() {} }, {});
-escena.dif = 'normal';
+escena.dif = params.get('dif') || 'normal';
 AV.empieza(escena);
 if (DESDE[nombre] !== null) {
   // Ya jugando, en su sitio del nivel (con la hoguera encendida si queda atras).
@@ -71,6 +74,10 @@ if (DESDE[nombre] !== null) {
   for (const En of A.N.enemigos) if (En.x < K.x - 100) { En.vivo = false; En.st = 6; En.muertoT = 9; A.N.vencidos++; }
   N.camara(A.N, K, 1200, 0, true);
 }
+// En las grabaciones de un ataque nuevo, el lobo o la kitsune solo hacen ese
+// ataque: eligiendo al azar, a veces no salia en toda la grabacion.
+const SOLO = { barrido: ['lobo', ['barre']], rastrero: ['kitsune', ['rastrero']] };
+if (SOLO[nombre]) for (const En of escena.av.N.enemigos) if (En.tipo === SOLO[nombre][0]) En.ataques = SOLO[nombre][1];
 
 const COLS = 10;
 const CW = Math.round(1200 * esc), CH = Math.round(540 * esc), n = Math.ceil(dura * fps);

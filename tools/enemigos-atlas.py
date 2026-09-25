@@ -56,11 +56,13 @@ _spec.loader.exec_module(RA)
 BICHOS = [
     ('lobo', 'werewolf/Black_Werewolf', 128, [
         ('idle', 'Idle'), ('anda', 'walk'), ('corre', 'Run'), ('zarpazo', 'Attack_1'),
-        ('acomete', 'Run+Attack'), ('salta', 'Jump'), ('dolor', 'Hurt'), ('muere', 'Dead')]),
+        ('acomete', 'Run+Attack'), ('salta', 'Jump'), ('dolor', 'Hurt'), ('muere', 'Dead'),
+        ('barre', 'Attack_2')]),
     ('kitsune', 'yokai/Kitsune', 128, [
         ('idle', 'Idle'), ('anda', 'Walk'), ('lanza', 'Attack_3'), ('corro', 'Attack_2'),
-        ('salta', 'Jump'), ('dolor', 'Hurt'), ('muere', 'Dead')]),
-    ('fuego', 'yokai/Kitsune', 64, [('vuela', 'Fire_2')]),
+        ('salta', 'Jump'), ('dolor', 'Hurt'), ('muere', 'Dead'), ('rastrero', 'Attack_1')]),
+    # la bola (vuela) y la llama que va por el suelo (rastrero, 24-09-2026)
+    ('fuego', 'yokai/Kitsune', 64, [('vuela', 'Fire_2'), ('rastrero', 'Fire_1')]),
 ]
 
 

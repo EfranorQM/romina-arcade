@@ -55,8 +55,14 @@ export const BOSQUE = {
   // sitio (el tercer numero), no por distancia: por distancia, los dos lobos
   // de las ramas se sumaban a la pelea con la kitsune. Y lejos de los bordes
   // de los fosos: peleando al borde, apartarse es caerse.
-  enemigos: [['lobo', 1700], ['kitsune', 3300], ['lobo', 3950, 3750], ['lobo', 4330, 4150],
-             ['kitsune', 5250], ['lobo', 6400], ['lobo', 6900, 6650]],
+  // El cuarto dato (opcional) dice que ataques sabe: el bosque los enseña de
+  // uno en uno. El primer lobo y la primera kitsune, los de siempre; los
+  // lobos de las ramas añaden el BARRIDO BAJO (se salta); la segunda
+  // kitsune, el FUEGO RASTRERO (se salta); los dos del final, todo.
+  enemigos: [['lobo', 1700], ['kitsune', 3300],
+             ['lobo', 3950, 3750, { ataques: ['zarpazo', 'barre'] }], ['lobo', 4330, 4150, { ataques: ['zarpazo', 'barre', 'acomete'] }],
+             ['kitsune', 5250, undefined, { ataques: ['lanza', 'rastrero', 'corro'] }],
+             ['lobo', 6400, undefined, { ataques: ['zarpazo', 'barre', 'acomete'] }], ['lobo', 6900, 6650, { ataques: ['zarpazo', 'barre', 'acomete'] }]],
   salida: 7050,
   // El arbol con cara, al final del camino: el que guarda la salida.
   arbol: 7050,
@@ -99,10 +105,11 @@ export function makeNivel(def, rnd = Math.random, dif = {}) {
   // 300 px y la kitsune 150. Asi la pelea no es de espaldas a un foso (con el
   // lobo a 90 px, esquivar hacia atras era caerse) ni en el sitio donde ella
   // aterriza del salto.
-  const enemigos = (def.enemigos || []).map(([tipo, x, despiertaX], i) => {
+  const enemigos = (def.enemigos || []).map(([tipo, x, despiertaX, extra], i) => {
     const s = suelo.find(t => x >= t.x0 && x <= t.x1);
     const m = tipo === 'lobo' ? 300 : 150;
-    const E = EN.makeEnemigo(tipo, x, def.suelo, Math.max(s.x0, 0) + m, Math.min(s.x1, def.ancho) - m, i + 1, dif, [s.x0, s.x1]);
+    const E = EN.makeEnemigo(tipo, x, def.suelo, Math.max(s.x0, 0) + m, Math.min(s.x1, def.ancho) - m, i + 1, dif, [s.x0, s.x1],
+                             extra && extra.ataques);
     if (despiertaX !== undefined) E.despiertaX = despiertaX;
     return E;
   });

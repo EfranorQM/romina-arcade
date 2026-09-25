@@ -10,12 +10,22 @@
 //                       es contraataque.
 //            ACOMETIDA  se agacha y se lanza en plancha desde media distancia.
 //                       Rompe la guardia: se ESQUIVA atravesandolo (o se salta).
+//            BARRIDO BAJO  se echa atras con los brazos abiertos y barre a ras
+//                       de suelo: rompe la guardia; se SALTA.
 //   KITSUNE  BOLA DE FUEGO  le crece en la mano y la lanza a la altura del
 //                       pecho: saltar no sirve. La GUARDIA la apaga, y una
 //                       PARADA se la DEVUELVE (y le quema a ella).
 //            CORRO DE FUEGO  si ella se le pega, se rodea de fuegos: rompe la
 //                       guardia. Hay que apartarse; despues se queda agotada y
 //                       es cuando se le pega.
+//            FUEGO RASTRERO  agita las colas, le brotan llamas a los pies y las
+//                       manda por el suelo hacia ella: la guardia no lo apaga
+//                       (va por el suelo); se SALTA.
+// Asi cada uno pide TRES botones: GUARDIA, ESQUIVAR y SALTAR. Los dos ultimos
+// (24-09-2026) salen de animaciones del pack que no se usaban. Que ataques
+// usa cada uno lo dice el nivel (`ataques`): el bosque los enseña de uno en
+// uno, y el aviso de cada ataque brilla del color del boton que lo contesta
+// (RESPUESTA, abajo; lo pinta la escena).
 //
 // Los numeros de los avisos salen de los dibujos (el lobo tarda cuatro
 // fotogramas en alzarse; la bola crece seis) y se miden en el arnes: cada
@@ -39,6 +49,14 @@ export const LOBO = {
   // de que baje la garra: con 0.42 no llegaba ni reaccionando en 0.35 s.
   zarpazo: { aviso: 0.50, activo: 0.10, recupera: 0.40, alcance: 108, dano: 1, tipo: 'zarpazo' },
   acomete: { aviso: 0.50, vuelo: 0.42, vel: 620, recupera: 0.45, dano: 1, tipo: 'embestida', alto: 92 },
+  // EL BARRIDO BAJO (su Attack_2): le da si ella tiene los pies a menos de
+  // `alto` del suelo, asi que se salta. Saltar es cuestion de MOMENTO: vale
+  // pulsando entre 0.34 y 0.06 s antes de que barra. Con 0.50 de aviso el
+  // ultimo instante quedaba a 0.05 s de los reflejos de cada dificultad; con
+  // 0.56 la ventana cubre sus reflejos +-0.1 s (tools/prueba-peleas.mjs).
+  barre: { aviso: 0.56, activo: 0.12, recupera: 0.45, alcance: 120, alto: 44, dano: 1, tipo: 'barre' },
+  // Lo que hace sin que el nivel diga otra cosa.
+  ataques: ['zarpazo', 'acomete'],
   recarga: [1.0, 1.5],
   recargaAcomete: [1.4, 2.0],
   dolor: 0.28,
@@ -49,6 +67,10 @@ export const KITSUNE = {
   despierta: 800,
   lanza: { aviso: 0.60, recupera: 0.25 },
   corro: { aviso: 0.55, activo: 0.50, radio: 150, dano: 1, tipo: 'corro' },
+  // EL FUEGO RASTRERO (su Attack_1): el aviso es el remolino de colas con las
+  // llamas brotando a sus pies; luego sale la llama por el suelo.
+  rastrero: { aviso: 0.70, recupera: 0.35 },
+  ataques: ['lanza', 'corro'],
   // Lo que se queda agotada tras el corro: es el premio por apartarse, y
   // tiene que dar para volver (apartarse son ~200 px, casi un segundo).
   agotada: 1.4,
@@ -63,6 +85,17 @@ export const FUEGO_R = 16;             // radio de la bola
 export const FUEGO_ALTO = 150;         // a que altura sale (la mano, sobre sus pies)
 export const FUEGO_DEVUELTO = 1.25;    // la devuelta va mas rapida
 export const FUEGO_MANO = 74;          // de su centro a la mano
+// La llama RASTRERA: va por el suelo, y le da si tiene los pies bajos. Se
+// apaga a los 900 px (antes seguia camino abajo hasta perderse).
+export const RASTRERO_V = 340, RASTRERO_ALTO = 40, RASTRERO_R = 18, RASTRERO_ALCANCE = 900;
+
+// QUE BOTON CONTESTA CADA ATAQUE. La escena pinta el aviso de su color (y en
+// PASEO, el boton encima): es la misma ley que el maestro del ogro enseña.
+export const RESPUESTA = {
+  zarpazo: 'guardia', lanza: 'guardia',
+  acomete: 'esquivar', corro: 'esquivar',
+  barre: 'saltar', rastrero: 'saltar',
+};
 
 // LA DIFICULTAD (caba-partida.js, opcionesBosque): el ritmo acorta los
 // avisos y la pausa estira lo que descansan entre ataque y ataque (y lo que
@@ -74,7 +107,7 @@ export const FUEGO_MANO = 74;          // de su centro a la mano
 function escala(T, o) {
   const ritmo = o.ritmo || 1, pausa = o.pausa || 1, carrera = o.ritmoCarrera || ritmo;
   const E = JSON.parse(JSON.stringify(T));
-  for (const k of ['zarpazo', 'acomete', 'lanza', 'corro']) if (E[k]) E[k].aviso = T[k].aviso / (k === 'acomete' ? carrera : ritmo);
+  for (const k of ['zarpazo', 'acomete', 'barre', 'lanza', 'corro', 'rastrero']) if (E[k]) E[k].aviso = T[k].aviso / (k === 'acomete' ? carrera : ritmo);
   for (const k of ['recarga', 'recargaAcomete']) if (E[k]) E[k] = T[k].map(v => v * pausa);
   if (E.agotada) E.agotada = T.agotada * pausa;
   return E;
@@ -82,11 +115,12 @@ function escala(T, o) {
 
 // `x0`, `x1`: por donde se mueve (dentro de su tramo, lejos de los bordes:
 // no se cae a los fosos). `tramo`: el tramo de camino entero, [desde, hasta]:
-// solo va a por ella si lo pisa. `o`: la dificultad.
-export function makeEnemigo(tipo, x, y, x0, x1, id, o = {}, tramo = [-Infinity, Infinity]) {
+// solo va a por ella si lo pisa. `o`: la dificultad. `ataques`: los que usa
+// (sin el, los de su tipo).
+export function makeEnemigo(tipo, x, y, x0, x1, id, o = {}, tramo = [-Infinity, Infinity], ataques = null) {
   const T = escala(TIPOS[tipo], o);
   return {
-    id, tipo, T, x, y, vx: 0, dir: -1, x0, x1, tramo,
+    id, tipo, T, x, y, vx: 0, dir: -1, x0, x1, tramo, ataques: ataques || T.ataques, ultimo: null,
     st: ESPERA, t: 0, animT: 0, atk: null, golpeo: false,
     hp: T.hp, hpMax: T.hp, vivo: true, recarga: 0.6, hurtT: 0, flash: 0,
     despierto: false, abierto: 0, muertoT: 0,
@@ -159,9 +193,15 @@ function lobo(E, K, rnd, dist, hacia, ev) {
       E.vx = 0; if (E.st !== ESPERA) cambia(E, ESPERA);
       return;
     }
-    if (E.recarga <= 0 && dist <= 150) {
-      E.atk = 'zarpazo'; cambia(E, AVISO); E.vx = 0; ev.push({ tipo: 'aviso', x: E.x, y: E.y, atk: 'zarpazo' });
-    } else if (E.recarga <= 0 && dist > 170 && dist <= 330 && puedeVolar(E, hacia)) {
+    const sabe = a => E.ataques.includes(a);
+    if (E.recarga <= 0 && dist <= 150 && (sabe('zarpazo') || sabe('barre'))) {
+      // De cerca: el zarpazo o, si lo sabe, el barrido bajo (sin repetir el
+      // mismo tres veces: un ataque que se repite deja de pedir mirar).
+      const barre = sabe('barre') && (!sabe('zarpazo') ||
+        (E.ultimo === 'zarpazo' ? rnd() < 0.6 : E.ultimo === 'barre' ? rnd() < 0.25 : rnd() < 0.45));
+      E.atk = barre ? 'barre' : 'zarpazo'; E.ultimo = E.atk;
+      cambia(E, AVISO); E.vx = 0; ev.push({ tipo: 'aviso', x: E.x, y: E.y, atk: E.atk });
+    } else if (E.recarga <= 0 && dist > 170 && dist <= 330 && sabe('acomete') && puedeVolar(E, hacia)) {
       E.atk = 'acomete'; cambia(E, AVISO); E.vx = 0; ev.push({ tipo: 'aviso', x: E.x, y: E.y, atk: 'acomete' });
     } else if (dist > 330) {
       // de lejos, corre hacia ella
@@ -174,6 +214,27 @@ function lobo(E, K, rnd, dist, hacia, ev) {
       if (!quiere && E.st !== ESPERA) cambia(E, ESPERA);
     } else {
       E.vx = hacia * T.anda; if (E.st !== ANDA) cambia(E, ANDA);
+    }
+    return;
+  }
+  if (E.atk === 'barre') {
+    const A = T.barre;
+    if (E.st === AVISO && E.t >= A.aviso) { cambia(E, ATACA); E.golpeo = false; E.vx = E.dir * 90; }
+    else if (E.st === ATACA) {
+      // A ras de suelo: saltando pasa por debajo de ella.
+      if (!E.golpeo && K.vivo && E.y - K.y < A.alto) {
+        const d = (K.x - E.x) * E.dir;
+        if (d > -10 && d < A.alcance + C.CUERPO_K) {
+          E.golpeo = true;
+          const r = C.herir(K, E.x, A.tipo, A.dano);
+          if (r) ev.push({ tipo: 'golpe', x: K.x, y: K.y - 40, r });
+        }
+      }
+      E.vx *= 0.8;
+      if (E.t >= A.activo) cambia(E, RECUPERA);
+    } else if (E.st === RECUPERA) {
+      E.vx *= 0.8;
+      if (E.t >= A.recupera) { cambia(E, ESPERA); E.recarga = entre(rnd, T.recarga); }
     }
     return;
   }
@@ -250,12 +311,27 @@ function kitsune(E, K, rnd, dist, hacia, ev, fuegos) {
       E.dir = -hacia; E.vx = -hacia * T.anda; if (E.st !== ANDA) cambia(E, ANDA);
     } else if (E.recarga <= 0 && dist >= 300 && dist <= 760) {
       // La bola, SOLO DE LEJOS: a quemarropa (nacia a 100 px de ella) llega
-      // en 0.2 s y no hay guardia que la pare a tiempo.
-      E.dir = hacia; E.atk = 'lanza'; cambia(E, AVISO); E.vx = 0;
-      ev.push({ tipo: 'aviso', x: E.x, y: E.y, atk: 'lanza' });
+      // en 0.2 s y no hay guardia que la pare a tiempo. Si sabe el fuego
+      // rastrero, a veces ese (por el suelo: se salta).
+      const rastrea = E.ataques.includes('rastrero') && (!E.ataques.includes('lanza') ||
+        (E.ultimo === 'lanza' ? rnd() < 0.6 : E.ultimo === 'rastrero' ? rnd() < 0.25 : rnd() < 0.45));
+      E.dir = hacia; E.atk = rastrea ? 'rastrero' : 'lanza'; E.ultimo = E.atk; cambia(E, AVISO); E.vx = 0;
+      ev.push({ tipo: 'aviso', x: E.x, y: E.y, atk: E.atk });
     } else {
       E.dir = hacia; E.vx = 0; if (E.st !== ESPERA) cambia(E, ESPERA);
     }
+    return;
+  }
+  if (E.atk === 'rastrero') {
+    const A = T.rastrero;
+    if (E.st === AVISO && E.t >= A.aviso) {
+      // La llama sale de sus pies y va por el suelo; se apaga al salir de su
+      // tramo (no cruza fosos: va pegada al camino).
+      fuegos.push({ id: E.id * 100 + ((E.t * 1000) | 0) + 50, x: E.x + E.dir * 40, y: E.y, vx: E.dir * RASTRERO_V,
+                    rastrero: true, tramo: E.tramo, x0: E.x, propio: false, t: 0, fin: 0 });
+      ev.push({ tipo: 'fuego', x: E.x + E.dir * 40, y: E.y, rastrero: true });
+      cambia(E, RECUPERA);
+    } else if (E.st === RECUPERA && E.t >= A.recupera) { cambia(E, ESPERA); E.recarga = entre(rnd, T.recarga); }
     return;
   }
   if (E.atk === 'lanza') {
@@ -297,7 +373,14 @@ export function stepFuegos(fuegos, K, enemigos, dt) {
     F.t += dt;
     if (F.fin > 0) { F.fin += dt; if (F.fin > 0.36) F.fuera = true; continue; }
     F.x += F.vx * dt;
-    if (!F.propio) {
+    if (F.rastrero) {
+      // Por el suelo: le da si tiene los pies bajos; la guardia no la apaga.
+      if (K.vivo && Math.abs(F.x - K.x) < RASTRERO_R + C.CUERPO_K - 6 && F.y - K.y < RASTRERO_ALTO) {
+        const r = C.herir(K, F.x, 'rastrero', 1);
+        if (r) { F.fin = 0.001; ev.push({ tipo: 'quema', x: F.x, y: F.y - 20, r, rastrero: true }); }
+      }
+      if (F.x < F.tramo[0] || F.x > F.tramo[1] || Math.abs(F.x - F.x0) > RASTRERO_ALCANCE) { F.fin = 0.001; ev.push({ tipo: 'apaga', x: F.x, y: F.y }); }
+    } else if (!F.propio) {
       if (K.vivo && Math.abs(F.x - K.x) < FUEGO_R + C.CUERPO_K && F.y > K.y - 176 && F.y < K.y) {
         const r = C.herir(K, F.x, 'fuego', 1);
         if (r === 'parada') {
@@ -374,12 +457,19 @@ export function pose(E, n) {
     if (E.st === AVISO && E.atk === 'zarpazo') return ['zarpazo', Math.min(3, Math.floor(E.t / T.zarpazo.aviso * 4))];
     if (E.st === ATACA && E.atk === 'zarpazo') return ['zarpazo', 4];
     if (E.st === RECUPERA && E.atk === 'zarpazo') return ['zarpazo', 5];
+    if (E.st === AVISO && E.atk === 'barre') return ['barre', Math.min(1, Math.floor(E.t / T.barre.aviso * 2))];
+    if (E.st === ATACA && E.atk === 'barre') return ['barre', 2];
+    if (E.st === RECUPERA && E.atk === 'barre') return ['barre', 3];
     if (E.st === AVISO && E.atk === 'acomete') return ['acomete', Math.min(1, Math.floor(E.t / T.acomete.aviso * 2))];
     if (E.st === ATACA && E.atk === 'acomete') return ['acomete', 2 + Math.min(2, Math.floor(E.t / T.acomete.vuelo * 3))];
     if (E.st === RECUPERA && E.atk === 'acomete') return ['acomete', E.t < T.acomete.recupera / 2 ? 5 : 6];
     if (E.st === ANDA) return Math.abs(E.vx) > 200 ? ['corre', Math.floor(E.animT / 0.07) % n.corre] : ['anda', Math.floor(E.animT / 0.08) % n.anda];
     return ['idle', Math.floor(E.animT / 0.12) % n.idle];
   }
+  // El rastrero: el remolino y las llamas a los pies durante el aviso (0-6);
+  // la llama sale por el suelo al recuperar (7-9).
+  if (E.st === AVISO && E.atk === 'rastrero') return ['rastrero', Math.min(6, Math.floor(E.t / T.rastrero.aviso * 7))];
+  if (E.st === RECUPERA && E.atk === 'rastrero') return ['rastrero', 7 + Math.min(2, Math.floor(E.t / T.rastrero.recupera * 3))];
   if (E.st === AVISO && E.atk === 'lanza') return ['lanza', Math.min(5, Math.floor(E.t / T.lanza.aviso * 6))];
   if (E.st === RECUPERA && E.atk === 'lanza') return ['lanza', 6];
   if (E.st === AVISO && E.atk === 'corro') return ['corro', Math.min(2, Math.floor(E.t / T.corro.aviso * 3))];

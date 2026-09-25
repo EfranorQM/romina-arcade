@@ -386,18 +386,20 @@ function recorre(sem, tonto = false, reac = REAC, dif = 'normal', machacon = fal
               ' de 4 corazones; enemigos vencidos: ' + llegan.map(r => r.vencidos).join(' '));
   for (const r of res) if (!r.llego) console.log('    no llega: acaba en x=' + Math.round(r.x) + ' tras ' + r.t.toFixed(1) + ' s (' + r.golpes + ' golpes, ' + r.caidas + ' caidas)');
   ok(llegan.length >= 10, 'el piloto llega a la salida en al menos 10 de 12 partidas');
-  // Y uno con los reflejos de una persona normal (0.35 s), en las tres
-  // dificultades. Este piloto se sabe todas las respuestas (devuelve las
-  // bolas, guarda las distancias): lo que dice es si con reflejos normales
-  // SE PUEDE, y si FURIA muerde mas. Lo que cuesta aprenderlas no lo mide.
+  // Y uno con los reflejos de una persona normal (0.45 s: ver `reflejos` en
+  // caba-partida.js), en las tres dificultades. Este piloto se sabe todas las
+  // respuestas (devuelve las bolas, guarda las distancias): lo que dice es si
+  // con reflejos normales SE PUEDE, y si FURIA muerde mas. Lo que cuesta
+  // aprenderlas no lo mide. (Con 0.35, los reflejos que pide FURIA, las dos
+  // salian sin un rasguño y la comparacion no decia nada.)
   const perdidosDe = {};
   for (const dif of ['paseo', 'normal', 'furia']) {
     const rs = [];
-    for (let s = 1; s <= 12; s++) rs.push(recorre(s, false, 21, dif));
+    for (let s = 1; s <= 12; s++) rs.push(recorre(s, false, 27, dif));
     const ll = rs.filter(r => r.llego);
     const perdidos = rs.reduce((a, r) => a + (P.DIFICULTADES[dif].corazones - r.hp), 0) / rs.length;
     perdidosDe[dif] = perdidos;
-    console.log('  con 0.35 s de reflejos, en ' + dif + ': llega en ' + ll.length + ' de 12, perdiendo ' + perdidos.toFixed(2) +
+    console.log('  con 0.45 s de reflejos, en ' + dif + ': llega en ' + ll.length + ' de 12, perdiendo ' + perdidos.toFixed(2) +
                 ' corazones de media (de ' + P.DIFICULTADES[dif].corazones + ')');
     if (dif !== 'furia') ok(ll.length >= 11, 'en ' + dif + ', con reflejos normales, se pasa casi siempre');
   }
@@ -467,6 +469,24 @@ function ventanaLobo(atk, resp, que = r => r !== 'golpe') {
   console.log('  acometida: esquivando hacia el ' + e + ' frames (' + ms(e * DT) + '), saltando ' + s + ' (' + ms(s * DT) + '), esquivando hacia atras ' + a);
   ok(e * DT >= 0.2, 'atravesar la acometida esquivando da al menos 200 ms');
   ok(contraLobo('acomete', 'esquivaHacia', REAC) !== 'golpe', 'esquivando a los 0.25 s del aviso, la atraviesa');
+}
+// EL REPERTORIO: un lobo solo usa los ataques que el nivel dice que sabe. (El
+// primero en llevar repertorio, 24-09-2026, acometia sin saber: la acometida
+// se elegia por distancia sin mirarlo, y lo delato una grabacion.)
+{
+  for (const [sabe, dist] of [[['zarpazo'], 250], [['barre'], 250], [['zarpazo'], 110], [['acomete'], 110]]) {
+    const def = nivelCon({ enemigos: [['lobo', 1000 + dist, undefined, { ataques: sabe }]] });
+    const L = N.makeNivel(def, semilla(4), P.opcionesBosque('normal'));
+    const K = C.makeCaballero(1000, { y: def.suelo, hp: 999 });
+    K.hpMax = 999;
+    const usados = new Set();
+    for (let f = 0; f < 60 * 30; f++) {
+      C.stepCaballero(K, { ...NADA, dx: f % 240 < 120 ? 0.3 : -0.3 }, DT, N.mundo(L));
+      for (const e of N.stepNivel(L, K, DT, VW)) if (e.tipo === 'aviso') usados.add(e.atk);
+      K.iframe = 0.5;
+    }
+    ok([...usados].every(a => sabe.includes(a)), 'un lobo que solo sabe ' + sabe + ' (ella a ' + dist + ' px) usa: ' + ([...usados].join(', ') || 'nada'));
+  }
 }
 // Un combo entero lo tumba: tres tajos (1 + 1 + 2) contra sus 3 de vida.
 {

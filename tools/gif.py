@@ -38,7 +38,7 @@ PAGINA = {'ogro': ('tools/ver-ogro.html', 620, 470), 'caballera': ('tools/ver-ca
 DURA = {
     'escena': {'arena': 5.2, 'parada': 2.2, 'barrido': 1.8, 'embestida': 2.6,
                'inicio': 4.6, 'victoria': 6.6},
-    'aventura': {'inicio': 8.0, 'foso': 2.4, 'lobo': 7.0, 'troncos': 6.0, 'kitsune': 9.0, 'ramas': 6.0, 'tocon': 5.0, 'final': 16.0},
+    'aventura': {'inicio': 8.0, 'foso': 2.4, 'barrido': 7.0, 'rastrero': 8.0, 'lobo': 7.0, 'troncos': 6.0, 'kitsune': 9.0, 'ramas': 6.0, 'tocon': 5.0, 'final': 16.0},
     'ogro': {'garrote': 0.95, 'pisoton': 1.45, 'barrido': 0.88, 'embestida': 1.30,
              'ruge': 1.2, 'dolor': 0.24, 'pared': 1.25, 'parada': 0.55, 'jadeo': 0.55,
              'muere': 1.2, 'anda': 1.2, 'espera': 1.0},

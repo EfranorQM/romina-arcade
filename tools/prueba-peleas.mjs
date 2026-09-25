@@ -72,6 +72,7 @@ function bosque(dif, tipo, atk, dist, resp) {
     C.stepCaballero(K, resp(n * DT), DT, N.mundo(L));
     N.stepNivel(L, K, DT, VW);
     pierde += hp - K.hp;
+    if (E.st === EN.ESPERA && n > 10) E.recarga = 99;       // solo este ataque
     if ((E.st === EN.RECUPERA || E.st === EN.AGOTADA || E.st === EN.ESPERA) && !L.fuegos.some(F => !F.propio && !F.fin) && n > 10) break;
   }
   return pierde;
@@ -80,9 +81,9 @@ const guardia = tr => t => ({ ...NADA, bloquea: t >= tr });
 const esquiva = (tr, dx) => t => ({ ...NADA, esquiva: Math.abs(t - tr) < DT / 2, dx: Math.abs(t - tr) < DT / 2 ? dx : 0 });
 const salta = tr => t => ({ ...NADA, salta: Math.abs(t - tr) < DT / 2 });
 // Los tiempos de reaccion (por frames) con los que la respuesta salva.
-function tramo(prueba) {
+function tramo(prueba, hasta = 1.6) {
   const ok = [];
-  for (let k = 0; k * DT <= 1.6; k++) if (prueba(k * DT) === 0) ok.push(k * DT);
+  for (let k = 0; k * DT <= hasta; k++) if (prueba(k * DT) === 0) ok.push(k * DT);
   if (!ok.length) return null;
   let huecos = 0;
   for (let i = 1; i < ok.length; i++) if (ok[i] - ok[i - 1] > DT * 1.5) huecos++;
@@ -107,8 +108,17 @@ for (const dif of P.ORDEN) {
     ['la ACOMETIDA del lobo a 250 px: atravesarla', cubre, tramo(tr => bosque(dif, 'lobo', 'acomete', 250, esquiva(tr, 1)))],
     ['la BOLA de la kitsune a 500 px: GUARDIA', plazo, tramo(tr => bosque(dif, 'kitsune', 'lanza', 500, guardia(tr)))],
     ['el CORRO de la kitsune a 120 px: ESQUIVAR', plazo, tramo(tr => bosque(dif, 'kitsune', 'corro', 120, esquiva(tr, 0)))],
+    // Los que se SALTAN se cronometran (saltar pronto es caer antes): su
+    // tramo tiene que cubrir los reflejos de la dificultad, como los de carrera.
+    ['el BARRIDO BAJO del lobo a 110 px: SALTAR', cubre, tramo(tr => bosque(dif, 'lobo', 'barre', 110, salta(tr)))],
   ];
   for (const [nom, regla, t] of casos) ok(regla(t, refl), nom + ' vale reaccionando en ' + texto(t));
+  // El FUEGO RASTRERO se salta cuando llega (se ve venir por el suelo, como la
+  // onda del ogro): que el tramo exista y sea ancho.
+  {
+    const t = tramo(tr => bosque(dif, 'kitsune', 'rastrero', 500, salta(tr)), 3.2);
+    ok(t && t.a - t.de >= 0.2 && !t.huecos, 'el FUEGO RASTRERO a 500 px se salta: tramo de ' + (t ? Math.round((t.a - t.de + DT) * 1000) + ' ms (' + texto(t) + ')' : 'NADA'));
+  }
   // El pisoton se SALTA, de lejos (la onda) y de cerca (el pie): se cronometra
   // con lo que se ve venir, asi que lo que se mide es que el tramo exista y
   // sea ancho.
@@ -182,7 +192,13 @@ for (const dif of P.ORDEN) {
               (rs.some(r => r.atascada) ? ' (' + rs.filter(r => r.atascada).length + ' ATASCADAS: el piloto, no el bosque)' : '') +
               '; el que no se defiende llega en ' + mach.filter(r => r.llego).length + '/12');
   ok(llegan.length >= 15, D.nombre + ': con sus reflejos se pasa el bosque casi siempre');
-  ok(mach.filter(r => r.llego).length <= 1, D.nombre + ': sin defenderse no se pasa');
+  if (dif === 'paseo') {
+    // En PASEO, como contra el ogro: machacando se puede, pero defenderse
+    // tiene que valer mucho mas (menos de la mitad llegan, y casi sin vida).
+    const mll = mach.filter(r => r.llego);
+    const mpierde = mach.reduce((a, r) => a + (r.llego ? D.corazones - r.hp : D.corazones), 0) / mach.length;
+    ok(mll.length <= 6 && mpierde >= 3 * pierde, 'PASEO: defenderse vale la pena (sin defenderse llega en ' + mll.length + '/12 y pierde ' + mpierde.toFixed(1) + ')');
+  } else ok(mach.filter(r => r.llego).length <= 1, D.nombre + ': sin defenderse no se pasa');
 }
 
 console.log(fallos ? '\n' + fallos + ' FALLOS' : '\nTODO OK');
