@@ -60,7 +60,7 @@ function ogro(dif, atk, dist, resp) {
 }
 // Un ataque de un enemigo del bosque, forzado, con ella en 1000 mirandole.
 // Deja apuntado si hubo PARADA (`paro`) y cuando se fijo el picado (`fija`).
-let paro = false, fija = null;
+let paro = false, fija = null, cae = null, sombra = null;
 function bosque(dif, tipo, atk, dist, resp) {
   const def = { ...N.BOSQUE, fosos: [], tocones: [], troncos: [], ramas: [], enemigos: [[tipo, 1000 + dist]], hogueras: [], salida: 99999 };
   const L = N.makeNivel(def, semilla(8), P.opcionesBosque(dif));
@@ -69,16 +69,19 @@ function bosque(dif, tipo, atk, dist, resp) {
   E.despierto = true; E.recarga = 0; E.x0 = 0; E.x1 = 99999;
   E.atk = atk; E.st = EN.AVISO; E.t = 0; E.animT = 0; E.vx = 0; E.dir = -1;
   let pierde = 0;
-  paro = false; fija = null;
+  paro = false; fija = null; cae = null; sombra = null;
+  if (atk === 'salto') { E.saltoX0 = E.x; E.saltoX1 = 1000 - E.T.salto.pasa; }
   for (let n = 0; n < 300; n++) {
     const hp = K.hp;
-    C.stepCaballero(K, resp(n * DT), DT, N.mundo(L));
+    C.stepCaballero(K, resp(n * DT, K), DT, N.mundo(L));
     N.stepNivel(L, K, DT, VW);
     pierde += hp - K.hp;
     if (K.parada > 0) paro = true;
     if (E.fase === 'fija' && fija === null) fija = (n + 1) * DT;
+    if (atk === 'salto' && E.atk === 'estocada' && cae === null) cae = (n + 1) * DT;
+    if (L.fuegos.some(F => F.gota) && sombra === null) sombra = (n + 1) * DT;
     if (E.st === EN.ESPERA && n > 10) E.recarga = 99;       // solo este ataque
-    if ((E.st === EN.RECUPERA || E.st === EN.AGOTADA || E.st === EN.ESPERA) && !L.fuegos.some(F => !F.propio && !F.fin) && n > 10) break;
+    if ((E.st === EN.RECUPERA || E.st === EN.AGOTADA || E.st === EN.ESPERA || E.st === EN.HUYE) && !L.fuegos.some(F => !F.propio && !F.fin) && n > 10) break;
   }
   return pierde;
 }
@@ -151,6 +154,53 @@ for (const dif of P.ORDEN) {
     const t = tramo(tr => bosque(dif, 'alfa', 'levanta', 110, salta(tr)));
     ok(!t, 'el ZARPAZO HACIA ARRIBA no se libra saltando (' + texto(t) + ')');
   }
+  // LOS VAMPIROS DEL CEMENTERIO (25-09-2026).
+  const vamp = [
+    ['la ZARPA de la vampira a 110 px: GUARDIA', plazo, tramo(tr => bosque(dif, 'vampira', 'zarpa', 110, guardia(tr)))],
+    ['el MORDISCO de la vampira a 120 px: ESQUIVAR hacia atras', plazo, tramo(tr => bosque(dif, 'vampira', 'muerde', 120, esquiva(tr, -1)))],
+    ['la ESTOCADA del vampiro a 140 px: GUARDIA', plazo, tramo(tr => bosque(dif, 'vampiro', 'estocada', 140, guardia(tr)))],
+    ['el TAJO BAJO del vampiro a 110 px: SALTAR', cubre, tramo(tr => bosque(dif, 'vampiro', 'bajo', 110, salta(tr)))],
+    ['el DARDO de la condesa a 500 px: GUARDIA', plazo, tramo(tr => bosque(dif, 'condesa', 'dardo', 500, guardia(tr)))],
+    ['la ZARPA de la condesa a 110 px: GUARDIA', plazo, tramo(tr => bosque(dif, 'condesa', 'zarpa', 110, guardia(tr)))],
+  ];
+  for (const [nom, regla, t] of vamp) ok(regla(t, refl), nom + ' vale reaccionando en ' + texto(t));
+  {
+    // el mordisco rompe la guardia
+    const t = tramo(tr => bosque(dif, 'vampira', 'muerde', 120, guardia(tr)));
+    ok(!t, 'el MORDISCO no se para con la guardia (' + texto(t) + ')');
+  }
+  // EL SALTO POR ENCIMA: cae a su espalda y la estocada llega por detras. Se
+  // contesta GIRANDOSE (el stick hacia el) y levantando la guardia; el plazo
+  // cuenta desde que cae (su aviso).
+  {
+    bosque(dif, 'vampiro', 'salto', 250, () => NADA);
+    const tc = cae;
+    // (cae a su IZQUIERDA: ella mira a la derecha, hacia donde estaba el)
+    const girar = tr => t => t < tc + tr ? NADA : t < tc + tr + 0.05 ? { ...NADA, dx: -0.5 } : { ...NADA, bloquea: true };
+    const t = tramo(r => bosque(dif, 'vampiro', 'salto', 250, girar(r)), 1.0);
+    ok(plazo(t, refl), 'el SALTO del vampiro (cae a su espalda a los ' + f2(tc || 0) + ' s): GIRARSE Y GUARDIA vale reaccionando en ' + texto(t));
+    const sinGirar = tramo(r => bosque(dif, 'vampiro', 'salto', 250, t => ({ ...NADA, bloquea: t >= (tc || 0) + r })), 1.0);
+    ok(!sinGirar, 'la estocada por la espalda no se para SIN girarse (' + texto(sinGirar) + ')');
+  }
+  // LA LLUVIA: desde que salen las sombras, andar hasta salir de la suya (y
+  // quedarse entre dos) vale del primer instante a los reflejos.
+  {
+    const salir = tr => {
+      let x0 = null;
+      return (t, K) => {
+        if (t < tr) return NADA;
+        if (x0 === null) x0 = K.x;
+        return Math.abs(K.x - x0) < 72 ? { ...NADA, dx: 1 } : NADA;
+      };
+    };
+    bosque(dif, 'condesa', 'lluvia', 400, () => NADA);
+    const ts = sombra;
+    const t = tramo(r => bosque(dif, 'condesa', 'lluvia', 400, salir(ts + r)), 1.4);
+    ok(plazo(t, refl), 'la LLUVIA de la condesa (las sombras salen a los ' + f2(ts || 0) + ' s): SALIR DE LA SOMBRA andando vale reaccionando en ' + texto(t));
+    const quieta = bosque(dif, 'condesa', 'lluvia', 400, () => NADA);
+    const guardando = bosque(dif, 'condesa', 'lluvia', 400, guardia(0));
+    ok(quieta > 0 && guardando > 0, 'la LLUVIA le da si se queda quieta (' + quieta + ') o con la guardia (' + guardando + ')');
+  }
   // LA PARADA del desenvaine (lo que lo aturde): reaccionando con los
   // reflejos de la dificultad, la guardia sube a tiempo de PARARLO, no solo
   // de taparse. Es lo que abre al yamabushi.
@@ -213,9 +263,9 @@ for (const dif of P.ORDEN) {
 // primeros son camino (se pasan casi siempre); el ultimo es la pelea del jefe
 // (el yamabushi y el lobo blanco con su manada) y se le pide lo que al ogro.
 // El que no se defiende se mide en el bosque entero y sin hogueras.
-console.log('\n3. EL BOSQUE, POR TRAMOS (tools/piloto-aventura.mjs, 16 partidas por tramo)');
-function recorre(dif, mu, sem, machacon = false, desde = 0, hasta = 0) {
-  const def = N.BOSQUE, rnd = semilla(sem * 31 + 7);
+console.log('\n3. LOS NIVELES, POR TRAMOS (tools/piloto-aventura.mjs, 16 partidas por tramo)');
+function recorre(dif, mu, sem, machacon = false, desde = 0, hasta = 0, def = N.BOSQUE) {
+  const rnd = semilla(sem * 31 + 7);
   const reac = () => Math.max(12, Math.round(normal(rnd, mu, 0.08) * 60));
   const L = N.makeNivel(def, semilla(sem), P.opcionesBosque(dif));
   if (desde) { L.hoguera = desde; L.seguroX = desde + 40; }
@@ -236,14 +286,16 @@ function recorre(dif, mu, sem, machacon = false, desde = 0, hasta = 0) {
   }
   return { llego: false, atascada: true };
 }
-const H = N.BOSQUE.hogueras;
+for (const def of [N.BOSQUE, N.CEMENTERIO]) {
+const H = def.hogueras;
 const TRAMOS = [['hasta la 1a hoguera', 0, H[0]], ['de la 1a a la 2a', H[0], H[1]], ['de la 2a al final (el jefe)', H[1], 0]];
+console.log('  ==== ' + def.nombre);
 for (const dif of P.ORDEN) {
   const D = P.DIFICULTADES[dif];
   console.log('  -- ' + D.nombre + ' (reflejos de ' + f2(D.reflejos) + ' s, ' + D.corazones + ' corazones)');
   TRAMOS.forEach(([nom, desde, hasta], i) => {
     const rs = [];
-    for (let s = 1; s <= 16; s++) rs.push(recorre(dif, D.reflejos, s, false, desde, hasta));
+    for (let s = 1; s <= 16; s++) rs.push(recorre(dif, D.reflejos, s, false, desde, hasta, def));
     const llegan = rs.filter(r => r.llego).length;
     const pierde = rs.reduce((a, r) => a + (r.llego ? D.corazones - r.hp : D.corazones), 0) / rs.length;
     const jefe = i === TRAMOS.length - 1, pide = jefe ? Math.ceil(16 * GANA[dif]) : 15;
@@ -251,19 +303,25 @@ for (const dif of P.ORDEN) {
        (rs.some(r => r.atascada) ? ' (' + rs.filter(r => r.atascada).length + ' ATASCADAS: el piloto, no el bosque)' : ''));
   });
   const mach = [];
-  for (let s = 1; s <= 12; s++) mach.push(recorre(dif, 0.4, s, true));
+  for (let s = 1; s <= 12; s++) mach.push(recorre(dif, 0.4, s, true, 0, 0, def));
   const mll = mach.filter(r => r.llego);
   if (dif === 'paseo') {
     // En PASEO, como contra el ogro: defenderse tiene que valer mucho mas
-    // (menos de la mitad llegan, y perdiendo el triple o todo). Desde que el
-    // lobo blanco guarda la salida, sin defenderse no llega ninguno.
+    // (menos de la mitad llegan, y perdiendo el triple o todo). Ojo: desde que
+    // ENCENDER UNA HOGUERA CURA, cada tramo empieza con la vida llena y quien
+    // machaca se arrastra de tramo en tramo; lo que lo para es el jefe. En el
+    // cementerio llegaba 11 de 16 hasta que la zarpa de la condesa, si entra,
+    // encadena otra (25-09-2026); y 7 de 12 cuando empezo a lanzar al caer de
+    // su brinco, hasta que la lluvia apunto adonde va ella (quien corre sin
+    // mirar se come las gotas).
     const bien = [];
-    for (let s = 1; s <= 12; s++) bien.push(recorre(dif, D.reflejos, s));
+    for (let s = 1; s <= 12; s++) bien.push(recorre(dif, D.reflejos, s, false, 0, 0, def));
     const pierde = bien.reduce((a, r) => a + (r.llego ? D.corazones - r.hp : D.corazones), 0) / bien.length;
     const mpierde = mach.reduce((a, r) => a + (r.llego ? D.corazones - r.hp : D.corazones), 0) / mach.length;
     ok(mll.length <= 6 && mpierde >= Math.min(3 * pierde, D.corazones),
-       'PASEO: defenderse vale la pena (el bosque entero sin hogueras: defendiendose pierde ' + pierde.toFixed(1) + '; sin defenderse llega en ' + mll.length + '/12 y pierde ' + mpierde.toFixed(1) + ')');
+       'PASEO: defenderse vale la pena (el nivel entero sin hogueras: defendiendose pierde ' + pierde.toFixed(1) + '; sin defenderse llega en ' + mll.length + '/12 y pierde ' + mpierde.toFixed(1) + ')');
   } else ok(mll.length <= 1, D.nombre + ': sin defenderse no se pasa (llega en ' + mll.length + '/12)');
+}
 }
 
 console.log(fallos ? '\n' + fallos + ' FALLOS' : '\nTODO OK');

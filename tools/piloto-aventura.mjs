@@ -25,6 +25,8 @@ import * as C from '../www/js/games/caba-cuerpo.js';
 import * as EN from '../www/js/games/caba-enemigos.js';
 
 export const REAC = 15;
+// Los ataques que se contestan con la GUARDIA (mirando hacia el que ataca).
+const GUARDIA = ['zarpazo', 'tajo', 'iai', 'levanta', 'zarpa', 'estocada'];
 const NADA = { dx: 0, salta: false, golpea: false, esquiva: false, bloquea: false };
 
 // `m` es la memoria del piloto (se crea vacia: {}). `sem` varia un poco la
@@ -66,7 +68,13 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
     const hace = n - m.ataque[E.id].desde;
     if (hace < reacDe('a' + E.id + ':' + m.ataque[E.id].desde)) continue;
     const d = E.x - K.x;
-    if ((E.atk === 'zarpazo' || E.atk === 'tajo' || E.atk === 'iai' || E.atk === 'levanta') && Math.abs(d) < 240) guardia = true;
+    if (GUARDIA.includes(E.atk) && Math.abs(d) < 240) guardia = true;
+    // EL MORDISCO de la vampira: se esquiva hacia atras, SIN STICK (la que
+    // sale pulsando solo ESQUIVAR, que se para al borde de un foso: con el
+    // stick hacia atras el piloto se tiraba a la tumba de detras)
+    if (E.atk === 'muerde' && E.st === EN.AVISO && Math.abs(d) < 320) esquivaHacia = 'atras';
+    // EL TAJO BAJO del vampiro: se salta como el barrido
+    if (E.atk === 'bajo' && E.st === EN.AVISO && E.t >= E.T.bajo.aviso - 0.17 && Math.abs(d) < 230) salta = true;
     // EL PICADO: se esquiva al verlo FIJARSE (antes, la sigue), hacia donde
     // quede mas lejos de su sombra. Los reflejos cuentan desde que se fija.
     if (E.atk === 'picado' && E.st === EN.ATACA && (E.fase === 'fija' || E.fase === 'cae')) {
@@ -78,8 +86,11 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
     if (E.atk === 'relampago' && Math.abs(d) < 520 &&
         ((E.st === EN.AVISO && E.t >= E.T.relampago.aviso - 0.06) || (E.st === EN.ATACA && !E.golpeo))) salta = true;
     // la bola creciendo en la mano: ya sabe que viene una (no hay que
-    // volver a reaccionar cuando sale)
-    if (E.atk === 'lanza' && E.st === EN.AVISO) m.anticipa = true;
+    // volver a reaccionar cuando sale). Y la sangre girando en la mano de la
+    // condesa, igual: sin esto el piloto reaccionaba al dardo ya en el aire
+    // (0.25 s hasta ella) y se los comia todos (25-09-2026: 75 corazones en
+    // 16 peleas en PASEO en cuanto la condesa lanzo de verdad).
+    if ((E.atk === 'lanza' || E.atk === 'dardo') && E.st === EN.AVISO) m.anticipa = true;
     // LA ACOMETIDA se atraviesa agachado o ya volando hacia ella (hasta el
     // 24-09-2026 solo agachado: con reflejos de mas de lo que dura el aviso,
     // 0.62 s en PASEO, el piloto no la esquivaba nunca y se la comia; una
@@ -96,7 +107,7 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
   // la bola llegaba con la guardia ya vieja: la paraba sin devolverla.)
   let bolas = 0;
   for (const F of L.fuegos) {
-    if (F.propio || F.fin) continue;
+    if (F.propio || F.fin || F.gota) continue;
     // LA LLAMA RASTRERA: se salta cuando le va a llegar (como la onda del ogro).
     if (F.rastrero) {
       const viene = (F.x - K.x) * Math.sign(F.vx) < 0;
@@ -110,7 +121,7 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
     const llega = (Math.abs(F.x - K.x) - EN.FUEGO_R - 22) / Math.abs(F.vx);
     if (viene && (hace >= reacDe('f' + F.id) || m.anticipa) && llega < 0.22) guardia = true;
   }
-  if (!bolas && !L.enemigos.some(E => E.atk === 'lanza' && E.st === EN.AVISO)) m.anticipa = false;
+  if (!bolas && !L.enemigos.some(E => (E.atk === 'lanza' || E.atk === 'dardo') && E.st === EN.AVISO)) m.anticipa = false;
 
   if (machacon) { guardia = false; esquivaHacia = 0; aparta = 0; m.aparta = 0; salta = false; }
   // Saltar lo que va por el suelo manda: si llega y esta en el suelo, salta.
@@ -120,7 +131,7 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
   if (aparta) { inp.dx = sinFoso(aparta); m.aparta = 12; m.dirAparta = aparta; return inp; }
   if (m.aparta > 0) { m.aparta--; inp.dx = sinFoso(m.dirAparta); return inp; }
   if (esquivaHacia && K.enSuelo && K.esqCd <= 0) {
-    inp.dx = esquivaHacia; inp.esquiva = true;
+    inp.dx = esquivaHacia === 'atras' ? 0 : esquivaHacia; inp.esquiva = true;
     return inp;
   }
   // A mitad de un tajo la guardia no sube: si hay que cubrirse, se cancela
@@ -129,7 +140,7 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
   // --- La GUARDIA mira hacia lo que viene: se gira con el stick.
   if (guardia && K.enSuelo) {
     const amenaza = L.fuegos.find(F => !F.propio && !F.fin && Math.abs(F.x - K.x) < 300) ||
-                    L.enemigos.find(E => E.vivo && ['zarpazo', 'tajo', 'iai', 'levanta'].includes(E.atk) && (E.st === EN.AVISO || E.st === EN.ATACA));
+                    L.enemigos.find(E => E.vivo && GUARDIA.includes(E.atk) && (E.st === EN.AVISO || E.st === EN.ATACA) && Math.abs(E.x - K.x) < 260);
     const hacia = amenaza ? Math.sign(amenaza.x - K.x) || 1 : K.dir;
     if (K.dir !== hacia) { inp.dx = hacia * 0.5; return inp; }    // girarse primero
     inp.dx = 0; inp.bloquea = true;
@@ -140,15 +151,26 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
   // dentro de medio segundo quede mas lejos de la mas cercana (con una sola,
   // al apartarse de una se metia debajo de otra).
   for (const R of L.ramas) ve('r' + R.id);
-  const sombras = machacon ? [] : L.ramas.filter(R => n - m.visto.get('r' + R.id) >= reacDe('r' + R.id)).map(R => R.x);
-  if (sombras.some(x => Math.abs(x - K.x) < 110)) {
-    let mejor = 0, lejos = -1;
-    for (const dx of [1, 0, -1].filter(d => sinFoso(d) === d)) {
-      const x = K.x + dx * 240 * 0.5;
-      const d = Math.min(...sombras.map(s => Math.abs(s - x)));
-      if (d > lejos + 1) { lejos = d; mejor = dx; }
+  // (y las SOMBRAS ROJAS de la lluvia de la condesa, igual)
+  for (const F of L.fuegos) if (F.gota && !F.fin) ve('g' + F.id);
+  const gotas = machacon ? [] : L.fuegos.filter(F => F.gota && !F.fin && n - m.visto.get('g' + F.id) >= reacDe('g' + F.id)).map(F => F.x);
+  const sombras = (machacon ? [] : L.ramas.filter(R => n - m.visto.get('r' + R.id) >= reacDe('r' + R.id)).map(R => R.x)).concat(gotas);
+  // Con varias sombras juntas (la lluvia: tres, a 160 px) mirar solo a 120 px
+  // a cada lado caia justo encima de las de al lado, y el piloto iba y venia
+  // sin salir de la suya. Una persona da un paso al HUECO: el sitio cercano,
+  // con suelo, mas lejos de todas; y va hasta el.
+  if (sombras.some(x => Math.abs(x - K.x) < (gotas.includes(x) ? 76 : 110))) {
+    // (sin cruzar otra sombra por el camino: el sitio mas lejos de todas
+    // quedaba al otro lado de la gota de al lado, y corria por debajo de ella)
+    let mejor = K.x, holgura = -1;
+    for (let d = -240; d <= 240; d += 10) {
+      const x = K.x + d;
+      if (def.fosos.some(([a, b]) => x > a - 30 && x < b + 30)) continue;
+      if (sombras.some(sx => (sx - K.x) * d > 0 && Math.abs(sx - K.x) > 40 && Math.abs(sx - K.x) < Math.abs(d) + 40)) continue;
+      const h = Math.min(...sombras.map(s => Math.abs(s - x))) - Math.abs(d) * 0.05;
+      if (h > holgura) { holgura = h; mejor = x; }
     }
-    inp.dx = mejor;
+    inp.dx = Math.abs(mejor - K.x) < 8 ? 0 : Math.sign(mejor - K.x);
     return inp;
   }
 

@@ -5,7 +5,7 @@
 // ajustar un enemigo.
 //
 //   node tools/causas-bosque.mjs [paseo normal furia] [--desde X] [--hasta X]
-//                                [--machacon] [--reac 0.75]
+//                                [--machacon] [--reac 0.75] [--nivel cementerio]
 //
 // --desde X empieza en la hoguera de X (con ella encendida); --hasta X acaba
 // al llegar a X (a 20 px: encender una hoguera cura). --machacon: el piloto
@@ -22,13 +22,14 @@ const semilla = s => () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 42
 const machacon = process.argv.includes('--machacon');
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? +process.argv[i + 1] : d; };
 const desde = arg('--desde', 0), hasta = arg('--hasta', 0), mu = arg('--reac', 0);
+const nivel = process.argv.includes('--nivel') ? process.argv[process.argv.indexOf('--nivel') + 1] : 'bosque';
 const difs = process.argv.slice(2).filter((a, i, v) => !a.startsWith('--') && !(v[i - 1] || '').startsWith('--'));
 for (const dif of difs.length ? difs : P.ORDEN) {
   const D = P.DIFICULTADES[dif];
   const causas = {}, tiempos = [], muertes = {};
   let llegan = 0;
   for (let sem = 1; sem <= 16; sem++) {
-    const def = N.BOSQUE, rnd = semilla(sem * 31 + 7);
+    const def = N.NIVELES[nivel], rnd = semilla(sem * 31 + 7);
     const reac = () => Math.max(12, Math.round(normal(rnd, mu || (machacon ? 0.4 : D.reflejos), 0.08) * 60));
     const L = N.makeNivel(def, semilla(sem), P.opcionesBosque(dif));
     if (desde) { L.hoguera = desde; L.seguroX = desde + 40; }
@@ -44,7 +45,7 @@ for (const dif of difs.length ? difs : P.ORDEN) {
         if (e.tipo === 'salida') { fin = 'llega'; tiempos.push(f * DT); }
         if (hasta && K.x >= hasta - 20 && !fin) { fin = 'llega'; tiempos.push(f * DT); }
         if ((e.tipo === 'golpe' || e.tipo === 'quema') && hp > K.hp) {
-          const E = e.enemigo, k = E ? E.tipo + '.' + (e.rastrero ? 'rastrero' : E.atk) : e.rastrero ? 'kitsune.rastrero' : 'fuego';
+          const E = e.enemigo, k = E ? E.tipo + '.' + (e.rastrero ? 'rastrero' : E.atk) : e.rastrero ? 'kitsune.rastrero' : e.gota ? 'condesa.gota' : e.sangre ? 'condesa.dardo' : 'fuego';
           causas[k] = (causas[k] || 0) + 1; ultimo = k;
         }
         if ((e.tipo === 'golpeTronco' || e.tipo === 'golpeRama') && hp > K.hp) { causas[e.tipo] = (causas[e.tipo] || 0) + 1; ultimo = e.tipo; }

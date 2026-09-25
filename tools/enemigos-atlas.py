@@ -1,23 +1,28 @@
 """Hornea los ENEMIGOS de la aventura de ROMINA: el hombre lobo, la kitsune,
-los dos tengus y el lobo blanco.
+los dos tengus y el lobo blanco (el bosque); la vampira, el vampiro y la
+condesa, con su sangre (el cementerio).
 
     python tools/enemigos-atlas.py RUTA/enemigos
     python tools/enemigos-atlas.py RUTA/enemigos --hoja hoja.png
 
 RUTA/enemigos tiene las carpetas de los packs tal cual se bajan (werewolf/,
-yokai/). Escribe www/img/enemigos.png, www/img/enemigos2.png y
-www/js/games/enemigos-atlas.js.
+yokai/, vampire/). Escribe www/img/enemigos.png, enemigos2.png, enemigos3.png
+y www/js/games/enemigos-atlas.js.
 
-DOS HOJAS. Con los tres nuevos (24-09-2026) una sola hoja pasaba de 5000 px
+TRES HOJAS. Con los tres nuevos (24-09-2026) una sola hoja pasaba de 5000 px
 de alto, y muchos moviles no suben a la grafica texturas de mas de 4096. Los
-de siempre siguen en la primera; los nuevos van en la segunda.
+de siempre siguen en la primera; los del final del bosque, en la segunda
+(4083 px: llena); las vampiras del cementerio (25-09-2026), en la tercera.
 
 DE DONDE SALEN
-    Dos packs gratis de CraftPix, de la misma linea que el troll y el bosque:
+    Tres packs gratis de CraftPix, de la misma linea que el troll y el bosque:
       "Free Werewolf Sprite Sheets" -- free-game-assets.itch.io/free-werewolf-sprite-sheets-pixel-art
       "Free Yokai Pixel Sprite Sheets" (la Kitsune) -- free-game-assets.itch.io
+      "Free Vampire Pixel Art Sprite Sheets" -- free-game-assets.itch.io/free-vampire-pixel-art-sprite-sheets
     Los dos tengus (Karasu y Yamabushi) son del pack de la kitsune; el lobo
-    blanco, del de los lobos.
+    blanco, del de los lobos; la vampira (Vampire_Girl), el vampiro
+    (Converted_Vampire) y la condesa (Countess_Vampire, a x3: ver X3), con
+    las gotas de sangre (Blood_Charge), del de vampiros.
     Licencia de CraftPix (craftpix.net/file-licenses, "freebie"): uso libre en
     juegos, tambien comerciales, sin atribucion obligatoria; prohibido revender
     o redistribuir los archivos de origen. Los packs NO estan en el repo.
@@ -61,7 +66,7 @@ from PIL import Image
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 SALIDA_JS = os.path.join(AQUI, '..', 'www', 'js', 'games', 'enemigos-atlas.js')
-SALIDAS_PNG = [os.path.join(AQUI, '..', 'www', 'img', n) for n in ('enemigos.png', 'enemigos2.png')]
+SALIDAS_PNG = [os.path.join(AQUI, '..', 'www', 'img', n) for n in ('enemigos.png', 'enemigos2.png', 'enemigos3.png')]
 NL = '\n'
 
 # Scale2x, la raiz, el empaquetado y el PNG con paleta: los de ella.
@@ -101,10 +106,35 @@ BICHOS = [
         ('idle', 'Idle'), ('anda', 'walk'), ('corre', 'Run'), ('zarpazo', 'Attack_1'),
         ('acomete', 'Run+Attack'), ('barre', 'Attack_2'), ('levanta', 'Attack_3'),
         ('dolor', 'Hurt'), ('muere', 'Dead'), ('salta', 'Jump')], 1),
+    # EL CEMENTERIO (25-09-2026), del pack de vampiros de CraftPix.
+    # LA VAMPIRA: la zarpa (Attack_1) y el MORDISCO (Attack_4: le crece una
+    # cabeza de monstruo y muerde); su salto, para apartarse.
+    ('vampira', 'vampire/Vampire_Girl', 128, [
+        ('idle', 'Idle'), ('anda', 'Walk'), ('corre', 'Run'), ('zarpa', 'Attack_1'),
+        ('muerde', 'Attack_4'), ('salta', 'Jump'), ('dolor', 'Hurt'), ('muere', 'Dead')], 2),
+    # EL VAMPIRO esgrimista: la estocada (Attack_2), el tajo bajo (Attack_1) y
+    # el salto con el que pasa por encima de ella.
+    ('vampiro', 'vampire/Converted_Vampire', 128, [
+        ('idle', 'Idle'), ('anda', 'Walk'), ('corre', 'Run'), ('estocada', 'Attack_2'),
+        ('bajo', 'Attack_1'), ('salta', 'Jump'), ('dolor', 'Hurt'), ('muere', 'Dead')], 2),
+    # LA CONDESA, jefa del cementerio: el dardo de sangre (Attack_1, le gira en
+    # la mano), la lluvia (Attack_2, el brazo en alto), el zarpazo (Attack_3) y
+    # su salto.
+    ('condesa', 'vampire/Countess_Vampire', 128, [
+        ('idle', 'Idle'), ('anda', 'Walk'), ('corre', 'Run'), ('dardo', 'Attack_1'),
+        ('lluvia', 'Attack_2'), ('zarpa', 'Attack_3'), ('salta', 'Jump'), ('dolor', 'Hurt'),
+        ('muere', 'Dead')], 2),
+    # la sangre: el dardo (Blood_Charge_4), la gota que cae (_2) y su salpicon (_3)
+    ('sangre', 'vampire/Countess_Vampire', (64, 48), [('dardo', 'Blood_Charge_4'), ('gota', 'Blood_Charge_2'),
+                                                      ('salpica', 'Blood_Charge_3')], 2),
 ]
 # Como se alinea cada uno (por defecto, por el tronco) y de donde sale su
 # paleta (por defecto, la suya).
-PIES = {'karasu', 'yamabushi'}
+PIES = {'karasu', 'yamabushi', 'vampira', 'vampiro', 'condesa'}
+# LA CONDESA, A x3 (Scale3x en vez de Scale2x): del pack sale del alto de la
+# vampira (133 px a x2, menos que ella: 158) y una jefa asi no impone. A x3
+# mide 200: la misma densidad de pixel, un tercio mas grande.
+X3 = {'condesa'}
 PALETA_DE = {'alfa': 'werewolf/White_Werewolf'}
 # Y MAS BLANCO: el pelo del pack es beige grisaceo (c8bea2), y sobre el verde
 # del bosque se leia gris. Los tonos claros (luminancia de mas de 90) se
@@ -126,6 +156,7 @@ A_MANO = {('alfa', 'levanta'): -7}
 
 def celdas(ruta, celda, lut=None):
     im = Image.open(ruta).convert('RGBA')
+    cw, ch = celda if isinstance(celda, tuple) else (celda, celda)
     if lut:
         px = im.load()
         for y in range(im.height):
@@ -133,7 +164,7 @@ def celdas(ruta, celda, lut=None):
                 c = px[x, y]
                 if c[3]:
                     px[x, y] = lut[c[:3]] + (c[3],)
-    return [im.crop((i * celda, 0, (i + 1) * celda, celda)) for i in range(im.width // celda)]
+    return [im.crop((i * cw, 0, (i + 1) * cw, ch)) for i in range(im.width // cw)]
 
 
 def tabla_paleta(ruta, de, a):
@@ -175,6 +206,38 @@ def encaje_pies(base, otras):
     return round(sum(ps) / len(ps) - sum(pies(c) for c in base) / len(base))
 
 
+def scale3x(im):
+    """Scale3x (AdvMAME3x): triplica sin emborronar, como Scale2x dobla."""
+    W, H = im.size
+    src = im.load()
+    out = Image.new('RGBA', (W * 3, H * 3))
+    dst = out.load()
+
+    def g(x, y):
+        return src[min(W - 1, max(0, x)), min(H - 1, max(0, y))]
+
+    for y in range(H):
+        for x in range(W):
+            A, B, C = g(x - 1, y - 1), g(x, y - 1), g(x + 1, y - 1)
+            D, E, F = g(x - 1, y), src[x, y], g(x + 1, y)
+            G, Hh, I = g(x - 1, y + 1), g(x, y + 1), g(x + 1, y + 1)
+            if B != Hh and D != F:
+                e = [D if D == B else E,
+                     B if (D == B and E != C) or (B == F and E != A) else E,
+                     F if B == F else E,
+                     D if (D == B and E != G) or (D == Hh and E != A) else E,
+                     E,
+                     F if (B == F and E != I) or (Hh == F and E != C) else E,
+                     D if D == Hh else E,
+                     Hh if (D == Hh and E != I) or (Hh == F and E != G) else E,
+                     F if Hh == F else E]
+            else:
+                e = [E] * 9
+            for k in range(9):
+                dst[3 * x + k % 3, 3 * y + k // 3] = e[k]
+    return out
+
+
 def encaje(base, otra, alto_tronco):
     """El desplazamiento en x que mejor pone `otra` sobre `base`, mirando solo
     las filas del tronco (las de arriba de la mitad de la figura)."""
@@ -201,7 +264,7 @@ def main():
     ap.add_argument('--hoja', help='escribe tambien una hoja de contactos')
     args = ap.parse_args()
 
-    unicos, tablas, notas, hoja_de = [[], []], {}, [], {}
+    unicos, tablas, notas, hoja_de = [[], [], []], {}, [], {}
     for bicho, carpeta, celda, anims, h in BICHOS:
         hoja_de[bicho] = h
         lut = tabla_paleta(args.ruta, carpeta, PALETA_DE[bicho]) if bicho in PALETA_DE else None
@@ -224,16 +287,16 @@ def main():
         alto_tronco = (bb[3] - bb[1]) // 2
         # la raiz: entre los pies y en el suelo; la del fuego, en el centro de
         # la bola (vuela, no pisa)
-        if bicho == 'fuego':
+        if bicho in ('fuego', 'sangre'):
             b0 = RA.scale2x(base).getbbox()
             rx, ry = (b0[0] + b0[2]) // 2, (b0[1] + b0[3]) // 2
         else:
-            rx, ry = RA.raiz(RA.scale2x(base))
+            rx, ry = RA.raiz((scale3x if bicho in X3 else RA.scale2x)(base))
         tabla = {}
         for nom, _ in anims:
             if (bicho, nom) in A_MANO:
                 dx = A_MANO[(bicho, nom)]
-            elif bicho == 'fuego' or nom == anims[0][0]:
+            elif bicho in ('fuego', 'sangre') or nom == anims[0][0]:
                 dx = 0
             elif bicho in PIES:
                 fich = dict(anims)[nom]
@@ -243,13 +306,14 @@ def main():
             if dx:
                 notas.append(f'{bicho}.{nom}: {dx:+d} px')
             fila = []
+            k = 3 if bicho in X3 else 2
             for c in cortes[nom]:
-                d = RA.scale2x(c)
+                d = (scale3x if bicho in X3 else RA.scale2x)(c)
                 b = d.getbbox()
                 if not b:
                     continue
-                # el desplazamiento se aplica en la celda doblada (x2)
-                fila.append((len(unicos[h]), b[0] - rx - 2 * dx, b[1] - ry))
+                # el desplazamiento se aplica en la celda doblada (x2, o x3)
+                fila.append((len(unicos[h]), b[0] - rx - k * dx, b[1] - ry))
                 unicos[h].append(d.crop(b))
             tabla[nom] = fila
         tablas[bicho] = tabla
@@ -301,7 +365,7 @@ def main():
         for i, (b, n, fila) in enumerate(filas):
             for k, (u, ox, oy) in enumerate(fila):
                 x0 = 90 + k * 170 + ox
-                y0 = i * alto + 190 + oy if b != 'fuego' else i * alto + 100 + oy
+                y0 = i * alto + 190 + oy if b not in ('fuego', 'sangre') else i * alto + 100 + oy
                 v.alpha_composite(unicos[hoja_de[b]][u], (max(0, x0), max(0, y0)))
         v.convert('RGB').save(args.hoja)
 

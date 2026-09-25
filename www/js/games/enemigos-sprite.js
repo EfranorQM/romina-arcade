@@ -3,16 +3,17 @@
 // del aviso de la acometida, los puntos de vida y las bolas de fuego. La
 // logica vive en caba-enemigos.js, sin DOM.
 //
-// Los dibujos van en DOS hojas (HOJA_DE): los de siempre en img/enemigos.png
-// y los del final del bosque en img/enemigos2.png (juntos pasaban de 4096 px
-// de alto, lo que muchos moviles no suben a la grafica).
+// Los dibujos van en TRES hojas (HOJA_DE): los de siempre en img/enemigos.png,
+// los del final del bosque en img/enemigos2.png y los vampiros del cementerio
+// en img/enemigos3.png (juntos pasaban de 4096 px de alto, lo que muchos
+// moviles no suben a la grafica).
 
-import { LOBO, KITSUNE, FUEGO, KARASU, YAMABUSHI, ALFA, HOJA_DE } from './enemigos-atlas.js';
+import { LOBO, KITSUNE, FUEGO, KARASU, YAMABUSHI, ALFA, VAMPIRA, VAMPIRO, CONDESA, SANGRE, HOJA_DE } from './enemigos-atlas.js';
 import * as EN from './caba-enemigos.js';
 import { sombra } from './bosque-sprite.js';
 import { CAE_T, COLOR_RESPUESTA } from './caba-efectos.js';
 
-const HOJAS = ['../../img/enemigos.png', '../../img/enemigos2.png'].map(ruta => {
+const HOJAS = ['../../img/enemigos.png', '../../img/enemigos2.png', '../../img/enemigos3.png'].map(ruta => {
   const im = new Image();
   im.src = new URL(ruta, import.meta.url).href;
   return im;
@@ -37,9 +38,12 @@ export const P = {
   tengu1: '#b8483a', tengu2: '#e07a52', pluma: '#9a90b0',
   alfa1: '#e8dcc0', alfa2: '#b8ae98',
   acero: '#e8f0ff',
+  // los vampiros: la sangre y las brasas en que se deshacen
+  sangre1: '#c41c2c', sangre2: '#ff4a3a', sangre3: '#6a0c18', brasa: '#ffb040',
 };
 
-const ATLAS = { lobo: LOBO, kitsune: KITSUNE, karasu: KARASU, yamabushi: YAMABUSHI, alfa: ALFA };
+const ATLAS = { lobo: LOBO, kitsune: KITSUNE, karasu: KARASU, yamabushi: YAMABUSHI, alfa: ALFA,
+                vampira: VAMPIRA, vampiro: VAMPIRO, condesa: CONDESA };
 // Cuantos fotogramas tiene cada animacion (lo que necesita EN.pose).
 const CUENTA = {};
 for (const [k, A] of Object.entries(ATLAS)) {
@@ -110,7 +114,10 @@ export function drawEnemigo(g, E, cx, t) {
   else sombra(g, x, E.y + 2, (E.T.ancho + 10) * (1 - vuela / 160), 6, 0.32 * a);
   // LA ACOMETIDA SE VE VENIR: agachado, tiembla (como el ogro en su finta).
   // El relampago, igual: agachado con la mano en la katana.
-  const tiembla = E.st === EN.AVISO && (E.atk === 'acomete' || E.atk === 'relampago') ? (((t * 40) | 0) & 1 ? 2 : -2) : 0;
+  // (y los avisos de un solo fotograma: la estocada del vampiro, la zarpa de
+  // la condesa)
+  const tiembla = E.st === EN.AVISO && (E.atk === 'acomete' || E.atk === 'relampago' || E.atk === 'estocada' ||
+                                        (E.tipo === 'condesa' && E.atk === 'zarpa')) ? (((t * 40) | 0) & 1 ? 2 : -2) : 0;
   // EL GOLPE SE NOTA: aplastado y ensanchado mientras destella.
   const k2 = E.flash > 0 ? Math.min(1, E.flash / 0.1) : 0;
   const ex = 1 + 0.14 * k2, ey = 1 - 0.12 * k2;
@@ -199,6 +206,8 @@ export function drawFuego(g, F, cx) {
   const x = F.x - cx;
   if (x < -120 || x > 1320) return;
   if (F.rastrero) return drawRastrero(g, F, x);
+  if (F.gota) return drawGota(g, F, x);
+  if (F.sangre) return drawDardo(g, F, x);
   const n = FUEGO.vuela.length;
   const k = F.fin > 0 ? Math.min(n - 1, 5 + Math.floor(F.fin / 0.36 * (n - 5))) : Math.floor(F.t / 0.06) % 5;
   g.globalCompositeOperation = 'lighter';
@@ -244,4 +253,64 @@ function drawRastrero(g, F, x) {
   g.globalAlpha = apaga;
   pinta(g, HOJAS[0], x, y - (fr[5] + fr[3]) * E + 2, dir, fr, E, E);
   g.globalAlpha = 1;
+}
+
+// EL DARDO DE SANGRE de la condesa: el del pack, con un halo rojo (de oro si
+// ella lo ha devuelto: ahora es suyo); al chocar, el salpicon.
+function drawDardo(g, F, x) {
+  if (!lista(2)) return;
+  const dir = F.vx > 0 ? 1 : -1;
+  g.globalCompositeOperation = 'lighter';
+  g.globalAlpha = F.fin > 0 ? 0.2 : 0.3;
+  g.fillStyle = F.propio ? P.oro : P.sangre1;
+  g.fillRect(Math.round(x - 30), Math.round(F.y - 14), 60, 28);
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = 'source-over';
+  if (F.fin > 0) {
+    const n = SANGRE.salpica.length, k = Math.min(n - 1, Math.floor(F.fin / 0.36 * n));
+    return pinta(g, HOJAS[2], x, F.y, dir, SANGRE.salpica[k], 1.6, 1.6);
+  }
+  pinta(g, HOJAS[2], x, F.y, dir, SANGRE.dardo[Math.floor(F.t / 0.07) % SANGRE.dardo.length], 1.6, 1.6);
+}
+
+// LA GOTA DE LA LLUVIA: primero su SOMBRA ROJA en el suelo y la gota
+// formandose arriba, temblando (el aviso, como la rama del bosque); luego la
+// gota cayendo y el salpicon al llegar. (La primera sombra, un anillo de
+// puntos rojo oscuro, no se veia sobre la tierra agrietada.)
+function drawGota(g, F, x) {
+  if (!lista(2)) return;
+  const u = Math.min(1, F.t / F.cae);
+  const r = EN.GOTA_R + 12;
+  if (F.fin <= 0) {
+    sombra(g, x, F.suelo + 2, r * (0.6 + 0.4 * u), 8 * (0.6 + 0.4 * u), 0.3 + 0.35 * u);
+    // un charco rojo que se enciende, y su borde, grueso y vivo, que late
+    // (y al final parpadea)
+    g.globalAlpha = 0.18 + 0.22 * u;
+    g.fillStyle = P.sangre1;
+    for (let dy = -5; dy <= 5; dy++) {
+      const w = r * Math.sqrt(1 - (dy / 6) ** 2);
+      g.fillRect(Math.round(x - w), Math.round(F.suelo + 2 + dy), Math.round(w * 2), 1);
+    }
+    const late = u > 0.7 && ((F.t * 12) | 0) & 1;
+    g.globalAlpha = late ? 1 : 0.55 + 0.35 * u;
+    g.fillStyle = late ? P.sangre2 : P.sangre1;
+    for (let i = 0; i < 22; i++) {
+      const a = i / 22 * Math.PI * 2;
+      g.fillRect(Math.round(x + Math.cos(a) * r) - 3, Math.round(F.suelo + 2 + Math.sin(a) * r * 0.2) - 2, 6, 4);
+    }
+    g.globalAlpha = 1;
+    // la gota, arriba, formandose y temblando
+    if (F.t < F.cae) {
+      const tiembla = Math.round(Math.sin(F.t * 60 + F.x) * (1 + 2 * u));
+      pinta(g, HOJAS[2], x + tiembla, EN.GOTA_Y0 - 16, 1, SANGRE.gota[0], 1.2 + 1.0 * u, 1.2 + 1.0 * u);
+    }
+  }
+  if (F.fin > 0) {
+    const n = SANGRE.salpica.length, k = Math.min(n - 1, Math.floor(F.fin / 0.36 * n));
+    g.globalAlpha = Math.max(0, 1 - F.fin / 0.36);
+    pinta(g, HOJAS[2], x, F.suelo - 30, 1, SANGRE.salpica[k], 2.2, 2.2);
+    g.globalAlpha = 1;
+  } else if (F.t >= F.cae) {
+    pinta(g, HOJAS[2], x, F.y - 24, 1, SANGRE.gota[Math.floor(F.t / 0.06) % SANGRE.gota.length], 2.2, 2.2);
+  }
 }

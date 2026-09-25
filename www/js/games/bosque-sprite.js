@@ -60,7 +60,9 @@ export function sombra(g, x, y, rx, ry, a) {
   g.globalAlpha = 1;
 }
 
-// EL FONDO: todo lo que va por detras de ella, del cielo al camino.
+// EL FONDO: todo lo que va por detras de ella, del cielo al camino. (drawFondo
+// es el nombre comun con cementerio-sprite.js: la escena elige el modulo.)
+export function drawFondo(g, N, cx, VW, VH, t) { return drawBosque(g, N, cx, VW, VH, t); }
 export function drawBosque(g, N, cx, VW, VH, t) {
   if (!lista()) { g.fillStyle = '#2d3226'; g.fillRect(0, 0, VW, VH); return; }
   capa(g, 'lejos', cx, PARALAJE.lejos, VW);

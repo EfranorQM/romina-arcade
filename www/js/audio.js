@@ -345,6 +345,15 @@ export const SONGS = {
     { wave:'pulse', duty:0.25, pattern:'f.a.x.b.x.a.f.c.g.b.y.b.y.b.g.d.e.g.b.z.b.g.e.g.a.x.z.x.a.x.z.y.', vol:0.06 },
     { wave:'noise', pattern:'h...h.h.h...h.h.', vol:0.04 },
   ]},
+  // EL CEMENTERIO: Mi frigio (el Fa contra el Mi, el semitono que oscurece),
+  // lento; un bajo que insiste, una melodia de caja de musica, y en vez de
+  // bateria un LATIDO (dos golpes y silencio). Solo notas naturales: el
+  // secuenciador no tiene sostenidos.
+  caballeroCementerio: { bpm: 96, tracks: [
+    { wave:'tri',   pattern:'E...E...F...E...E...E...G...F...A...A...G...F...E...D...E.......', vol:0.15 },
+    { wave:'pulse', duty:0.25, pattern:'b...x.b.a...b...g...a.g.f...e...x...y.x.b...a...g.f.e.f.e.......', vol:0.05, gate:0.9 },
+    { wave:'noise', pattern:'h.h.............h.h.............', vol:0.05 },
+  ]},
   // DERROTA: La menor, lenta y con huecos. Triste pero no pesada: tiene que
   // dar ganas de volver a intentarlo, no de dejarlo.
   caballeroDerrota: { bpm: 84, tracks: [
@@ -422,5 +431,7 @@ export const SFX = {
   desenvaina: () => { sfx({ type: 'noise', f0: 1600, f1: 5200, dur: 0.22, vol: 0.16 }); setTimeout(() => sfx({ type: 'pulse', duty: 0.125, f0: 2400, f1: 2100, dur: 0.06, vol: 0.14 }), 180); },
   graznido: () => { sfx({ type: 'saw', f0: 620, f1: 420, dur: 0.12, vol: 0.22 }); setTimeout(() => sfx({ type: 'saw', f0: 580, f1: 380, dur: 0.16, vol: 0.22 }), 150); },
   picado:   () => sfx({ type: 'tri', f0: 1500, f1: 260, dur: 0.34, vol: 0.26 }),
+  // los vampiros: un siseo que sube y se corta
+  siseo:    () => { sfx({ type: 'noise', f0: 3000, f1: 6000, dur: 0.18, vol: 0.14 }); sfx({ type: 'saw', f0: 180, f1: 240, dur: 0.16, vol: 0.12 }); },
   aullido:  () => { sfx({ type: 'tri', f0: 280, f1: 560, dur: 0.35, vol: 0.30 }); setTimeout(() => sfx({ type: 'tri', f0: 560, f1: 520, dur: 0.45, vol: 0.30 }), 330); setTimeout(() => sfx({ type: 'tri', f0: 520, f1: 300, dur: 0.4, vol: 0.26 }), 760); },
 };

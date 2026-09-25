@@ -46,7 +46,6 @@ import * as OG from './ogro-cuerpo.js';
 import { bakeOgro, drawOgro, poseOgro, pisadaOgro, vueloOgro, P as POG } from './ogro-sprite.js';
 import * as AV from './caba-aventura.js';
 import * as NV from './caba-nivel.js';
-import { drawBosque } from './bosque-sprite.js';
 
 // La paleta de la INTERFAZ (botones, textos, corazones, chispas del acero).
 // Es la de la Romina de antes, que se borro con su codigo: el rosa se quedo
@@ -125,7 +124,11 @@ export default {
     // EL MODO: la AVENTURA (niveles que avanzan, caba-aventura.js) o la pelea
     // contra el ogro. Se recuerda, como la dificultad.
     this.modo = Save.dato('caba.modo', 'pelea') === 'aventura' ? 'aventura' : 'pelea';
-    this.vistaBosque = NV.makeNivel(NV.BOSQUE);
+    // EL NIVEL de la aventura (el bosque, el cementerio), tambien recordado;
+    // detras del menu se ve el suyo.
+    this.nivel = NV.NIVELES[Save.dato('caba.nivel', 'bosque')] ? Save.dato('caba.nivel', 'bosque') : 'bosque';
+    this.vistas = {};
+    for (const id of NV.ORDEN_NIVELES) this.vistas[id] = NV.makeNivel(NV.NIVELES[id]);
     this.av = null;
 
     this.nueva();
@@ -645,6 +648,16 @@ export default {
           return;
         }
       }
+      if (this.modo === 'aventura') {
+        const c = this.lineaNivel();
+        if (ev.x >= c.x - 20 && ev.x <= c.x + c.w + 20 && ev.y >= c.y - 10 && ev.y <= c.y + c.h + 10) {
+          // la flecha de la izquierda va hacia atras; lo demas, hacia delante
+          const O = NV.ORDEN_NIVELES, paso = ev.x < c.x + c.w / 3 ? -1 : 1;
+          this.nivel = O[(O.indexOf(this.nivel) + paso + O.length) % O.length];
+          Save.guarda('caba.nivel', this.nivel); SFX.select(); vibrate(8);
+          return;
+        }
+      }
       for (let i = 0; i < 3; i++) {
         const c = this.tarjeta(i);
         if (ev.x >= c.x && ev.x <= c.x + c.w && ev.y >= c.y && ev.y <= c.y + c.h) {
@@ -715,7 +728,7 @@ export default {
     if (this.fase === 'aventura') { AV.draw(this, g); return; }
     // Eligiendo la AVENTURA, detras se ve el bosque y no el salon.
     if (this.modo === 'aventura' && (this.fase === 'elige' || this.fase === 'armario')) {
-      drawBosque(g, this.vistaBosque, 0, VW, ALTO, this.t);
+      AV.fondoDe(this.nivel).drawFondo(g, this.vistas[this.nivel], 0, VW, ALTO, this.t);
       if (this.fase === 'elige') this.drawElige(g); else this.drawArmario(g);
       return;
     }
@@ -957,6 +970,8 @@ export default {
 
   // ---------- ELEGIR EL MODO Y LA DIFICULTAD ----------
   tarjeta(i) { return { x: 90 + i * 350, y: 196, w: 320, h: 226 }; },
+  // la linea del nivel de la aventura (se toca para cambiarlo)
+  lineaNivel() { return { x: 300, y: 428, w: 600, h: 32 }; },
   pestana(m) { return m === 'aventura' ? { x: 270, y: 124, w: 320, h: 52 } : { x: 610, y: 124, w: 320, h: 52 }; },
 
   drawElige(g) {
@@ -986,8 +1001,8 @@ export default {
       for (let k = 0; k < D.corazones; k++) corazon(g, Math.round(mx - ancho / 2 + k * 28), c.y + 74, true);
       if (this.modo === 'aventura') {
         // En la aventura no hay puntos: el lema del bosque y la mejor nota.
-        textCenter(g, LEMA_BOSQUE[key], mx, c.y + 118, '#e8d8e8', 2);
-        const B = Save.dato(AV.GUARDADO, null), nota = B && B.notas && B.notas[key];
+        textCenter(g, (LEMAS[this.nivel] || LEMAS.bosque)[key], mx, c.y + 118, '#e8d8e8', 2);
+        const B = Save.dato(AV.guardadoDe(this.nivel), null), nota = B && B.notas && B.notas[key];
         textCenter(g, nota ? 'MEJOR NOTA ' + nota : 'SIN NOTA AUN', mx, c.y + 150, nota ? '#ffd76a' : '#8a7ab8', 2);
       } else {
         textCenter(g, D.lema, mx, c.y + 118, '#e8d8e8', 2);
@@ -996,9 +1011,18 @@ export default {
       if (sel) textCenter(g, 'LA DE LA ULTIMA VEZ', mx, c.y + 190, '#b8801f', 2);
     }
     if (this.modo === 'aventura') {
-      // La aventura: que nivel es, y su mejor tiempo.
-      BT.rotulo(g, NV.BOSQUE.nombre + ': LLEGA AL ARBOL DEL FINAL', VW / 2, 438, '#c8e8a0', 2);
-      const B = Save.dato(AV.GUARDADO, null);
+      // La aventura: QUE NIVEL (con flechas para cambiarlo: se toca la linea),
+      // y su mejor tiempo. El cementerio lleva NUEVO! hasta que se juegue.
+      const D = NV.NIVELES[this.nivel], c = this.lineaNivel();
+      BT.marco(g, c.x, c.y, c.w, c.h, false);
+      BT.rotulo(g, D.nombre + ': ' + D.meta, VW / 2, c.y + 10, '#c8e8a0', 2);
+      const pulso = Math.sin(this.t * 5) > 0 ? '#ffe066' : '#c8a040';
+      BT.rotulo(g, '<', c.x + 24, c.y + 8, pulso, 3);
+      BT.rotulo(g, '>', c.x + c.w - 24, c.y + 8, pulso, 3);
+      if (this.nivel !== 'cementerio' && !Save.dato('caba.cementerioVisto', false) && Math.sin(this.t * 6) > -0.4) {
+        BT.rotulo(g, 'NUEVO!', c.x + c.w + 44, c.y + 8, '#5cffd8', 2);
+      }
+      const B = Save.dato(AV.guardadoDe(this.nivel), null);
       if (B && B.mejorT) BT.rotulo(g, 'MEJOR TIEMPO ' + reloj(B.mejorT), VW / 2, 464, '#c8b8ff', 2);
     } else {
       // Si todavia le queda que aprender, se le dice: la primera pelea enseña.
@@ -1205,7 +1229,10 @@ const RESP_OGRO = ['guardia', 'saltar', 'esquivar', 'esquivar'];
 const NOMBRE_PARTE = { capa: 'CAPA', falda: 'FALDA', estela: 'ESTELA' };
 // Lo que dice cada dificultad en la AVENTURA (en la pelea es su lema, que
 // habla del ogro).
-const LEMA_BOSQUE = { paseo: 'EL BOSQUE CON CALMA', normal: 'EL BOSQUE DE VERDAD', furia: 'EL BOSQUE NO PERDONA' };
+const LEMAS = {
+  bosque: { paseo: 'EL BOSQUE CON CALMA', normal: 'EL BOSQUE DE VERDAD', furia: 'EL BOSQUE NO PERDONA' },
+  cementerio: { paseo: 'LAS TUMBAS CON CALMA', normal: 'EL CEMENTERIO DE VERDAD', furia: 'LA CONDESA NO PERDONA' },
+};
 
 // La cara de la muestra de una prenda (claro, medio, oscuro): de la falda, sus
 // tonos de la parte que mas se ve.

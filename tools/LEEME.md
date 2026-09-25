@@ -369,7 +369,7 @@ python tools/gif.py aventura:jefe vistas/jefe.mp4 --dif paseo --reac 0.6
 python tools/hoja-gif.py vistas/x.gif hoja.png 0.4           # un fotograma cada 0,4 s, en rejilla
 node tools/causas-bosque.mjs paseo --desde 7900              # que se lleva los corazones, por ataque
 python tools/bosque-atlas.py RUTA/PNG/Battleground3/Bright   # hornear el bosque
-python tools/enemigos-atlas.py RUTA/enemigos                 # hornear los enemigos (dos hojas)
+python tools/enemigos-atlas.py RUTA/enemigos                 # hornear los enemigos (tres hojas)
 ```
 
 Dónde está cada cosa, todo sin DOM salvo el dibujo:
@@ -487,7 +487,8 @@ Trampas que salieron midiendo, y que no se veían en una captura:
 - **Lo que no cabe en pantalla.** El cuervo a 250 px de altura se salía por
   arriba (se ajustó a su dibujo: 190 px con las alas abiertas, a 146 de
   altura). La pelea del jefe al final del nivel quedaba debajo de los botones,
-  con la cámara parada: el último tramo es largo para que no lo esté.
+  con la cámara parada: el último tramo es largo para que no lo esté. (Desde
+  el cementerio, además, la cámara encuadra la pelea: ver abajo.)
 - **Las partículas** del arcade se pintan en coordenadas de pantalla: con la
   cámara en marcha, el polvo se quedaba atrás. Se corren con la cámara.
 - **Las bolas se borraban al salir de cámara**, y el arnés no mueve la cámara:
@@ -518,9 +519,9 @@ El arte:
   en unas que en otras, y `enemigos-atlas.py` las alinea con el reposo (el
   tronco, de la cintura para arriba; los tengus, por los pies: su reposo es de
   tres cuartos y en el tronco mandan las alas). Doblados con Scale2x, como ella.
-  Los packs no están en el repo, solo lo horneado, en DOS hojas: juntos pasaban
-  de 4096 px de alto (lo que muchos móviles suben a la gráfica). La segunda ya
-  mide 4083: lo que venga, a una tercera.
+  Los packs no están en el repo, solo lo horneado, en TRES hojas: juntos pasaban
+  de 4096 px de alto (lo que muchos móviles suben a la gráfica). La segunda
+  mide 4083; los vampiros del cementerio van en la tercera.
 - **El lobo blanco es el negro con otra paleta**: sus animaciones son los mismos
   dibujos pixel a pixel, salvo el reposo, que el pack pinta oscuro. Se hornean
   los del negro con la tabla de colores negro → blanco (30 colores, sin
@@ -528,6 +529,90 @@ El arte:
   reposo un escalón más claro (el pack lo pinta en sombra).
 - La música del bosque es `SONGS.caballeroBosque`, en Fa lidio (el modo que
   suena a encantado y cabe entero en el secuenciador).
+
+## La AVENTURA de ROMINA: el cementerio
+
+El segundo nivel (25-09-2026), elegido en la pantalla de la aventura con la
+línea `< EL CEMENTERIO: LLEGA A LA CRIPTA >` (se toca para cambiar de nivel;
+lleva un NUEVO! hasta que se juega, y está abierto desde el principio, sin
+pasar el bosque). 10100 px de tierra agrietada con huesos: las TUMBAS ABIERTAS
+son los fosos (la ancha, con una lápida caída de escalón), lo que rueda son
+CALAVERAS, no caen ramas, las hogueras son piras de huesos con fuego verde, y
+la CRIPTA del final es la salida. Se guarda aparte (`caba.cementerio`).
+
+```
+node tools/causas-bosque.mjs paseo --nivel cementerio --desde 7500   # la condesa, por ataque
+python tools/gif.py aventura:condesa vistas/condesa.mp4 --dif paseo  # (y vampira, vampiro, pareja, cementerio)
+python tools/cementerio-atlas.py RUTA/PNG/Battleground4/Bright       # hornear el cementerio
+```
+
+Los vampiros se enseñan como los del bosque, de uno en uno y luego juntos, y
+cada ataque pide su botón:
+
+- **LA VAMPIRA:** la ZARPA se para (GUARDIA); el MORDISCO (le crece una cabeza
+  de monstruo y se lanza hasta ella) no lo para la guardia: se ESQUIVA. Si
+  muerde, se cura.
+- **EL VAMPIRO**, esgrimista: la ESTOCADA se para; el TAJO BAJO se salta; y el
+  SALTO lo lleva por encima de ella a su espalda, donde cae ya estocando: hay
+  que girarse y parar ("ESTÁ DETRÁS: GÍRATE Y PARA").
+- **LA CONDESA**, la jefa (20 de vida, no se encoge, se hornea a x3). El DARDO
+  de sangre se para, y con una PARADA se le devuelve ("SU PROPIA SANGRE!", le
+  quita 2). La LLUVIA: tres gotas, cada una con su sombra roja en el suelo
+  antes de caer; se sale de ellas andando. La ZARPA se para; si entra, bebe y
+  encadena otra. Se aparta de un BRINCO (no más a menudo que cada 1,4 s) y cae
+  lista para lanzar; acorralada, salta por encima de ella. La sangre que le da
+  a Romina la cura.
+
+LA CÁMARA ENCUADRA LA PELEA (`caba-nivel.js camara`, para los dos niveles): cada
+enemigo despierto del tramo en el que está ella queda dentro de la pantalla y
+a la izquierda de los botones (`LIBRE`, 920 px del lienzo de 1200), y Romina
+también; los más cercanos mandan. Y nadie pelea debajo de los botones al final
+del nivel: el sitio de cada enemigo acaba donde la cámara parada aún lo deja
+ver. Medido con el piloto: durante los avisos ningún enemigo queda fuera de la
+pantalla, y la condesa no queda nunca debajo de un botón.
+
+Trampas que salieron midiendo (25-09-2026):
+
+- **La condesa, fuera de cuadro.** Despertaba a 760 px (el borde de la
+  pantalla está a 744) con la recarga gastada durmiendo, y lanzaba en el acto:
+  2 de cada 3 lluvias empezaban con ella fuera de la pantalla. Ahora un jefe
+  espera 1 s al despertar, y la cámara lo encuadra.
+- **Medio cuerpo bajo los botones.** Con la cámara mirando solo hacia donde
+  miraba ella, los que atacan de lejos avisaban con el cuerpo bajo los
+  medallones: la kitsune, el 17 % (el fuego rastrero) y el 10 % (la bola); la
+  condesa, el 4 %, y entera detrás de GUARDIA para quien pelea de lejos (una
+  captura de la app). Con la cámara que encuadra: 3 %, 1,5 % y 0
+  (`node tools/pantalla-avisos.mjs`, y `CAM=vieja` para comparar).
+- **La jefa que no lanzaba.** Contra quien la persigue, su recarga nunca
+  llegaba a tiempo: por pelea, 10 brincos, 7 zarpas, 1 lluvia y ningún dardo.
+  Ahora cae del brinco lista para lanzar (y con ella cerca, lluvia: el dardo
+  acababa a bocajarro), y lanza de verdad: 4-7 lluvias y 4-5 dardos.
+- **La lluvia a destiempo.** Caía donde estaba Romina al lanzarla: quien
+  corría ya había pasado, y mientras la condesa lanzaba, quieta, le pegaba.
+  Sin defenderse se llegaba al final 7 de cada 12 veces. La lluvia apunta
+  adonde va ella (hasta 300 px): quien corre sin mirar se la come.
+- **El piloto se comía los dardos**: reaccionaba al dardo ya en el aire (0,25
+  s hasta ella), no al aviso de 0,9 s. Se anticipa como con la bola de la
+  kitsune. Hasta que la condesa lanzó de verdad no se notó.
+- **Dos gotas con el mismo nombre.** El id de cada proyectil salía del enemigo y
+  del tiempo, y chocaba: el piloto tomaba gotas nuevas por ya vistas. Ahora
+  cada una lleva un número propio.
+- **El vampiro en la cinta.** Con ella junto al foso (en su tramo pero fuera de
+  su alcance), andaba contra el borde de su sitio sin moverse. Parado en el
+  borde, espera.
+
+El arte:
+
+- **El cementerio** es el campo de batalla 4 del mismo pack que el bosque
+  (`cementerio-atlas.py`, con las funciones de `bosque-atlas.py`): capas que
+  empalman cada 480 px, el suelo partido en fondo y piso, la cripta con las
+  ventanas que laten y el árbol del cristal sueltos, y las piezas pintadas con
+  la paleta del cementerio. Fuegos fatuos verdes por el aire.
+- **Los vampiros** son del pack de vampiros de CraftPix (ver
+  `enemigos-atlas.py`), en la tercera hoja, alineados por los pies. La condesa
+  medía 133 px a x2, menos que Romina (158): se hornea con Scale3x (200 px, la
+  misma densidad de pixel) para que imponga.
+- La música es `SONGS.caballeroCementerio`, a 96 bpm en Mi frigio.
 
 ## Los efectos de ROMINA
 

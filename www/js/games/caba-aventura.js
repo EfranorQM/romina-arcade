@@ -27,26 +27,34 @@ import * as BT from './caba-botones.js';
 import * as MD from './caba-mandos.js';
 import * as FX from './caba-efectos.js';
 import { drawRomina } from './romi-sprite.js';
-import { drawBosque, drawHoguera, drawTroncos, drawSombrasRamas, drawRamas, sombra, P as PB } from './bosque-sprite.js';
+import * as FB from './bosque-sprite.js';
+import * as FC from './cementerio-sprite.js';
+import { sombra } from './bosque-sprite.js';
 import { drawEnemigo, drawFuego, P as PE } from './enemigos-sprite.js';
 
 const ALTO = 540;
 const ENTRADA_T = 2.4, FINAL_T = 2.4, CAE_T = 0.9;
 const NADA = { dx: 0, salta: false, golpea: false, esquiva: false, bloquea: false };
 const ORO = '#ffe066', ROSA = '#ef4a84', BLANCO = '#fff4fa';
-// LO QUE SE GUARDA. El 24-09-2026 el bosque crecio (los tengus y el lobo
-// blanco, 3300 px mas): el tiempo y las notas del bosque corto no se pueden
-// comparar con los del largo, asi que se guardan aparte, y el NUEVO! de la
-// pestaña vuelve a salir hasta que lo juegue.
-export const GUARDADO = 'caba.bosque2', VISTA = 'caba.aventuraVista2';
+// LO QUE SE GUARDA, por nivel (def.guardado). El 24-09-2026 el bosque crecio
+// (los tengus y el lobo blanco, 3300 px mas): el tiempo y las notas del bosque
+// corto no se pueden comparar con los del largo, asi que se guardan aparte
+// (caba.bosque2), y el NUEVO! de la pestaña vuelve a salir hasta que lo juegue.
+export const VISTA = 'caba.aventuraVista2';
+export const guardadoDe = id => (N.NIVELES[id] || N.BOSQUE).guardado;
+// EL NIVEL: cada uno pinta con su modulo (la misma cara: drawFondo,
+// drawHoguera, drawTroncos, drawSombrasRamas, drawRamas y sus colores P).
+const FONDOS = { bosque: FB, cementerio: FC };
+export const fondoDe = id => FONDOS[id] || FB;
+const pb = S => fondoDe(S.av.N.def.id).P;
 // El polvo de los EFECTOS (saltar, caer): mas claro que el del bosque. Con el
 // suyo (#cecb85) sobre el camino (#adaa6d) el aro y las nubes no se veian.
-const POLVO_FX = ['#fff8d8', '#ece6b8', PB.polvo3];
+const POLVO_FX = { bosque: ['#fff8d8', '#ece6b8', FB.P.polvo3], cementerio: ['#f4f8e0', '#dde6c0', FC.P.polvo3] };
 
-// Empezar el bosque (desde el principio, o desde la ultima hoguera a la que
-// llego: `desdeHoguera` es su x).
+// Empezar el nivel elegido (S.nivel), desde el principio o desde la ultima
+// hoguera a la que llego (`desdeHoguera` es su x).
 export function empieza(S, desdeHoguera = 0) {
-  const def = N.BOSQUE;
+  const def = N.NIVELES[S.nivel] || N.BOSQUE;
   const L = N.makeNivel(def, Math.random, P.opcionesBosque(S.dif));
   if (desdeHoguera) L.hoguera = desdeHoguera;
   const x0 = desdeHoguera ? desdeHoguera + 40 : 40;
@@ -57,16 +65,18 @@ export function empieza(S, desdeHoguera = 0) {
     N: L, fase: 'entrada', faseT: 0, t: 0, tJuego: 0,
     golpes: 0, caidas: 0, desdeHoguera, gano: false, acabada: false, res: null, funde: 0,
     msg: '', msgT: 0, hitstop: 0,
-    // cuantas veces le ha parado el yamabushi un golpe (lo dice las primeras)
-    rechazos: 0,
+    // cuantas veces le ha parado el yamabushi un golpe, le han curado, le
+    // han llovido y se le han puesto detras (lo dice las primeras)
+    rechazos: 0, curas: 0, lluvias: 0, espaldas: 0,
     // Los EFECTOS de lo que hace ella: los mismos que en la pelea.
-    fx: FX.makeEfectos(POLVO_FX),
+    fx: FX.makeEfectos(POLVO_FX[def.id] || POLVO_FX.bosque),
   };
   S.salta = false; S.golpea = false; S.esquiva = false;
   S.combo = 0; S.comboT = 0; S.leccion = null;
   S.fase = 'aventura'; S.faseT = 0;
   Save.guarda(VISTA, true);                     // ya no hace falta el NUEVO
-  playMusic(SONGS.caballeroBosque || SONGS.caballero);
+  if (def.id === 'cementerio') Save.guarda('caba.cementerioVisto', true);
+  playMusic(SONGS[def.musica] || SONGS.caballeroBosque || SONGS.caballero);
 }
 
 // ---------------------------------------------------------------- update
@@ -138,7 +148,7 @@ function juego(S, dt) {
   if (S.comboT > 0) S.comboT -= dt;
   if (antesCd > 0 && K.esqCd <= 0) S.pulsos.esquivar = 1;
   if (!antesSuelo && K.enSuelo) {
-    burst(K.x - L.camX, K.y, 9, { rnd: Math.random, colors: [PB.polvo1, PB.polvo2], speed: 120, life: 0.32, size: 4, grav: 520 });
+    burst(K.x - L.camX, K.y, 9, { rnd: Math.random, colors: [pb(S).polvo1, pb(S).polvo2], speed: 120, life: 0.32, size: 4, grav: 520 });
     FX.aterriza(A.fx, K.x, K.y, antesVy / 1100);
     SFX.aterriza(); cam.shake(1.5, 0.08);
   }
@@ -147,10 +157,10 @@ function juego(S, dt) {
   if (antesSt !== C.ESQUIVA && K.st === C.ESQUIVA) {
     SFX.esquiva(); vibrate(8);
     FX.esquiva(A.fx, K.x, antesY, K.esqDir);
-    burst(K.x - L.camX, K.y, 10, { rnd: Math.random, colors: [PB.polvo1, PB.polvo3], speed: 140, life: 0.3, size: 4, grav: 400 });
+    burst(K.x - L.camX, K.y, 10, { rnd: Math.random, colors: [pb(S).polvo1, pb(S).polvo3], speed: 140, life: 0.3, size: 4, grav: 400 });
   }
   if (K.st === C.CORRE && K.enSuelo && ((A.t * 12) | 0) % 3 === 0) {
-    burst(K.x - L.camX - K.dir * 14, K.y, 1, { rnd: Math.random, colors: [PB.polvo2], speed: 44, life: 0.24, size: 3, grav: 240 });
+    burst(K.x - L.camX - K.dir * 14, K.y, 1, { rnd: Math.random, colors: [pb(S).polvo2], speed: 44, life: 0.24, size: 3, grav: 240 });
   }
 
   // El nivel: troncos, ramas, fosos, hoguera, salida.
@@ -160,11 +170,11 @@ function juego(S, dt) {
     else if (e.tipo === 'golpeTronco' || e.tipo === 'golpeRama') {
       A.golpes++;
       duele(S);
-      burst(ex, e.y, 16, { rnd: Math.random, colors: [PB.madera1, PB.madera2, PB.corteza], speed: 280, life: 0.5, size: 4, grav: 700 });
+      burst(ex, e.y, 16, { rnd: Math.random, colors: [pb(S).madera1, pb(S).madera2, pb(S).corteza], speed: 280, life: 0.5, size: 4, grav: 700 });
       if (e.tipo === 'golpeTronco' && K.st === C.DOLOR) { A.msg = 'SALTALO O ESQUIVALO'; A.msgT = 1.3; }
     } else if (e.tipo === 'rama') {
       SFX.aterriza(); cam.shake(2, 0.1);
-      burst(ex, e.y, 14, { rnd: Math.random, colors: [PB.madera2, PB.hoja1, PB.hoja2], speed: 220, life: 0.5, size: 4, grav: 800 });
+      burst(ex, e.y, 14, { rnd: Math.random, colors: [pb(S).madera2, pb(S).hoja1, pb(S).hoja2], speed: 220, life: 0.5, size: 4, grav: 800 });
     } else if (e.tipo === 'cae') {
       // Una caida solo cuenta jugando: con la partida ya acabada, pasar a
       // 'cae' deshacia el final (ver stepNivel, 'Caer a un foso').
@@ -176,11 +186,12 @@ function juego(S, dt) {
     } else if (e.tipo === 'hoguera') {
       SFX.powerup(); vibrate(20);
       A.msg = e.cura ? 'LA HOGUERA TE CURA' : 'HOGUERA ENCENDIDA'; A.msgT = 1.6;
-      burst(ex, e.y - 20, 22, { rnd: Math.random, colors: [PB.fuego1, PB.fuego2, BLANCO], speed: 200, life: 0.7, size: 4, grav: -80 });
+      burst(ex, e.y - 20, 22, { rnd: Math.random, colors: [pb(S).fuego1, pb(S).fuego2, BLANCO], speed: 200, life: 0.7, size: 4, grav: -80 });
     } else if (e.tipo === 'salida') {
       termina(S, true);
     } else if (e.tipo === 'guardada') {
-      A.msg = 'EL LOBO BLANCO GUARDA LA SALIDA'; A.msgT = 1.6;
+      const J = N.jefeVivo(A.N);
+      A.msg = (J ? J.T.nombre : 'EL JEFE') + ' GUARDA LA SALIDA'; A.msgT = 1.6;
     } else enemigo(S, e, ex);
   }
   camara(S, dt);
@@ -207,12 +218,29 @@ function enemigo(S, e, ex) {
     else if (e.atk === 'corro') SFX.alarm();
     else if (e.atk === 'tajo' || e.atk === 'iai' || e.atk === 'relampago') SFX.desenvaina();
     else if (e.atk === 'picado') SFX.graznido();
+    else if (e.atk === 'zarpa' || e.atk === 'muerde') SFX.siseo();
+    else if (e.atk === 'estocada' || e.atk === 'bajo') SFX.desenvaina();
+    else if (e.atk === 'salto') SFX.salto();
+    else if (e.atk === 'dardo' || e.atk === 'lluvia') SFX.crece();
+    if (e.espalda && A.espaldas++ < 2) { A.msg = 'ESTA DETRAS: GIRATE Y PARA'; A.msgT = 1.4; }
     // EL AVISO BRILLA DEL COLOR DEL BOTON que lo contesta; en PASEO, el boton
     // sale encima (para quien todavia no se sabe cada ataque de memoria).
     const E = e.enemigo, resp = EN.RESPUESTA[e.atk];
-    if (E && resp) FX.aviso(A.fx, E.x, E.y - E.T.alto - 28, resp, E.T[e.atk].aviso, S.dif === 'paseo' ? S.mini[resp] : null);
+    if (E && resp) FX.aviso(A.fx, E.x, E.y - E.T.alto - 28, resp, E.T[e.atk].aviso + (e.extra || 0), S.dif === 'paseo' ? S.mini[resp] : null);
   } else if (e.tipo === 'fuego') {
     SFX.dash();
+  } else if (e.tipo === 'cura') {
+    // UN VAMPIRO SE CURA con la sangre de ella: su +1 en verde, y se dice
+    const E = e.enemigo;
+    if (e.n > 0) FX.numero(A.fx, e.x, e.y, '+' + e.n, '#7dff8a');
+    if (A.curas++ < 2 && E) { A.msg = E.tipo === 'condesa' ? 'SE BEBE TU SANGRE' : 'TE HA MORDIDO: SE CURA'; A.msgT = 1.4; }
+  } else if (e.tipo === 'lluvia') {
+    SFX.alarm(); cam.shake(1.5, 0.3);
+    if (A.lluvias++ < 1) { A.msg = 'SAL DE LAS SOMBRAS ROJAS'; A.msgT = 1.4; }
+  } else if (e.tipo === 'salpica') {
+    burst(ex, e.y - 6, 10, { rnd: Math.random, colors: [PE.sangre1, PE.sangre2, PE.sangre3], speed: 220, life: 0.4, size: 4, grav: 700 });
+  } else if (e.tipo === 'brinco') {
+    SFX.salto();
   } else if (e.tipo === 'fija') {
     // EL PICADO SE FIJA: va a caer donde esta su sombra. Es el momento de
     // esquivar, y ahi (en la sombra) sale el aviso del boton.
@@ -220,9 +248,9 @@ function enemigo(S, e, ex) {
     const E = e.enemigo;
     FX.aviso(A.fx, e.x, e.y - 30, 'esquivar', E.T.picado.fija, S.dif === 'paseo' ? S.mini.esquivar : null);
   } else if (e.tipo === 'aterriza') {
-    cam.shake(4, 0.16); vibrate(16); SFX.aterriza();
-    FX.aterriza(A.fx, e.x, e.y, 1.2);
-    burst(ex, e.y, 16, { rnd: Math.random, colors: [PB.polvo1, PB.polvo2, PE.pluma], speed: 260, life: 0.45, size: 4, grav: 500 });
+    cam.shake(e.suave ? 1.5 : 4, 0.16); vibrate(e.suave ? 6 : 16); SFX.aterriza();
+    FX.aterriza(A.fx, e.x, e.y, e.suave ? 0.7 : 1.2);
+    burst(ex, e.y, 16, { rnd: Math.random, colors: [pb(S).polvo1, pb(S).polvo2, PE.pluma], speed: 260, life: 0.45, size: 4, grav: 500 });
   } else if (e.tipo === 'relampago') {
     SFX.dash(); cam.shake(2, 0.1);
   } else if (e.tipo === 'aullido') {
@@ -251,6 +279,12 @@ function enemigo(S, e, ex) {
       A.msg = atk === 'picado' ? 'ESQUIVA: SAL DE SU SOMBRA' : 'SALTA EL RELAMPAGO'; A.msgT = 1.3;
     } else if (atk === 'levanta' && e.aire) {
       A.msg = 'ESE SE PARA CON LA GUARDIA'; A.msgT = 1.3;
+    } else if (atk === 'bajo') {
+      A.msg = 'SALTA EL TAJO BAJO'; A.msgT = 1.2;
+    } else if (e.gota) {
+      A.msg = 'SAL DE LA SOMBRA ROJA'; A.msgT = 1.2;
+    } else if (atk === 'muerde') {
+      A.msg = 'ESQUIVA EL MORDISCO'; A.msgT = 1.2;
     } else if (e.r === 'rota') {
       A.msg = atk === 'acomete' ? 'ESQUIVALO' : atk === 'corro' ? 'APARTATE DEL FUEGO' : 'GUARDIA ROTA';
       A.msgT = 1.2;
@@ -274,7 +308,9 @@ function enemigo(S, e, ex) {
     SFX.corta(); vibrate(e.fuerte || e.contra ? 22 : 14);
     FX.acierta(A.fx, E.x - K.dir * 12, e.y, K.dir, e.contra ? 3 : e.fuerte ? 2 : K.combo);
     const cols = E.tipo === 'lobo' ? [PE.lobo1, PE.lobo2, PE.sangre] : E.tipo === 'kitsune' ? [PE.kitsune1, PE.kitsune2, PE.fuego1]
-      : E.tipo === 'alfa' ? [PE.alfa1, PE.alfa2, PE.sangre] : [PE.tengu1, PE.tengu2, PE.pluma];
+      : E.tipo === 'alfa' ? [PE.alfa1, PE.alfa2, PE.sangre]
+      : E.tipo === 'vampira' || E.tipo === 'vampiro' || E.tipo === 'condesa' ? [PE.sangre1, PE.sangre2, PE.brasa]
+      : [PE.tengu1, PE.tengu2, PE.pluma];
     burst(ex, e.y, e.muere ? 26 : 14, { rnd: Math.random, colors: cols, speed: e.muere ? 340 : 260, life: 0.5, size: 4, grav: 620 });
     if (e.contra) {
       A.msg = 'CONTRAATAQUE'; A.msgT = 0.8;
@@ -282,7 +318,8 @@ function enemigo(S, e, ex) {
     }
     if (e.muere) { SFX.explode(); FX.muerte(A.fx, E.x + K.dir * 22, E.y, E.tipo); }
   } else if (e.tipo === 'quemado') {
-    SFX.corta(); cam.shake(3, 0.12);
+    SFX.corta(); cam.shake(e.sangre ? 5 : 3, 0.14);
+    if (e.sangre) { A.msg = 'SU PROPIA SANGRE!'; A.msgT = 1.1; }
     burst(ex, e.y, 18, { rnd: Math.random, colors: [ORO, PE.fuego1, PE.fuego3], speed: 300, life: 0.5, size: 4, grav: 200 });
   }
 }
@@ -311,7 +348,7 @@ function cierra(S) {
   const A = S.av, K = S.K;
   const perdidos = K.hpMax - Math.max(0, K.hp);
   const nota = !A.gano ? null : perdidos === 0 ? 'S' : perdidos <= 1 ? 'A' : perdidos <= 2 ? 'B' : 'C';
-  const guardado = Save.dato(GUARDADO, { hecho: false, mejorT: 0, notas: {} });
+  const guardado = Save.dato(A.N.def.guardado, { hecho: false, mejorT: 0, notas: {} });
   let recordT = false;
   if (A.gano) {
     guardado.hecho = true;
@@ -319,7 +356,7 @@ function cierra(S) {
     const orden = ['C', 'B', 'A', 'S'];
     const antes = guardado.notas[S.dif];
     if (!antes || orden.indexOf(nota) > orden.indexOf(antes)) guardado.notas[S.dif] = nota;
-    Save.guarda(GUARDADO, guardado);
+    Save.guarda(A.N.def.guardado, guardado);
   }
   A.res = { gano: A.gano, t: A.tJuego, vida: Math.max(0, K.hp), vidaMax: K.hpMax, caidas: A.caidas,
             // (los lobos de la manada que el jefe no llego a llamar no cuentan)
@@ -356,10 +393,11 @@ export function input(S, ev) {
 export function draw(S, g) {
   const A = S.av, K = S.K, L = A.N;
   const cx = Math.round(L.camX);
-  drawBosque(g, L, cx, VW, ALTO, A.t);
-  drawHoguera(g, L, cx, A.t);
-  drawSombrasRamas(g, L, cx);
-  drawTroncos(g, L, cx);
+  const F = fondoDe(L.def.id);
+  F.drawFondo(g, L, cx, VW, ALTO, A.t);
+  F.drawHoguera(g, L, cx, A.t);
+  F.drawSombrasRamas(g, L, cx);
+  F.drawTroncos(g, L, cx);
   // Los enemigos, por detras de ella (ella queda delante, mas cerca).
   for (const E of L.enemigos) drawEnemigo(g, E, cx, A.t);
 
@@ -382,7 +420,7 @@ export function draw(S, g) {
   if (!parpadea) drawRomina(g, K.x - cx, K.y, K.dir, p, f, 0, blanco, K.dir, ex, ey);
   FX.drawGuardia(g, K, cx, A.t, K.bloqT >= C.BLOQ_SUBE && K.bloqT < C.BLOQ_SUBE + K.paradaVent);
 
-  drawRamas(g, L, cx, A.t);
+  F.drawRamas(g, L, cx, A.t);
   // Las bolas de fuego, por delante de todo: le vienen a ella.
   for (const F of L.fuegos) drawFuego(g, F, cx);
   // Los cortes, las estrellas y las chispas de los efectos.
@@ -424,12 +462,12 @@ function drawHud(S, g) {
   // EL JEFE, en cuanto aulla: su nombre y su vida, a la derecha (la pausa
   // esta en el centro).
   const J = N.jefeVivo(L);
-  if (J && J.aullidos > 0) {
+  if (J && (J.aullidos > 0 || (!J.manada && J.despierto))) {
     const jw = 220, jx = VW - 110 - jw, jy = 22;
     g.fillStyle = '#10140c'; g.fillRect(jx - 3, jy - 3, jw + 6, 12);
     g.fillStyle = '#3a2030'; g.fillRect(jx, jy, jw, 6);
     g.fillStyle = '#e83a5a'; g.fillRect(jx, jy, Math.round(jw * J.hp / J.hpMax), 6);
-    text(g, 'EL LOBO BLANCO', jx, jy + 14, '#f0e8d8', 2);
+    text(g, J.T.nombre, jx, jy + 14, '#f0e8d8', 2);
   }
   const s = P.DIFICULTADES[S.dif].nombre + '   ' + reloj(A.tJuego);
   text(g, s, VW - 14 - measure(s, 2), 36, '#c8d8b0', 2);
@@ -451,9 +489,9 @@ function drawEntrada(S, g) {
   g.fillStyle = '#000000'; g.fillRect(0, 0, VW, b); g.fillRect(0, ALTO - b, VW, b);
   if (t > 0.2 && t < ENTRADA_T - 0.1) {
     g.globalAlpha = Math.min(1, (t - 0.2) / 0.3, (ENTRADA_T - 0.1 - t) / 0.3);
-    BT.rotulo(g, S.av.desdeHoguera ? 'DESDE LA HOGUERA' : 'NIVEL 1', VW / 2, 110, '#c8d8b0', 3);
-    BT.rotulo(g, N.BOSQUE.nombre, VW / 2, 146, ORO, 8);
-    BT.rotulo(g, 'LLEGA AL ARBOL DEL FINAL', VW / 2, 230, BLANCO, 2);
+    BT.rotulo(g, S.av.desdeHoguera ? 'DESDE LA HOGUERA' : 'NIVEL ' + (N.ORDEN_NIVELES.indexOf(S.av.N.def.id) + 1), VW / 2, 110, '#c8d8b0', 3);
+    BT.rotulo(g, S.av.N.def.nombre, VW / 2, 146, ORO, 8);
+    BT.rotulo(g, S.av.N.def.meta, VW / 2, 230, BLANCO, 2);
     g.globalAlpha = 1;
   }
   if (t > 0.3) {
@@ -467,8 +505,8 @@ function drawFinal(S, g) {
   const t = S.av.faseT;
   if (t < 0.3) return;
   g.globalAlpha = Math.min(1, (t - 0.3) / 0.3);
-  if (S.av.gano) BT.rotulo(g, 'SALISTE DEL BOSQUE', VW / 2, 150, ORO, 6);
-  else BT.rotulo(g, 'EL BOSQUE TE HA PODIDO', VW / 2, 150, ROSA, 6);
+  if (S.av.gano) BT.rotulo(g, S.av.N.def.salisteMsg, VW / 2, 150, ORO, 6);
+  else BT.rotulo(g, S.av.N.def.perdisteMsg, VW / 2, 150, ROSA, 6);
   g.globalAlpha = 1;
 }
 
@@ -477,7 +515,7 @@ function drawResultado(S, g) {
   if (!R) return;
   g.globalAlpha = Math.min(0.6, t * 2); g.fillStyle = '#0a0d08'; g.fillRect(0, 0, VW, ALTO); g.globalAlpha = 1;
   BT.marco(g, 250, 30, 700, 400);
-  BT.rotulo(g, R.gano ? 'BOSQUE SUPERADO' : 'TE HA PODIDO', VW / 2, 50, R.gano ? ORO : ROSA, 5);
+  BT.rotulo(g, R.gano ? S.av.N.def.superado : 'TE HA PODIDO', VW / 2, 50, R.gano ? ORO : ROSA, 5);
   textCenter(g, 'DIFICULTAD ' + P.DIFICULTADES[S.dif].nombre, VW / 2, 98, '#c8b8ff', 2);
   if (R.gano && t > 0.45) {
     const u = Math.min(1, (t - 0.45) / 0.25);

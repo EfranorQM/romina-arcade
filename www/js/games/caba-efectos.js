@@ -32,6 +32,7 @@
 // veces un liso (ver la memoria de medir el pintado).
 
 import { drawSilueta } from './romi-sprite.js';
+import { textCenter } from '../font.js';
 import { BLOQ_SUBE, BLOQUEA } from './caba-cuerpo.js';
 
 const BLANCO = '#ffffff', ORO = '#ffe066', ORO2 = '#ffb62e', ACERO = '#d4dcf0', ACERO2 = '#8a97b8';
@@ -129,13 +130,20 @@ export function aviso(F, x, y, resp, dur, icono) {
 // UN ENEMIGO CAE en (x, y): el polvo cuando toca el suelo (el salto hacia
 // atras lo pinta enemigos-sprite.js) y, cuando se va apagando, humo que sube
 // (el lobo) o chispas de su fuego azul (la kitsune).
+// UN NUMERO QUE SUBE Y SE APAGA (el +1 del vampiro que se cura).
+export function numero(F, x, y, txt, col) {
+  F.cosas.push({ tipo: 'numero', x, y, t: 0, dur: 0.9, txt, col });
+}
+
 export const CAE_T = 0.36;               // lo que tarda en tocar el suelo
 export function muerte(F, x, y, tipo) {
   F.cosas.push({ tipo: 'aro', x, y, t: -CAE_T, dur: 0.32, r0: 18, r1: 70, col: F.polvo[0], s: 4 });
   nubes(F, x, y, 120, 8, 17, 0.42, CAE_T);
   // (El humo del lobo, gris violeta claro: del color de su pelo, #3c3450, no
   // se veia sobre el verde oscuro del bosque.)
-  const cols = tipo === 'kitsune' ? ['#6be8ff', '#e8ffff', '#1e9cd8'] : ['#9a90b0', '#c8c0dc', '#6a6080'];
+  const cols = tipo === 'kitsune' ? ['#6be8ff', '#e8ffff', '#1e9cd8']
+    : tipo === 'vampira' || tipo === 'vampiro' || tipo === 'condesa' ? ['#ffb040', '#ff4a3a', '#6a0c18']
+    : ['#9a90b0', '#c8c0dc', '#6a6080'];
   for (let i = 0; i < 20; i++) {
     F.chispas.push({ x: x + (Math.random() - 0.5) * 70, y: y - 8 - Math.random() * 70, vx: (Math.random() - 0.5) * 50,
                      vy: -50 - Math.random() * 70, grav: -40, t: -(1.1 + Math.random() * 0.5), dur: 0.7,
@@ -197,6 +205,12 @@ export function drawDelante(g, F, cx) {
       const e = c.t < 0.1 ? 1.35 - 0.35 * c.t / 0.1 : 1, w = c.img.width * e;
       g.globalAlpha = Math.min(1, (c.dur - c.t) / 0.12);
       g.drawImage(c.img, Math.round(x - w / 2), Math.round(y - w / 2 + Math.sin(c.t * 9) * 2), Math.round(w), Math.round(w));
+      g.globalAlpha = 1;
+      continue;
+    }
+    if (c.tipo === 'numero') {
+      g.globalAlpha = Math.min(1, (1 - u) * 2);
+      textCenter(g, c.txt, Math.round(x), Math.round(y - 40 * sale(u)), c.col, 4);
       g.globalAlpha = 1;
       continue;
     }

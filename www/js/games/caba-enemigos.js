@@ -174,9 +174,82 @@ export const ALFA = {
   aullido: 1.3,
   jefe: true,
 };
-export const TIPOS = { lobo: LOBO, kitsune: KITSUNE, karasu: KARASU, yamabushi: YAMABUSHI, alfa: ALFA };
+// ---------- EL CEMENTERIO (25-09-2026) ----------
+export const VAMPIRA = {
+  hp: 3, ancho: 22, alto: 140,
+  anda: 130, corre: 280,
+  despierta: 720,
+  // LA ZARPA: se echa atras con la mano abierta y araña. Se para como el
+  // zarpazo del lobo, con su mismo aviso (con 0.46 dejaba 0.57 s en PASEO).
+  zarpa: { aviso: 0.50, activo: 0.10, recupera: 0.36, alcance: 104, dano: 1, tipo: 'zarpazo' },
+  // EL MORDISCO: le crece una cabeza de monstruo (cuatro fotogramas) y se
+  // lanza `avance` px mordiendo. Rompe la guardia: se ESQUIVA. Si muerde, se
+  // cura `cura` (lo dice la escena: "TE HA MORDIDO").
+  muerde: { aviso: 0.62, activo: 0.16, recupera: 0.55, alcance: 96, avance: 110, dano: 1, cura: 1, tipo: 'mordisco' },
+  ataques: ['zarpa', 'muerde'],
+  recarga: [0.9, 1.4],
+  dolor: 0.26,
+};
+export const VAMPIRO = {
+  hp: 3, ancho: 22, alto: 148,
+  anda: 110, corre: 260,
+  despierta: 720,
+  // LA ESTOCADA: en guardia de esgrima y a fondo; larga. Se para.
+  estocada: { aviso: 0.50, activo: 0.12, recupera: 0.45, alcance: 160, dano: 1, tipo: 'katana' },
+  // EL TAJO BAJO: la espada a ras de suelo, como el barrido del lobo: se SALTA.
+  bajo: { aviso: 0.56, activo: 0.12, recupera: 0.45, alcance: 150, alto: 44, dano: 1, tipo: 'barre' },
+  // EL SALTO POR ENCIMA: se agacha, pasa por encima de ella y cae `pasa` px
+  // a su espalda; al caer, la estocada POR DETRAS (con su aviso): hay que
+  // girarse y parar. El salto no hace daño: cambia de lado. Esa estocada
+  // lleva `giro` s mas de aviso: girarse cuesta el stick (con el aviso de
+  // siempre dejaba 0.57 s en PASEO; con el, 0.67).
+  salto: { aviso: 0.40, vuelo: 0.55, pasa: 110, alto: 175, giro: 0.10 },
+  ataques: ['estocada', 'bajo', 'salto'],
+  recarga: [1.0, 1.5],
+  dolor: 0.26,
+};
+// (Horneada a x3, no a x2 como los demas: ver tools/enemigos-atlas.py. Mide
+// 219 px con el moño; su cuerpo, 205.)
+export const CONDESA = {
+  hp: 20, ancho: 36, alto: 205,
+  anda: 90, corre: 240,
+  despierta: 760,
+  // EL DARDO: la sangre le gira en la mano y la lanza a la altura del pecho.
+  // La guardia lo para, y una PARADA se lo DEVUELVE (le quita `devuelto`).
+  dardo: { aviso: 0.62, recupera: 0.30 },
+  // LA LLUVIA: alza el brazo y caen `gotas` gotas de sangre cerca de ella,
+  // cada una con su sombra roja en el suelo `cae` s antes: hay que salir.
+  // (con 160 entre gota y gota queda entre sombras un hueco de 76 px sin nada)
+  lluvia: { aviso: 0.45, recupera: 0.55, gotas: 3, cae: 0.85, separa: 160 },
+  // LA ZARPA, si ella se le pega y no puede apartarse. Se para.
+  zarpa: { aviso: 0.50, activo: 0.10, recupera: 0.40, alcance: 128, dano: 1, tipo: 'zarpazo' },
+  ataques: ['dardo', 'lluvia', 'zarpa'],
+  recarga: [1.1, 1.6],
+  dolor: 0.30,
+  jefe: true, nombre: 'LA CONDESA', encadena: true,
+  // Lo que se cura con cada gota o dardo de sangre que le entra a ella, y
+  // lo que le quita un dardo devuelto.
+  bebe: 1, devuelto: 2,
+  // Se aparta de un brinco si ella se le acerca (y no mas a menudo que esto).
+  // Con 3 s, ella la alcanzaba antes de que pudiera volver a brincar y le
+  // pegaba mientras avisaba la zarpa: la jefa caia en 13 s.
+  brinco: 1.4,
+  // EL BRINCO ES PARA LANZAR: cae lista (sin recarga). Si no, quien la
+  // perseguia la alcanzaba antes de que acabara su recarga y ella volvia a
+  // brincar o sacaba la zarpa: en una pelea, 10 brincos, 7 zarpas, 1 lluvia
+  // y ningun dardo (25-09-2026).
+  lanzaAlCaer: true,
+};
+ALFA.nombre = 'EL LOBO BLANCO';
+export const TIPOS = { lobo: LOBO, kitsune: KITSUNE, karasu: KARASU, yamabushi: YAMABUSHI, alfa: ALFA,
+                       vampira: VAMPIRA, vampiro: VAMPIRO, condesa: CONDESA };
 
 // ---------- El fuego ----------
+// Cada bola, llama o gota, con su numero: sacado del reloj del que la lanza
+// se repetia (cada lanzamiento sale al acabar el mismo aviso), y el piloto del
+// arnes veia una gota NUEVA como vista hace segundos: reaccionaba al instante.
+let ultimoId = 0;
+const nuevoId = () => ++ultimoId;
 export const FUEGO_V = 420;            // px/s
 export const FUEGO_R = 16;             // radio de la bola
 export const FUEGO_ALTO = 150;         // a que altura sale (la mano, sobre sus pies)
@@ -190,11 +263,13 @@ export const RASTRERO_V = 340, RASTRERO_ALTO = 40, RASTRERO_R = 18, RASTRERO_ALC
 // PASEO, el boton encima): es la misma ley que el maestro del ogro enseña.
 export const RESPUESTA = {
   zarpazo: 'guardia', lanza: 'guardia', tajo: 'guardia', iai: 'guardia', levanta: 'guardia',
-  acomete: 'esquivar', corro: 'esquivar', picado: 'esquivar',
-  barre: 'saltar', rastrero: 'saltar', relampago: 'saltar',
+  zarpa: 'guardia', estocada: 'guardia', salto: 'guardia', dardo: 'guardia',
+  acomete: 'esquivar', corro: 'esquivar', picado: 'esquivar', muerde: 'esquivar', lluvia: 'esquivar',
+  barre: 'saltar', rastrero: 'saltar', relampago: 'saltar', bajo: 'saltar',
 };
 // Todos los ataques que avisan (los que la dificultad acorta).
-const ATAQUES = ['zarpazo', 'acomete', 'barre', 'lanza', 'corro', 'rastrero', 'tajo', 'picado', 'iai', 'relampago', 'levanta'];
+const ATAQUES = ['zarpazo', 'acomete', 'barre', 'lanza', 'corro', 'rastrero', 'tajo', 'picado', 'iai', 'relampago', 'levanta',
+                 'zarpa', 'muerde', 'estocada', 'bajo', 'salto', 'dardo', 'lluvia'];
 
 // LA DIFICULTAD (caba-partida.js, opcionesBosque): el ritmo acorta los
 // avisos y la pausa estira lo que descansan entre ataque y ataque (y lo que
@@ -211,6 +286,8 @@ function escala(T, o) {
   const E = JSON.parse(JSON.stringify(T));
   for (const k of ATAQUES) if (E[k]) E[k].aviso = T[k].aviso / (k === 'acomete' ? carrera : ritmo);
   if (E.picado) { E.picado.cierne = T.picado.cierne / ritmo; E.picado.fija = T.picado.fija / ritmo; }
+  // (la sombra de cada gota de la lluvia es su aviso)
+  if (E.lluvia) E.lluvia.cae = T.lluvia.cae / ritmo;
   for (const k of ['recarga', 'recargaAcomete']) if (E[k]) E[k] = T[k].map(v => v * pausa);
   if (E.agotada) E.agotada = T.agotada * pausa;
   return E;
@@ -231,6 +308,9 @@ export function makeEnemigo(tipo, x, y, x0, x1, id, o = {}, tramo = [-Infinity, 
     // picado; aullidos y manada: los del jefe; oculto: un lobo de la manada
     // que aun no ha llamado (ni se ve ni se mueve).
     alt: 0, fase: null, aullidos: 0, manada: null, oculto: false, provocado: false,
+    // brincoT: lo que le falta a la condesa para poder apartarse otra vez;
+    // saltoX0/X1: de donde a donde salta el vampiro por encima de ella.
+    brincoT: 0, saltoX0: 0, saltoX1: 0,
     despiertaX: undefined,
   };
 }
@@ -256,13 +336,19 @@ export function stepEnemigo(E, K, dt, rnd, fuegos) {
   if (E.flash > 0) E.flash -= dt;
   if (E.recarga > 0) E.recarga -= dt;
   if (E.abierto > 0) E.abierto -= dt;
+  if (E.brincoT > 0) E.brincoT -= dt;
   if (E.st === MUERTO) { E.muertoT += dt; E.vx *= 0.85; mueve(E, dt); return ev; }
   const T = E.T, dist = Math.abs(K.x - E.x), haciaElla = K.x < E.x ? -1 : 1;
   // Se despierta al tenerla cerca, o (si el nivel se lo pide) al pasar ella
   // por un sitio: asi dos del mismo tramo no se le echan encima a la vez.
   if (!E.despierto) {
-    if (E.despiertaX !== undefined ? K.x >= E.despiertaX : dist < T.despierta) E.despierto = true;
-    else return ev;
+    if (E.despiertaX !== undefined ? K.x >= E.despiertaX : dist < T.despierta) {
+      E.despierto = true;
+      // El jefe se deja ver antes de atacar: la condesa despierta fuera de la
+      // pantalla (a 760 px) y lanzaba su lluvia en el acto, antes de que la
+      // camara la encuadrara (su recarga se gasta dormida).
+      if (T.jefe) E.recarga = Math.max(E.recarga, 1.0);
+    } else return ev;
   }
 
   if (E.st === DOLOR) {
@@ -271,13 +357,14 @@ export function stepEnemigo(E, K, dt, rnd, fuegos) {
       // Tras el golpe, la kitsune salta lejos de ella; el lobo y el cuervo, a
       // veces. El yamabushi y el jefe no se apartan: vuelven a su sitio (el
       // yamabushi, a su guardia, y enseguida contesta).
-      if (E.tipo === 'kitsune' || ((E.tipo === 'lobo' || E.tipo === 'karasu') && rnd() < 0.35)) { cambia(E, HUYE); E.vx = -haciaElla * 300; E.dir = haciaElla; }
+      if (E.tipo === 'kitsune' || ((E.tipo === 'lobo' || E.tipo === 'karasu' || E.tipo === 'vampira' || E.tipo === 'vampiro') && rnd() < 0.35)) { cambia(E, HUYE); E.vx = -haciaElla * 300; E.dir = haciaElla; }
       else { cambia(E, ESPERA); E.recarga = Math.max(E.recarga, E.tipo === 'yamabushi' ? 0.25 : 0.4); }
     }
   } else if (E.st === HUYE) {
     // un salto hacia atras (el dibujo es su salto)
     E.vx *= 0.97;
-    if (E.t >= 0.5) { cambia(E, ESPERA); E.vx = 0; E.recarga = Math.max(E.recarga, 0.5); }
+    // (la condesa brinca PARA LANZAR: cae lista, ver CONDESA.lanzaAlCaer)
+    if (E.t >= 0.5) { cambia(E, ESPERA); E.vx = 0; E.recarga = T.lanzaAlCaer ? 0 : Math.max(E.recarga, 0.5); }
   } else if (E.st === AGOTADA) {
     E.vx = 0;
     if (E.t >= T.agotada) { cambia(E, ESPERA); E.recarga = entre(rnd, T.recarga); }
@@ -289,6 +376,9 @@ export function stepEnemigo(E, K, dt, rnd, fuegos) {
   } else if (E.tipo === 'lobo' || E.tipo === 'alfa') lobo(E, K, rnd, dist, haciaElla, ev);
   else if (E.tipo === 'karasu') karasu(E, K, rnd, dist, haciaElla, ev);
   else if (E.tipo === 'yamabushi') yamabushi(E, K, rnd, dist, haciaElla, ev);
+  else if (E.tipo === 'vampira') vampira(E, K, rnd, dist, haciaElla, ev);
+  else if (E.tipo === 'vampiro') vampiro(E, K, rnd, dist, haciaElla, ev);
+  else if (E.tipo === 'condesa') condesa(E, K, rnd, dist, haciaElla, ev, fuegos);
   else kitsune(E, K, rnd, dist, haciaElla, ev, fuegos);
 
   mueve(E, dt);
@@ -367,27 +457,7 @@ function lobo(E, K, rnd, dist, hacia, ev) {
     }
     return;
   }
-  if (E.atk === 'barre') {
-    const A = T.barre;
-    if (E.st === AVISO && E.t >= A.aviso) { cambia(E, ATACA); E.golpeo = false; E.vx = E.dir * 90; }
-    else if (E.st === ATACA) {
-      // A ras de suelo: saltando pasa por debajo de ella.
-      if (!E.golpeo && K.vivo && E.y - K.y < A.alto) {
-        const d = (K.x - E.x) * E.dir;
-        if (d > -10 && d < A.alcance + C.CUERPO_K) {
-          E.golpeo = true;
-          const r = C.herir(K, E.x, A.tipo, A.dano);
-          if (r) ev.push({ tipo: 'golpe', x: K.x, y: K.y - 40, r });
-        }
-      }
-      E.vx *= 0.8;
-      if (E.t >= A.activo) cambia(E, RECUPERA);
-    } else if (E.st === RECUPERA) {
-      E.vx *= 0.8;
-      if (E.t >= A.recupera) { cambia(E, ESPERA); E.recarga = entre(rnd, T.recarga); }
-    }
-    return;
-  }
+  if (E.atk === 'barre') return barrido(E, K, T.barre, rnd, ev);
   if (E.atk === 'zarpazo') return garra(E, K, T.zarpazo, rnd, ev);
   if (E.atk === 'levanta') return garra(E, K, T.levanta, rnd, ev, T.levanta.alto, 60);
   // LA ACOMETIDA
@@ -424,7 +494,14 @@ function garra(E, K, A, rnd, ev, alto = 150, empuje = 140) {
         const r = C.herir(K, E.x, A.tipo, A.dano);
         if (r === 'parada') { E.abierto = C.PARADA_PREMIO; ev.push({ tipo: 'parada', x: E.x + E.dir * 50, y: E.y - 70 }); }
         else if (r === 'bloqueado') { E.vx = -E.dir * 180; ev.push({ tipo: 'bloqueo', x: E.x + E.dir * 50, y: E.y - 70 }); }
-        else if (r) ev.push({ tipo: 'golpe', x: K.x, y: K.y - 90, r, aire: E.y - K.y > 30 });
+        else if (r) {
+          ev.push({ tipo: 'golpe', x: K.x, y: K.y - 90, r, aire: E.y - K.y > 30 });
+          // LA CONDESA SE BEBE LA SANGRE tambien con la zarpa, y si le entra
+          // ENCADENA otra (con su aviso entero): a quien se defiende no le
+          // cambia nada; a quien machaca, si (le ganaba 16 de 16 veces).
+          if (E.T.bebe && E.hp < E.hpMax) { const antes = E.hp; E.hp = Math.min(E.hpMax, E.hp + E.T.bebe); ev.push({ tipo: 'cura', x: E.x, y: E.y - E.T.alto - 10, n: E.hp - antes }); }
+          if (E.T.encadena) E.encadena = true;
+        }
       }
     }
     E.vx *= 0.8;
@@ -432,7 +509,32 @@ function garra(E, K, A, rnd, ev, alto = 150, empuje = 140) {
   } else if (E.st === RECUPERA) {
     E.vx *= 0.8;
     // Tras una parada se queda abierto lo que dura el premio de ella.
-    if (E.t >= Math.max(A.recupera, E.abierto)) { cambia(E, ESPERA); E.recarga = entre(rnd, E.T.recarga); }
+    if (E.t >= Math.max(A.recupera, E.abierto)) {
+      cambia(E, ESPERA); E.recarga = entre(rnd, E.T.recarga);
+      if (E.encadena) { E.encadena = false; E.recarga = 0; E.brincoT = Math.max(E.brincoT, 0.8); }
+    }
+  }
+}
+
+// UN BARRIDO A RAS DE SUELO (el del lobo, el tajo bajo del vampiro): le da
+// si ella tiene los pies a menos de `alto` del suelo, asi que se salta.
+function barrido(E, K, A, rnd, ev) {
+  if (E.st === AVISO && E.t >= A.aviso) { cambia(E, ATACA); E.golpeo = false; E.vx = E.dir * 90; }
+  else if (E.st === ATACA) {
+    // A ras de suelo: saltando pasa por debajo de ella.
+    if (!E.golpeo && K.vivo && E.y - K.y < A.alto) {
+      const d = (K.x - E.x) * E.dir;
+      if (d > -10 && d < A.alcance + C.CUERPO_K) {
+        E.golpeo = true;
+        const r = C.herir(K, E.x, A.tipo, A.dano);
+        if (r) ev.push({ tipo: 'golpe', x: K.x, y: K.y - 40, r });
+      }
+    }
+    E.vx *= 0.8;
+    if (E.t >= A.activo) cambia(E, RECUPERA);
+  } else if (E.st === RECUPERA) {
+    E.vx *= 0.8;
+    if (E.t >= A.recupera) { cambia(E, ESPERA); E.recarga = entre(rnd, E.T.recarga); }
   }
 }
 
@@ -513,7 +615,7 @@ function kitsune(E, K, rnd, dist, hacia, ev, fuegos) {
     if (E.st === AVISO && E.t >= A.aviso) {
       // La llama sale de sus pies y va por el suelo; se apaga al salir de su
       // tramo (no cruza fosos: va pegada al camino).
-      fuegos.push({ id: E.id * 100 + ((E.t * 1000) | 0) + 50, x: E.x + E.dir * 40, y: E.y, vx: E.dir * RASTRERO_V,
+      fuegos.push({ id: nuevoId(), x: E.x + E.dir * 40, y: E.y, vx: E.dir * RASTRERO_V,
                     rastrero: true, tramo: E.tramo, x0: E.x, propio: false, t: 0, fin: 0 });
       ev.push({ tipo: 'fuego', x: E.x + E.dir * 40, y: E.y, rastrero: true });
       cambia(E, RECUPERA);
@@ -530,7 +632,7 @@ function kitsune(E, K, rnd, dist, hacia, ev, fuegos) {
       return;
     }
     if (E.st === AVISO && E.t >= A.aviso) {
-      fuegos.push({ id: E.id * 100 + ((E.t * 1000) | 0), x: E.x + E.dir * FUEGO_MANO, y: E.y - FUEGO_ALTO,
+      fuegos.push({ id: nuevoId(), x: E.x + E.dir * FUEGO_MANO, y: E.y - FUEGO_ALTO,
                     vx: E.dir * FUEGO_V, propio: false, t: 0, fin: 0 });
       ev.push({ tipo: 'fuego', x: E.x + E.dir * FUEGO_MANO, y: E.y - FUEGO_ALTO });
       cambia(E, RECUPERA);
@@ -692,15 +794,243 @@ function yamabushi(E, K, rnd, dist, hacia, ev) {
   }
 }
 
+// ---------- LA VAMPIRA ----------
+function vampira(E, K, rnd, dist, hacia, ev) {
+  const T = E.T;
+  if (E.st === ESPERA || E.st === ANDA) {
+    E.dir = hacia;
+    if (!K.vivo) { E.vx = 0; cambia(E, ESPERA); return; }
+    if (fuera(E, K)) { E.vx = 0; if (E.st !== ESPERA) cambia(E, ESPERA); return; }
+    const sabe = a => E.ataques.includes(a);
+    if (E.recarga <= 0 && dist <= 130 && (sabe('zarpa') || sabe('muerde'))) {
+      // de cerca, la zarpa o el mordisco (repitiendo poco)
+      const muerde = sabe('muerde') && (!sabe('zarpa') ||
+        (E.ultimo === 'zarpa' ? rnd() < 0.55 : E.ultimo === 'muerde' ? rnd() < 0.25 : rnd() < 0.4));
+      E.atk = muerde ? 'muerde' : 'zarpa'; E.ultimo = E.atk; cambia(E, AVISO); E.vx = 0;
+      ev.push({ tipo: 'aviso', x: E.x, y: E.y, atk: E.atk });
+    } else if (E.recarga <= 0 && dist > 130 && dist <= 210 && sabe('muerde')) {
+      // a un paso, el mordisco (se lanza hasta ella)
+      E.atk = 'muerde'; E.ultimo = 'muerde'; cambia(E, AVISO); E.vx = 0;
+      ev.push({ tipo: 'aviso', x: E.x, y: E.y, atk: 'muerde' });
+    } else if (dist > 330) {
+      E.vx = hacia * T.corre; if (E.st !== ANDA) cambia(E, ANDA);
+    } else if (E.recarga > 0) {
+      const quiere = dist < 170 ? -hacia : dist > 240 ? hacia : 0;
+      E.vx = quiere * T.anda;
+      if (quiere && E.st !== ANDA) cambia(E, ANDA);
+      if (!quiere && E.st !== ESPERA) cambia(E, ESPERA);
+    } else {
+      E.vx = hacia * T.anda; if (E.st !== ANDA) cambia(E, ANDA);
+    }
+    return;
+  }
+  if (E.atk === 'zarpa') return garra(E, K, T.zarpa, rnd, ev);
+  // EL MORDISCO: se lanza con la cabeza de monstruo; si le entra, se cura.
+  const A = T.muerde;
+  if (E.st === AVISO && E.t >= A.aviso) { cambia(E, ATACA); E.golpeo = false; E.vx = E.dir * A.avance / A.activo; }
+  else if (E.st === ATACA) {
+    if (!E.golpeo && K.vivo && Math.abs(K.y - E.y) < 150) {
+      const d = (K.x - E.x) * E.dir;
+      if (d > -10 && d < A.alcance + C.CUERPO_K) {
+        E.golpeo = true;
+        const r = C.herir(K, E.x, A.tipo, A.dano);
+        if (r) {
+          ev.push({ tipo: 'golpe', x: K.x, y: K.y - 90, r });
+          const antes = E.hp;
+          E.hp = Math.min(E.hpMax, E.hp + A.cura);
+          ev.push({ tipo: 'cura', x: E.x, y: E.y - T.alto - 10, n: E.hp - antes });
+        }
+      }
+    }
+    if (E.t >= A.activo) { cambia(E, RECUPERA); if (E.vx * E.dir > 0) E.vx *= 0.2; }
+  } else if (E.st === RECUPERA) {
+    // la cabeza vuelve a ser la suya: el momento de pegarle
+    E.vx *= 0.8;
+    if (E.t >= A.recupera) { cambia(E, ESPERA); E.recarga = entre(rnd, T.recarga); }
+  }
+}
+
+// ---------- EL VAMPIRO ----------
+function vampiro(E, K, rnd, dist, hacia, ev) {
+  const T = E.T;
+  if (E.st === ESPERA || E.st === ANDA) {
+    E.dir = hacia; E.alt = 0;
+    if (!K.vivo) { E.vx = 0; cambia(E, ESPERA); return; }
+    if (fuera(E, K)) { E.vx = 0; if (E.st !== ESPERA) cambia(E, ESPERA); return; }
+    const sabe = a => E.ataques.includes(a);
+    // donde caeria saltando por encima de ella: dentro de su sitio
+    const cae = K.x + hacia * T.salto.pasa, cabe = cae > E.x0 && cae < E.x1;
+    if (E.recarga <= 0 && dist <= 150 && (sabe('estocada') || sabe('bajo'))) {
+      const bajo = sabe('bajo') && (!sabe('estocada') ||
+        (E.ultimo === 'estocada' ? rnd() < 0.55 : E.ultimo === 'bajo' ? rnd() < 0.25 : rnd() < 0.4));
+      E.atk = bajo ? 'bajo' : 'estocada'; E.ultimo = E.atk; cambia(E, AVISO); E.vx = 0;
+      ev.push({ tipo: 'aviso', x: E.x, y: E.y, atk: E.atk });
+    } else if (E.recarga <= 0 && dist > 150 && dist <= 320 && sabe('salto') && cabe && E.ultimo !== 'salto') {
+      // de media distancia, el salto por encima (nunca dos seguidos)
+      E.atk = 'salto'; E.ultimo = 'salto'; E.saltoX0 = E.x; E.saltoX1 = cae; cambia(E, AVISO); E.vx = 0;
+      ev.push({ tipo: 'aviso', x: E.x, y: E.y, atk: 'salto' });
+    } else if (dist > 330) {
+      E.vx = hacia * T.corre; if (E.st !== ANDA) cambia(E, ANDA);
+    } else if (E.recarga > 0) {
+      const quiere = dist < 170 ? -hacia : dist > 250 ? hacia : 0;
+      E.vx = quiere * T.anda;
+      if (quiere && E.st !== ANDA) cambia(E, ANDA);
+      if (!quiere && E.st !== ESPERA) cambia(E, ESPERA);
+    } else {
+      E.vx = hacia * T.anda; if (E.st !== ANDA) cambia(E, ANDA);
+    }
+    return;
+  }
+  if (E.atk === 'estocada') return garra(E, K, T.estocada, rnd, ev, 150, 240);
+  if (E.atk === 'bajo') return barrido(E, K, T.bajo, rnd, ev);
+  // EL SALTO: por encima de ella, a su espalda; al caer, la estocada por
+  // detras con su aviso (el que hay que ver para girarse).
+  const A = T.salto;
+  if (E.st === AVISO) { if (E.t >= A.aviso) { cambia(E, ATACA); E.golpeo = false; } return; }
+  if (E.st === ATACA) {
+    const u = Math.min(1, E.t / A.vuelo);
+    E.vx = 0;
+    E.x = E.saltoX0 + (E.saltoX1 - E.saltoX0) * u;
+    E.alt = 4 * A.alto * u * (1 - u);
+    if (E.t >= A.vuelo) {
+      E.alt = 0; E.x = E.saltoX1;
+      E.dir = K.x < E.x ? -1 : 1;
+      E.atk = 'estocada'; cambia(E, AVISO); E.t = -A.giro;
+      ev.push({ tipo: 'aterriza', x: E.x, y: E.y, suave: true });
+      ev.push({ tipo: 'aviso', x: E.x, y: E.y, atk: 'estocada', espalda: true, extra: A.giro });
+    }
+  }
+}
+
+// ---------- LA CONDESA ----------
+// De lejos lanza sangre (el dardo, la lluvia); si ella se le acerca, o le
+// pegan, se aparta de un brinco (no mas a menudo que T.brinco); si no puede,
+// la zarpa. No se aparta andando: de espaldas y a 90 px/s, ella la alcanzaba
+// y le pegaba por detras (la jefa moria en 13 s sin lanzar nada). Es jefa: no se encoge (hiere()), y la sangre que le entra a ella
+// la cura (stepFuegos).
+export const GOTA_Y0 = 70, GOTA_BAJA = 0.22, GOTA_R = 26;
+function condesa(E, K, rnd, dist, hacia, ev, fuegos) {
+  const T = E.T;
+  if (E.st === ESPERA || E.st === ANDA) {
+    E.dir = hacia;
+    if (!K.vivo) { E.vx = 0; cambia(E, ESPERA); return; }
+    if (fuera(E, K)) { E.vx = 0; if (E.st !== ESPERA) cambia(E, ESPERA); return; }
+    const sabe = a => E.ataques.includes(a);
+    const acorralada = hacia > 0 ? E.x - E.x0 < 40 : E.x1 - E.x < 40;
+    // ACORRALADA, SALTA POR ENCIMA de ella al otro lado (en cuatro brincos
+    // llegaba al final de su sitio y alli moria peleando de cerca).
+    if ((dist < 170 || E.provocado) && acorralada && E.brincoT <= 0) {
+      const x1 = Math.max(E.x0, Math.min(E.x1, K.x + hacia * 260));
+      if (Math.abs(x1 - E.x) > 200) {
+        E.provocado = false; E.brincoT = T.brinco;
+        E.atk = 'cruza'; E.saltoX0 = E.x; E.saltoX1 = x1; cambia(E, ATACA); E.vx = 0;
+        ev.push({ tipo: 'brinco', x: E.x, y: E.y });
+        return;
+      }
+    }
+    if ((dist < 170 || E.provocado) && !acorralada && E.brincoT <= 0) {
+      E.provocado = false; E.brincoT = T.brinco;
+      // (a 560 el brinco la apartaba 180 px y ella la alcanzaba en un paso)
+      cambia(E, HUYE); E.vx = -hacia * 900; E.dir = hacia;
+      ev.push({ tipo: 'brinco', x: E.x, y: E.y });
+      return;
+    }
+    E.provocado = false;
+    if (E.recarga <= 0 && dist <= 140 && sabe('zarpa')) {
+      E.atk = 'zarpa'; E.ultimo = 'zarpa'; cambia(E, AVISO); E.vx = 0;
+      ev.push({ tipo: 'aviso', x: E.x, y: E.y, atk: 'zarpa' });
+    } else if (E.recarga <= 0 && dist >= 220 && dist <= 760 && (sabe('dardo') || sabe('lluvia'))) {
+      // Con ella cerca, la lluvia: corriendo hacia ella se come 150 px durante
+      // el aviso del dardo, que acababa a bocajarro (y en zarpa).
+      const lluvia = sabe('lluvia') && (!sabe('dardo') || dist < 350 ||
+        (E.ultimo === 'dardo' ? rnd() < 0.55 : E.ultimo === 'lluvia' ? rnd() < 0.25 : rnd() < 0.4));
+      E.atk = lluvia ? 'lluvia' : 'dardo'; E.ultimo = E.atk; cambia(E, AVISO); E.vx = 0;
+      ev.push({ tipo: 'aviso', x: E.x, y: E.y, atk: E.atk });
+    } else if (dist > 760) {
+      E.vx = hacia * T.anda; if (E.st !== ANDA) cambia(E, ANDA);
+    } else {
+      E.vx = 0; if (E.st !== ESPERA) cambia(E, ESPERA);
+    }
+    return;
+  }
+  if (E.atk === 'zarpa') return garra(E, K, T.zarpa, rnd, ev);
+  if (E.atk === 'cruza') {
+    // por el aire, por encima de ella; al caer, de cara a ella
+    const u = Math.min(1, E.t / 0.62);
+    E.x = E.saltoX0 + (E.saltoX1 - E.saltoX0) * u;
+    E.alt = 4 * 210 * u * (1 - u);
+    if (u >= 1) {
+      E.alt = 0; E.dir = K.x < E.x ? -1 : 1; cambia(E, ESPERA); E.recarga = Math.min(E.recarga, 0.4);
+      ev.push({ tipo: 'aterriza', x: E.x, y: E.y, suave: true });
+    }
+    return;
+  }
+  if (E.atk === 'dardo') {
+    const A = T.dardo;
+    // Como la kitsune: a bocajarro no lo suelta (nacia encima de ella y no se
+    // podia parar); saca la zarpa, que avisa.
+    if (E.st === AVISO && E.t >= A.aviso && dist < 200) {
+      E.atk = 'zarpa'; cambia(E, AVISO); ev.push({ tipo: 'aviso', x: E.x, y: E.y, atk: 'zarpa' });
+      return;
+    }
+    if (E.st === AVISO && E.t >= A.aviso) {
+      // (sale de su mano: a x3, a 118 px del suelo; a la altura del pecho de ella)
+      fuegos.push({ id: nuevoId(), x: E.x + E.dir * 70, y: E.y - 118, vx: E.dir * FUEGO_V * 1.05,
+                    propio: false, t: 0, fin: 0, sangre: true, dueno: E.id });
+      ev.push({ tipo: 'fuego', x: E.x + E.dir * 70, y: E.y - 118, sangre: true });
+      cambia(E, RECUPERA);
+    } else if (E.st === RECUPERA && E.t >= A.recupera) { cambia(E, ESPERA); E.recarga = entre(rnd, T.recarga); }
+    return;
+  }
+  // LA LLUVIA: tres gotas, una encima de ella y dos a los lados (andando un
+  // paso, o esquivando a cualquier lado, se sale de las tres).
+  const A = T.lluvia;
+  if (E.st === AVISO && E.t >= A.aviso) {
+    // APUNTA ADONDE VA: si ella corre, la gota del medio cae donde estara al
+    // caer (hasta 300 px). Sobre donde estaba, quien la perseguia corriendo
+    // ya habia pasado, y mientras la condesa lanzaba, quieta, le pegaba: sin
+    // defenderse llegaba al final 7 de cada 12 veces (25-09-2026).
+    const x = K.x + Math.max(-300, Math.min(300, K.vx * A.cae));
+    const xs = [x, x - A.separa, x + A.separa].slice(0, A.gotas);
+    xs.forEach(x => fuegos.push({ id: nuevoId(), x, y: GOTA_Y0, vx: 0, gota: true,
+                                       suelo: E.y, cae: A.cae, propio: false, t: 0, fin: 0, dueno: E.id }));
+    ev.push({ tipo: 'lluvia', x: E.x, y: E.y });
+    cambia(E, RECUPERA);
+  } else if (E.st === RECUPERA && E.t >= A.recupera) { cambia(E, ESPERA); E.recarga = entre(rnd, T.recarga); }
+}
+
 // ---------- Las bolas de fuego ----------
 // Vuelan en linea recta. Contra ella: C.herir con 'fuego' (la guardia la
 // apaga; la PARADA la devuelve). Devuelta, quema a los enemigos.
+// LA SANGRE DE LA CONDESA va por aqui tambien: el DARDO (`sangre`) es una
+// bola que se para y se devuelve (devuelto le quita T.devuelto a ella), y la
+// GOTA (`gota`) cae del cielo tras `cae` s de sombra y le da si esta debajo
+// (de arriba: la guardia ni se entera). La sangre que le entra a ella cura a
+// la condesa (`cura`, con el `dueno`).
 export function stepFuegos(fuegos, K, enemigos, dt) {
   const ev = [];
+  const bebe = F => {
+    const D = enemigos.find(E => E.id === F.dueno);
+    if (!D || !D.vivo || !D.T.bebe) return;
+    const antes = D.hp;
+    D.hp = Math.min(D.hpMax, D.hp + D.T.bebe);
+    ev.push({ tipo: 'cura', x: D.x, y: D.y - D.T.alto - 10, n: D.hp - antes, enemigo: D });
+  };
   for (const F of fuegos) {
     F.t += dt;
     if (F.fin > 0) { F.fin += dt; if (F.fin > 0.36) F.fuera = true; continue; }
     F.x += F.vx * dt;
+    if (F.gota) {
+      if (F.t < F.cae) continue;                  // su sombra, en el suelo: el aviso
+      const u = (F.t - F.cae) / GOTA_BAJA;
+      F.y = GOTA_Y0 + (F.suelo - GOTA_Y0) * Math.min(1, u);
+      if (K.vivo && Math.abs(F.x - K.x) < GOTA_R + C.CUERPO_K - 6 && F.y > K.y - 160 && F.y - GOTA_R < K.y) {
+        const r = C.herir(K, F.x, 'piedra', 1);
+        if (r) { F.fin = 0.001; ev.push({ tipo: 'quema', x: F.x, y: F.y, r, gota: true }); bebe(F); continue; }
+      }
+      if (u >= 1) { F.fin = 0.001; F.y = F.suelo; ev.push({ tipo: 'salpica', x: F.x, y: F.suelo }); }
+      continue;
+    }
     if (F.rastrero) {
       // Por el suelo: le da si tiene los pies bajos; la guardia no la apaga.
       if (K.vivo && Math.abs(F.x - K.x) < RASTRERO_R + C.CUERPO_K - 6 && F.y - K.y < RASTRERO_ALTO) {
@@ -715,7 +1045,8 @@ export function stepFuegos(fuegos, K, enemigos, dt) {
           F.vx = -F.vx * FUEGO_DEVUELTO; F.propio = true;
           ev.push({ tipo: 'devuelto', x: F.x, y: F.y });
         } else if (r) {
-          F.fin = 0.001; ev.push({ tipo: r === 'bloqueado' ? 'apagado' : 'quema', x: F.x, y: F.y, r });
+          F.fin = 0.001; ev.push({ tipo: r === 'bloqueado' ? 'apagado' : 'quema', x: F.x, y: F.y, r, sangre: !!F.sangre });
+          if (F.sangre && r !== 'bloqueado') bebe(F);
         }
         // (invulnerable: la atraviesa)
       }
@@ -724,7 +1055,7 @@ export function stepFuegos(fuegos, K, enemigos, dt) {
         if (!E.vivo || E.st === MUERTO) continue;
         if (Math.abs(F.x - E.x) < FUEGO_R + E.T.ancho && F.y > E.y - E.T.alto && F.y < E.y) {
           F.fin = 0.001;
-          if (hiere(E, 1, F.vx > 0 ? 1 : -1)) ev.push({ tipo: 'quemado', x: F.x, y: F.y, id: E.id });
+          if (hiere(E, F.sangre && E.T.devuelto ? E.T.devuelto : 1, F.vx > 0 ? 1 : -1)) ev.push({ tipo: 'quemado', x: F.x, y: F.y, id: E.id, sangre: !!F.sangre });
           break;
         }
       }
@@ -814,6 +1145,10 @@ export function empuja(E, K) {
 // Que pose y fotograma toca. Devuelve [animacion, fotograma]; los
 // fotogramas de cada animacion salen del dibujo (enemigos-atlas.js).
 export function pose(E, n) {
+  // Topando con el borde de su sitio (mueve() le quita la velocidad) no anda
+  // sin moverse: espera. (Con ella junto al foso, fuera de su alcance pero en
+  // su tramo, el vampiro andaba contra el borde como en una cinta.)
+  if (E.st === ANDA && E.vx === 0) E = { ...E, st: ESPERA };
   const T = E.T;
   if (E.st === MUERTO) {
     const k = E.tipo === 'lobo' || E.tipo === 'alfa' ? Math.min(1, Math.floor(E.muertoT / 0.18)) : Math.min(n.muere - 1, Math.floor(E.muertoT / 0.1));
@@ -821,6 +1156,9 @@ export function pose(E, n) {
   }
   if (E.tipo === 'karasu') return poseKarasu(E, n);
   if (E.tipo === 'yamabushi') return poseYamabushi(E, n);
+  if (E.tipo === 'vampira') return poseVampira(E, n);
+  if (E.tipo === 'vampiro') return poseVampiro(E, n);
+  if (E.tipo === 'condesa') return poseCondesa(E, n);
   if (E.st === DOLOR) return ['dolor', E.t < T.dolor / 2 ? 0 : 1];
   if (E.st === HUYE) return ['salta', Math.min(n.salta - 1, Math.floor(E.t / 0.5 * n.salta))];
   if (E.tipo === 'alfa') {
@@ -883,6 +1221,73 @@ function poseKarasu(E, n) {
   }
   if (E.st === ANDA) return Math.abs(E.vx) > 200 ? ['corre', Math.floor(E.animT / 0.08) % n.corre] : ['anda', Math.floor(E.animT / 0.1) % n.anda];
   return ['idle', Math.floor(E.animT / 0.13) % n.idle];
+}
+
+// LA VAMPIRA. La zarpa: 0-2 echandose atras, 3 el zarpazo, 4 despues. El
+// mordisco: 0-3 le crece la cabeza de monstruo (el aviso), 4 la dentellada, y
+// al recuperarse la cabeza se le encoge (3, 2, 1).
+function poseVampira(E, n) {
+  const T = E.T;
+  if (E.st === DOLOR) return ['dolor', E.t < T.dolor / 2 ? 0 : 1];
+  if (E.st === HUYE) return ['salta', Math.min(n.salta - 1, Math.floor(E.t / 0.5 * n.salta))];
+  if (E.atk === 'zarpa') {
+    if (E.st === AVISO) return ['zarpa', Math.min(2, Math.floor(E.t / T.zarpa.aviso * 3))];
+    if (E.st === ATACA) return ['zarpa', 3];
+    if (E.st === RECUPERA) return ['zarpa', 4];
+  }
+  if (E.atk === 'muerde') {
+    if (E.st === AVISO) return ['muerde', Math.min(3, Math.floor(E.t / T.muerde.aviso * 4))];
+    if (E.st === ATACA) return ['muerde', 4];
+    if (E.st === RECUPERA) return ['muerde', Math.max(1, 3 - Math.floor(E.t / T.muerde.recupera * 3))];
+  }
+  if (E.st === ANDA) return Math.abs(E.vx) > 200 ? ['corre', Math.floor(E.animT / 0.08) % n.corre] : ['anda', Math.floor(E.animT / 0.1) % n.anda];
+  return ['idle', Math.floor(E.animT / 0.13) % n.idle];
+}
+
+// EL VAMPIRO. La estocada: 0 en guardia de esgrima (el aviso), 1 a fondo, 2
+// estirado. El tajo bajo: 0-1 la espada abajo (el aviso), 2 el barrido. El
+// salto: 0-1 agachado, 2-5 por el aire, 6 cayendo.
+function poseVampiro(E, n) {
+  const T = E.T;
+  if (E.st === DOLOR || E.st === HUYE) return E.st === DOLOR ? ['dolor', 0] : ['salta', Math.min(n.salta - 1, 2 + Math.floor(E.t / 0.5 * 4))];
+  if (E.atk === 'estocada') {
+    if (E.st === AVISO) return ['estocada', 0];
+    if (E.st === ATACA) return ['estocada', E.t < T.estocada.activo / 2 ? 1 : 2];
+    if (E.st === RECUPERA) return ['estocada', E.t < T.estocada.recupera / 2 ? 2 : 0];
+  }
+  if (E.atk === 'bajo') {
+    if (E.st === AVISO) return ['bajo', Math.min(1, Math.floor(E.t / T.bajo.aviso * 2))];
+    return ['bajo', 2];
+  }
+  if (E.atk === 'salto') {
+    if (E.st === AVISO) return ['salta', Math.min(1, Math.floor(E.t / T.salto.aviso * 2))];
+    if (E.st === ATACA) return ['salta', E.t >= T.salto.vuelo * 0.85 ? 6 : 2 + Math.min(3, Math.floor(E.t / T.salto.vuelo * 4))];
+  }
+  if (E.st === ANDA) return Math.abs(E.vx) > 200 ? ['corre', Math.floor(E.animT / 0.08) % n.corre] : ['anda', Math.floor(E.animT / 0.1) % n.anda];
+  return ['idle', Math.floor(E.animT / 0.13) % n.idle];
+}
+
+// LA CONDESA. El dardo: 0-3 la sangre girandole en la mano (el aviso), 4-5
+// lanzandolo. La lluvia: 0-2 alzando el brazo. La zarpa: un solo fotograma
+// (el aviso es su reposo temblando, que pinta el dibujo). Su brinco, el salto.
+function poseCondesa(E, n) {
+  const T = E.T;
+  if (E.st === HUYE) return ['salta', Math.min(n.salta - 1, Math.floor(E.t / 0.5 * n.salta))];
+  if (E.atk === 'cruza' && E.st === ATACA) return ['salta', Math.min(n.salta - 1, Math.floor(E.t / 0.62 * n.salta))];
+  if (E.atk === 'dardo') {
+    if (E.st === AVISO) return ['dardo', Math.min(3, Math.floor(E.t / T.dardo.aviso * 4))];
+    if (E.st === RECUPERA) return ['dardo', E.t < T.dardo.recupera / 2 ? 4 : 5];
+  }
+  if (E.atk === 'lluvia') {
+    if (E.st === AVISO) return ['lluvia', Math.min(2, Math.floor(E.t / T.lluvia.aviso * 3))];
+    if (E.st === RECUPERA) return ['lluvia', 2];
+  }
+  if (E.atk === 'zarpa') {
+    if (E.st === AVISO) return ['idle', 0];
+    return ['zarpa', 0];
+  }
+  if (E.st === ANDA) return Math.abs(E.vx) > 160 ? ['corre', Math.floor(E.animT / 0.08) % n.corre] : ['anda', Math.floor(E.animT / 0.11) % n.anda];
+  return ['idle', Math.floor(E.animT / 0.14) % n.idle];
 }
 
 // EL YAMABUSHI. El desenvaine (iai): 0-3 la mano en la empuñadura, 4 el tajo
