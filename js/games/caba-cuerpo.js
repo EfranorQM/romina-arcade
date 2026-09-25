@@ -26,11 +26,18 @@ const AIRE_CTRL = 0.55;                // cuanto manda el pulgar en el aire
 // salto se sienta con peso en vez de flotante, y es gratis.
 export const JUMP_V = 860;
 export const GRAV_UP = 3000, GRAV_DN = 4200;
-// Soltar pronto recorta el salto. Con 0.35 el salto corto se quedaba en 12 px
-// (medido): inutil, no servia ni para esquivar un barrido. Con 0.55 son 27 px,
-// la mitad del completo, que es una decision de verdad.
-const CORTE_T = 0.09, CORTE_F = 0.55;
-const COYOTE = 0.08, BUFFER = 0.10;    // margenes invisibles que salvan el salto
+// UN TOQUE ES EL SALTO ENTERO. Antes, soltar el boton en los primeros 90 ms
+// lo recortaba (a lo Mario), y en un movil eso es casi siempre: un toque de
+// pulgar dura 50-100 ms. Medido el 24-09-2026: un toque de 67 ms subia 68 px
+// en vez de 116, y el foso de 120 se cruzaba 1 vez de cada 9 con el stick a
+// tope ("al oprimir saltar no es suficiente para pasar el hueco"). Los
+// arneses no lo veian porque sus pilotos MANTENIAN el boton. El salto ya no
+// depende de cuanto se aprieta: su precio es el MOMENTO (contra la onda,
+// saltar pronto aterriza antes de que llegue).
+// Margenes invisibles que salvan el salto: el coyote deja saltar un instante
+// despues de salir del borde (con 0.08 el pulgar que llega tarde al borde se
+// caia) y el buffer guarda el que se pulsa justo antes de tocar suelo.
+const COYOTE = 0.12, BUFFER = 0.10;
 
 // --- Esquivar: un SALTO EVASIVO ---
 // Antes era una rodada, pero el pack de ella no trae voltereta y la montada
@@ -138,7 +145,7 @@ export function makeCaballero(x, o = {}) {
     hpMax, paradaVent: o.paradaVent || PARADA_VENT,
     x, y: o.y !== undefined ? o.y : SUELO, vx: 0, vy: 0, dir: 1,
     st: QUIETO, t: 0,
-    enSuelo: true, coyote: 0, buffer: 0, cortable: 0, aterriza: 0,
+    enSuelo: true, coyote: 0, buffer: 0, aterriza: 0,
     esqT: 0, esqCd: 0, esqDir: 1,
     bloqT: 0, bloqHit: 0, parada: 0,
     tajoT: 0, tajoId: 0, golpeo: 0, combo: 0, comboOlvido: 0, contra: 0,
@@ -162,21 +169,39 @@ export function makeCaballero(x, o = {}) {
 //             trozo de camino, y entre dos tramos hay un FOSO. Como son
 //             bloques, dentro del foso sus paredes cortan el paso: no se sale
 //             andando.
+//   agarra    EL BORDE PERDONA: si cae hasta tantos px antes del borde de un
+//             bloque, aterriza igual y se sube a el (ver subeAlBorde).
 export const PIES_R = 16;     // se sigue de pie con el centro hasta 16 px fuera del borde
 export const CUERPO_K = 22;   // medio ancho del cuerpo, para chocar de lado con un bloque
 
-// La superficie en la que aterriza al bajar de yAntes a y en x, o null.
-function aterrizaEn(x, yAntes, y, mundo) {
+// La superficie en la que aterriza al bajar de yAntes a y en x, o null. El
+// agarre solo vale por el lado del bloque HACIA el que va (vx): por el lado
+// del que se aleja haria de pared invisible, y al salir andando de un borde
+// volveria a aterrizar en el una y otra vez sin caerse nunca (medido: se
+// quedaba clavada a 24 px del borde).
+function aterrizaEn(x, yAntes, y, mundo, vx) {
   let mejor = y >= SUELO && !(mundo && mundo.sinSuelo) ? SUELO : null;
-  const cruza = (top, x0, x1) => {
-    if (x >= x0 - PIES_R && x <= x1 + PIES_R && yAntes <= top + 0.01 && y >= top &&
+  const cruza = (top, x0, x1, mI, mD) => {
+    if (x >= x0 - mI && x <= x1 + mD && yAntes <= top + 0.01 && y >= top &&
         (mejor === null || top < mejor)) mejor = top;
   };
   if (mundo) {
-    for (const p of mundo.repisas || []) cruza(p.y, p.x0, p.x1);
-    for (const b of mundo.bloques || []) cruza(b.top, b.x0, b.x1);
+    const ag = mundo.agarra || 0;
+    for (const p of mundo.repisas || []) cruza(p.y, p.x0, p.x1, PIES_R, PIES_R);
+    for (const b of mundo.bloques || []) cruza(b.top, b.x0, b.x1, PIES_R + (vx > 0 ? ag : 0), PIES_R + (vx < 0 ? ag : 0));
   }
   return mejor;
+}
+
+// Ha aterrizado con el agarre, con el centro fuera del borde: se sube a el.
+// Sin esto se caeria en el frame siguiente (apoyada() solo perdona PIES_R).
+function subeAlBorde(K, mundo) {
+  if (!mundo || !mundo.agarra || apoyada(K.x, K.y, mundo)) return;
+  for (const b of mundo.bloques || []) {
+    if (Math.abs(K.y - b.top) >= 0.5) continue;
+    if (K.x < b.x0 - PIES_R && K.x >= b.x0 - PIES_R - mundo.agarra) { K.x = b.x0 - PIES_R + 0.5; return; }
+    if (K.x > b.x1 + PIES_R && K.x <= b.x1 + PIES_R + mundo.agarra) { K.x = b.x1 + PIES_R - 0.5; return; }
+  }
 }
 
 // ¿Tiene algo bajo los pies a esta altura?
@@ -218,9 +243,9 @@ function chocaBloques(K, xAntes, mundo) {
   }
 }
 
-// Un paso. `inp` = { dx, salta, golpea, esquiva, saltaAbajo, bloquea }: dx es
-// el stick (-1..1), saltaAbajo y bloquea son botones MANTENIDOS y los otros
-// tres son FLANCOS (true solo en el frame en que se pulsan).
+// Un paso. `inp` = { dx, salta, golpea, esquiva, bloquea }: dx es el stick
+// (-1..1), bloquea es un boton MANTENIDO y los otros tres son FLANCOS (true
+// solo en el frame en que se pulsan).
 export function stepCaballero(K, inp, dt, mundo) {
   if (!K.vivo) { caeDerrotada(K, dt, mundo); return; }
   K.t += dt; K.animT += dt;
@@ -248,26 +273,24 @@ export function stepCaballero(K, inp, dt, mundo) {
 
   // --- ESQUIVAR: manda sobre todo lo demas, y cancela el tajo ---
   if (inp.esquiva && K.esqCd <= 0 && puedeActuar && K.enSuelo) {
-    const conStick = Math.abs(inp.dx) > 0.3;
+    // Con el stick de ahora (caba-mandos.js: a tope con el 60 % del radio),
+    // 0.6 pide casi el mismo pulgar que el 0.3 de antes (2.6 mm; antes 2.9):
+    // un pulgar que apenas se mueve no convierte la esquiva hacia atras en una
+    // hacia delante (que cruza fosos).
+    const conStick = Math.abs(inp.dx) > 0.6;
     // Sin stick, hacia atras y mirando al frente; con stick, hacia alli.
     const sentido = conStick ? Math.sign(inp.dx) : -K.dir;
     if (conStick) K.dir = sentido;
     K.st = ESQUIVA; K.esqT = 0; K.esqCd = ESQ_CD; K.esqDir = sentido; K.esqAtras = !conStick;
     K.vx = sentido * ESQ_VX; K.vy = -ESQ_VY;
-    K.enSuelo = false; K.coyote = 0; K.buffer = 0; K.cortable = 0;
+    K.enSuelo = false; K.coyote = 0; K.buffer = 0;
     K.animT = 0;
   }
 
-  // --- Saltar ---
+  // --- Saltar (siempre el salto entero: ver JUMP_V) ---
   if (K.buffer > 0 && (K.enSuelo || K.coyote > 0) && K.st !== ESQUIVA && K.st !== DOLOR) {
     K.vy = -JUMP_V; K.enSuelo = false; K.coyote = 0; K.buffer = 0;
-    K.cortable = CORTE_T;
     K.st = SALTA; K.animT = 0;
-  }
-  // Salto cortable: soltar pronto lo deja a la mitad de alto.
-  if (K.cortable > 0) {
-    K.cortable -= dt;
-    if (!inp.saltaAbajo && K.vy < 0) { K.vy *= CORTE_F; K.cortable = 0; }
   }
 
   // --- Tajo: arrancar, ENCADENAR o CONTRAATACAR ---
@@ -369,13 +392,14 @@ function gravedad(K, dt, mundo) {
     const yAntes = K.y;
     K.vy += (K.vy < 0 ? GRAV_UP : GRAV_DN) * dt;
     K.y += K.vy * dt;
-    const s = K.vy >= 0 ? aterrizaEn(K.x, yAntes, K.y, mundo) : null;
+    const s = K.vy >= 0 ? aterrizaEn(K.x, yAntes, K.y, mundo, K.vx) : null;
     if (s !== null) {
       // ATERRIZAJE. Se guarda cuanto venia cayendo para que el dibujo pueda
       // amortiguar: caer de un salto entero y bajar un escalon no se ven
       // igual. Dura poco (0.12 s) y NO quita el control -- solo se dibuja.
       if (K.vy > 300) K.aterriza = 0.12;
       K.y = s; K.vy = 0; K.enSuelo = true;
+      subeAlBorde(K, mundo);
       if (K.st === SALTA) { K.st = QUIETO; K.animT = 0; }
       // La esquiva acaba al tocar suelo, con su agachada de aterrizaje.
       if (K.st === ESQUIVA) { K.st = QUIETO; K.vx = 0; K.aterriza = 0.12; K.animT = 0; }

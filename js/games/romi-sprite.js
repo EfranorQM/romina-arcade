@@ -109,14 +109,44 @@ function blanca() {
   return cv;
 }
 
+// LAS SILUETAS de un color: las copias que deja la esquiva (caba-efectos.js).
+// Una hoja entera teñida por color, hecha una vez, como la blanca.
+const SILUETAS = new Map();
+function silueta(color) {
+  if (!lista()) return null;
+  let cv = SILUETAS.get(color);
+  if (!cv) {
+    cv = document.createElement('canvas');
+    cv.width = HOJA.naturalWidth; cv.height = HOJA.naturalHeight;
+    const c = cv.getContext('2d');
+    c.drawImage(HOJA, 0, 0);
+    c.globalCompositeOperation = 'source-in';
+    c.fillStyle = color;
+    c.fillRect(0, 0, cv.width, cv.height);
+    SILUETAS.set(color, cv);
+  }
+  return cv;
+}
+export function drawSilueta(g, x, y, dir, pose, frame, color, alfa) {
+  const S = silueta(color);
+  if (!S || alfa <= 0) return;
+  const arr = FRAMES[pose] || FRAMES.idle;
+  const [sx, sy, w, h, ox, oy] = arr[Math.min(frame, arr.length - 1)];
+  g.globalAlpha = alfa;
+  pinta(g, S, Math.round(x), Math.round(y), dir, sx, sy, w, h, ox, oy);
+  g.globalAlpha = 1;
+}
+
 // Dibuja a Romina con los PIES en (x, y). No hay nada que hornear: la hoja ya
 // viene hecha.
-//   rastro (0..1): la estela de sombras de la ESQUIVA. Se pasa mientras es
-//     invulnerable, que es justo lo que tiene que leerse ("ahora no le entra").
+//   rastro (0..1): dos sombras fijas detras de ella (la esquiva de antes; la
+//     de ahora deja copias de verdad, ver caba-efectos.js).
 //   blanco (0..1): el destello del golpe recibido, encima del dibujo.
 //   haciaX: hacia donde se MUEVE (la estela queda detras de eso, no de hacia
 //     donde mira: esquivando hacia atras mira al ogro y se va de espaldas).
-export function drawRomina(g, x, y, dir, pose, frame, rastro = 0, blanco = 0, haciaX = dir) {
+//   ex, ey: estirarla o aplastarla alrededor de los PIES (el despegue y la
+//     caida, caba-efectos.js escala()). 1 = tal cual.
+export function drawRomina(g, x, y, dir, pose, frame, rastro = 0, blanco = 0, haciaX = dir, ex = 1, ey = 1) {
   if (!lista()) return;
   if (pendiente) vestir(pendiente);
   const hoja = vestida || HOJA;
@@ -132,19 +162,20 @@ export function drawRomina(g, x, y, dir, pose, frame, rastro = 0, blanco = 0, ha
     }
     g.globalAlpha = 1;
   }
-  pinta(g, hoja, px, py, dir, sx, sy, w, h, ox, oy);
+  pinta(g, hoja, px, py, dir, sx, sy, w, h, ox, oy, ex, ey);
   const B = blanco > 0 ? blanca() : null;
   if (B) {
     g.globalAlpha = Math.min(1, blanco);
-    pinta(g, B, px, py, dir, sx, sy, w, h, ox, oy);
+    pinta(g, B, px, py, dir, sx, sy, w, h, ox, oy, ex, ey);
     g.globalAlpha = 1;
   }
 }
 
-function pinta(g, img, px, py, dir, sx, sy, w, h, ox, oy) {
+function pinta(g, img, px, py, dir, sx, sy, w, h, ox, oy, ex = 1, ey = 1) {
   g.save();
   g.translate(px, py);
   if (dir < 0) g.scale(-1, 1);
+  if (ex !== 1 || ey !== 1) g.scale(ex, ey);
   g.drawImage(img, sx, sy, w, h, ox, oy, w, h);
   g.restore();
 }
