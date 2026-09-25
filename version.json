@@ -1,5 +1,5 @@
 {
-  "version": "1.0.24",
+  "version": "1.0.25",
   "fecha": "2026-09-25",
   "archivos": [
     "img/arena.png",
@@ -79,8 +79,8 @@
     "js/update.js"
   ],
   "notas": [
-    "ROMINA: SALTO ENTERO CON UN TOQUE",
-    "BOTONES MAS GRANDES Y SIN HUECOS",
-    "EFECTOS NUEVOS AL SALTAR Y PELEAR"
+    "PELEAS MAS JUSTAS EN ROMINA",
+    "EL OGRO AVISA ANTES DE PEGAR",
+    "EL PISOTON YA SE PUEDE SALTAR"
   ]
 }

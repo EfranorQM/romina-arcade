@@ -54,8 +54,10 @@ export const ATAQUES = [
   // hay que ESQUIVARLA. Su parte activa (0.16) cabe en los 340 ms
   // invulnerables de la esquiva (ESQ_INV0 a ESQ_INV1); la ventana para
   // pulsar la mide la seccion 6 de tools/prueba-ogro.mjs. Sale en el mismo
-  // fotograma que el garrote, asi que llega igual de lejos.
-  [0.88, 0.40, 0.56, 34, 1, 240],
+  // fotograma que el garrote, asi que llega igual de lejos. Avanza 12 px, no
+  // 34: con 34 la estocada alcanzaba por 3 px, en su ultimo frame, a una
+  // Romina que ya lo habia esquivado hacia atras desde 100 px (24-09-2026).
+  [0.88, 0.40, 0.56, 12, 1, 240],
   // EMBESTIDA: cruza la arena. Se esquiva ATRAVESANDOLO (ver empujaCuerpo),
   // y si la pared esta cerca el ogro choca con ella y queda abierto 1.25 s:
   // el hueco mas grande del jefe.
@@ -88,6 +90,9 @@ export const RUGE_T = 1.20;
 //   ritmoCarga  lo rapido que corre el reloj del AVISO (>1 avisa menos). Solo
 //               la carga: estirar tambien la parte activa haria MAS dificil
 //               esquivar en la dificultad facil, al reves de lo que se busca.
+//   ritmoCarrera el de la EMBESTIDA, aparte: se contesta atravesandolo cuando
+//               viene, y con un aviso mas largo quien reacciona rapido salta
+//               antes de que arranque y cae delante de el (ver caba-partida.js).
 //   pausa       cuanto descansa entre ataques (>1 descansa mas)
 //   permitidos  que ataques puede elegir (null = todos): la primera pelea los
 //               va soltando de uno en uno, segun ella aprende a contestarlos.
@@ -97,7 +102,8 @@ export function makeOgro(x, o = {}) {
     x, y: SUELO, vx: 0, dir: -1,
     st: ESPERA, t: 0, animT: 0,
     hp: hpMax, hpMax, fase: 1, invul: 0,
-    ritmoCarga: o.ritmoCarga || 1, pausa: o.pausa || 1, permitidos: o.permitidos || null,
+    ritmoCarga: o.ritmoCarga || 1, ritmoCarrera: o.ritmoCarrera || o.ritmoCarga || 1,
+    pausa: o.pausa || 1, permitidos: o.permitidos || null,
     // EL OGRO QUE APRENDE (ver abajo): lo que ella suele hacer, la contramedida
     // que eligio y lo que la contramedida le hace a cada ataque. Solo aprende
     // cuando ya no hay nada que enseñarle a ella (la primera pelea, no).
@@ -110,6 +116,9 @@ export function makeOgro(x, o = {}) {
     vivo: true,
   };
 }
+
+// Lo rapido que corre el aviso de ESTE ataque (la embestida lleva el suyo).
+export function ritmoDe(O, atk) { return atk === EMBESTIDA ? O.ritmoCarrera : O.ritmoCarga; }
 
 // El garrote esta haciendo daño en este instante.
 export function garroteActivo(O) {
@@ -288,7 +297,7 @@ function pasoAtaque(O, K, dt) {
   O.reteniendo = false;
   // El aviso corre al ritmo de la dificultad (y de la prisa); el golpe,
   // siempre igual.
-  O.atkT += dt * (O.atkT < a0 ? O.ritmoCarga * O.prisa : 1);
+  O.atkT += dt * (O.atkT < a0 ? ritmoDe(O, O.atk) * O.prisa : 1);
 
   // El avance del cuerpo durante la parte activa: es lo que hace que un
   // garrotazo se sienta lanzado y no plantado.
@@ -391,7 +400,7 @@ export function eligeContra(O) {
 // Cuanto hay que acelerar el aviso de un ataque para que dure `objetivo` s
 // (nunca menos de AVISO_MIN, ni mas lento que el suyo).
 function prisaPara(O, atk, objetivo) {
-  const aviso = ATAQUES[atk][1] / O.ritmoCarga;
+  const aviso = ATAQUES[atk][1] / ritmoDe(O, atk);
   return Math.max(1, aviso / Math.max(AVISO_MIN, objetivo));
 }
 
@@ -408,7 +417,13 @@ export const TIPOS = ['garrote', 'pisoton', 'barrido', 'embestida'];
 export function golpeaA(O, K, radioK = 26) {
   if (garroteActivo(O)) {
     const gp = golpeOgro(O);
-    if (Math.abs(K.x - gp.x) < gp.r + radioK) return { x: O.x, dano: gp.dano, tipo: TIPOS[O.atk] };
+    // EL PISOTON SE SALTA, como su onda. Hasta el 24-09-2026 el pie no miraba
+    // la altura: de cerca (a menos de 186 px delante de el) no lo libraba NADA
+    // -- ni saltar, que es lo que enseña el consejo, ni esquivar hacia atras
+    // (la onda la pillaba al caer), ni apartarse andando -- y costaba dos
+    // corazones. Medido con tools/prueba-ogro.mjs, seccion 6.
+    const saltado = O.atk === PISOTON && SUELO - K.y > ONDA_ALTO;
+    if (!saltado && Math.abs(K.x - gp.x) < gp.r + radioK) return { x: O.x, dano: gp.dano, tipo: TIPOS[O.atk] };
   }
   const w = ondaGolpea(O, K);
   if (w) return { x: w.x, dano: ONDA_DANO, tipo: 'onda' };

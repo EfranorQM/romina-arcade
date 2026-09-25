@@ -13,23 +13,47 @@
 import { GARROTE, PISOTON, BARRIDO, EMBESTIDA } from './ogro-cuerpo.js';
 
 // ---------- Las dificultades ----------
+//   reflejos    lo que la dificultad le pide al pulgar: lo que tarda en ver un
+//               ataque y pulsar su respuesta. Cada ataque tiene que dejar AL
+//               MENOS esto desde que empieza su aviso (lo mide el arnes)
 //   corazones   los de ella
 //   paradaVent  cuanto dura la ventana de la PARADA (normal: 0.18 s)
 //   ogroHp      la vida del ogro
 //   ritmoCarga  lo rapido que AVISA el ogro (>1, menos aviso). Solo el aviso:
 //               el golpe dura siempre lo mismo (ver makeOgro)
+//   ritmoBosque lo mismo para el lobo y la kitsune de la aventura: un lobo
+//               muere en tres tajos y no hace falta tanto aviso como el ogro
+//               (con el del ogro, en PASEO pasaba el bosque hasta el que no se
+//               defendia nunca)
+//   ritmoCarrera el de los ataques de CARRERA (la embestida, la acometida del
+//               lobo): se contestan atravesandolos cuando vienen, asi que un
+//               aviso mas largo no ayuda: quien reacciona rapido salta antes de
+//               que arranquen y cae delante (ver ritmoDe en ogro-cuerpo.js)
 //   pausa       lo que descansa entre ataques (>1, mas)
 //   mult        por cuanto se multiplican los puntos
-// Los tiempos de aviso con ritmoCarga 1.2 (furia) siguen pasando el minimo de
-// la reaccion en movil (0.30 s): el mas corto, el barrido, queda en 0.33. Lo
-// vigila el arnes.
+//
+// POR QUE ESTOS NUMEROS (24-09-2026, "muy dificil incluso en el modo facil").
+// Hasta la v1.0.24 el ritmo era 0.8 / 1.0 / 1.2, medido con un arnes que
+// reaccionaba en 0.25 s. Una persona tarda mas en VER el ataque, elegir entre
+// cuatro botones y pulsar: 0.35 s quien juega mucho, 0.45 una persona normal,
+// 0.55-0.65 quien juega poco. Con 1.0 el garrotazo daba 0.32 s para levantar la
+// guardia: en NORMAL una persona normal no ganaba NINGUNA pelea (0 de 40 con el
+// piloto de tools/prueba-peleas.mjs), en FURIA nadie, y en PASEO ganaba mas el
+// que machacaba ATACAR sin defenderse que el que se defendia. Ahora:
+//   PASEO   reflejos 0.60: 40 de 40 perdiendo 1.3 corazones; el que no se
+//           defiende gana 18 de 40 (con el ogro de 24 de vida: con 18, 40)
+//   NORMAL  reflejos 0.45: 36 de 40; con 0.55, la mitad
+//   FURIA   reflejos 0.35: 25 de 40; con 0.45, casi nunca
+// En el bosque (24 partidas cada uno): PASEO con 0.60 llega siempre perdiendo
+// 1.5 de 6 corazones, NORMAL con 0.45 y FURIA con 0.35 tambien; el que no se
+// defiende no llega en ninguna.
 export const DIFICULTADES = {
-  paseo:  { nombre: 'PASEO',  lema: 'EL OGRO AVISA CON CALMA', corazones: 6,
-            paradaVent: 0.26, ogroHp: 18, ritmoCarga: 0.8, pausa: 1.6, mult: 0.6 },
-  normal: { nombre: 'NORMAL', lema: 'LA PELEA DE VERDAD',      corazones: 4,
-            paradaVent: 0.18, ogroHp: 24, ritmoCarga: 1.0, pausa: 1.0, mult: 1.0 },
-  furia:  { nombre: 'FURIA',  lema: 'EL OGRO NO DA TREGUA',    corazones: 3,
-            paradaVent: 0.15, ogroHp: 30, ritmoCarga: 1.2, pausa: 0.6, mult: 1.6 },
+  paseo:  { nombre: 'PASEO',  lema: 'EL OGRO AVISA CON CALMA', reflejos: 0.60, corazones: 6,
+            paradaVent: 0.26, ogroHp: 24, ritmoCarga: 0.5, ritmoBosque: 0.7, ritmoCarrera: 0.8, pausa: 1.6, mult: 0.6 },
+  normal: { nombre: 'NORMAL', lema: 'LA PELEA DE VERDAD',      reflejos: 0.45, corazones: 4,
+            paradaVent: 0.18, ogroHp: 24, ritmoCarga: 0.65, ritmoBosque: 0.9, ritmoCarrera: 1.0, pausa: 1.0, mult: 1.0 },
+  furia:  { nombre: 'FURIA',  lema: 'EL OGRO NO DA TREGUA',    reflejos: 0.35, corazones: 3,
+            paradaVent: 0.15, ogroHp: 30, ritmoCarga: 0.8, ritmoBosque: 1.1, ritmoCarrera: 1.2, pausa: 0.6, mult: 1.6 },
 };
 export const ORDEN = ['paseo', 'normal', 'furia'];
 
@@ -40,13 +64,13 @@ export function opcionesElla(dif) {
 }
 export function opcionesOgro(dif, permitidos) {
   const D = DIFICULTADES[dif];
-  return { hp: D.ogroHp, ritmoCarga: D.ritmoCarga, pausa: D.pausa, permitidos };
+  return { hp: D.ogroHp, ritmoCarga: D.ritmoCarga, ritmoCarrera: D.ritmoCarrera, pausa: D.pausa, permitidos };
 }
-// Y los enemigos de la AVENTURA (caba-enemigos.js), con los mismos numeros
-// que el ogro: el ritmo acorta sus avisos y la pausa, lo que descansan.
+// Y los enemigos de la AVENTURA (caba-enemigos.js): el ritmo acorta sus avisos
+// y la pausa, lo que descansan.
 export function opcionesBosque(dif) {
   const D = DIFICULTADES[dif] || DIFICULTADES.normal;
-  return { ritmo: D.ritmoCarga, pausa: D.pausa };
+  return { ritmo: D.ritmoBosque, ritmoCarrera: D.ritmoCarrera, pausa: D.pausa };
 }
 
 // ---------- Los puntos y la nota ----------
@@ -200,7 +224,9 @@ export function tintesDe(t) {
 export const LECCIONES = [
   { atk: GARROTE,   boton: 'guardia',  texto: ['EL GARROTAZO SE PARA', 'PULSA GUARDIA JUSTO ANTES DEL GOLPE'] },
   { atk: PISOTON,   boton: 'saltar',   texto: ['EL PISOTON SUELTA ONDAS', 'SALTALAS'] },
-  { atk: BARRIDO,   boton: 'esquivar', texto: ['EL BARRIDO NO SE PARA', 'ESQUIVALO'] },
+  // (Hacia el: pegada al ogro, esquivar hacia atras solo salva en un tramo
+  // corto -- ni antes ni despues --; atravesandolo, desde que empieza.)
+  { atk: BARRIDO,   boton: 'esquivar', texto: ['EL BARRIDO NO SE PARA', 'ESQUIVA HACIA EL Y LO ATRAVIESAS'] },
   { atk: EMBESTIDA, boton: 'esquivar', texto: ['LA EMBESTIDA', 'ESQUIVA HACIA EL Y LO ATRAVIESAS'] },
 ];
 // Si en tres intentos no aprende uno, se suelta el siguiente igual: la pelea
