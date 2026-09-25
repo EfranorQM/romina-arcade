@@ -82,7 +82,9 @@ function perfil(puntos, ancho, material, bisel = 0.02) {
 export function junta(padre) {
   const grupos = new Map();
   for (const m of [...padre.children]) {
-    if (!m.isMesh || m.userData.mueve || m.material.map) continue;
+    // Las de color por vertice (los modelos de Kenney) ya vienen fundidas y
+    // esta funcion solo copia posicion y normal: juntarlas las dejaba NEGRAS.
+    if (!m.isMesh || m.userData.mueve || m.material.map || m.material.vertexColors) continue;
     m.updateMatrix();
     const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
     g.applyMatrix4(m.matrix);
@@ -325,6 +327,21 @@ export function creaMoto() {
   haz.visible = false;
   moto.add(haz);
 
+  // La llama del turbo: dos conos aditivos (azul por fuera, blanco dentro)
+  // saliendo del silencioso, que tiemblan.
+  const llama = new THREE.Group();
+  for (const [r, l, c] of [[0.07, 0.55, '#5ff0ff'], [0.04, 0.32, '#ffffff']]) {
+    const g = new THREE.ConeGeometry(r, l, 10, 1, true);
+    // Ancha en la boca del silencioso y afilada hacia atras.
+    g.translate(0, l / 2, 0); g.rotateZ(Math.PI / 2);
+    llama.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.8,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })));
+  }
+  llama.position.set(-0.9, 0.232, 0.14);
+  llama.rotation.z = -0.26;                  // sube con el silencioso
+  llama.visible = false;
+  moto.add(llama);
+
   const piloto3 = creaPiloto();
   moto.add(piloto3.grupo);
 
@@ -417,6 +434,10 @@ export function creaMoto() {
     grupo: moto, actualiza, piloto: piloto3, suelta, cae, reinicia,
     get caida() { return caida.suelta; },
     faro(on) { haz.visible = on; },
+    turbo(on, t) {
+      llama.visible = on;
+      if (on) { const f = 0.8 + Math.sin(t * 47) * 0.15 + Math.sin(t * 29) * 0.1; llama.scale.set(f, 1, 1); }
+    },
   };
 }
 
@@ -534,18 +555,38 @@ function creaPiloto() {
 
   const cad = new THREE.Vector3(), cuello = new THREE.Vector3(), hombro = new THREE.Vector3();
   const pie = new THREE.Vector3(), mano = new THREE.Vector3(), rod = new THREE.Vector3(), codo = new THREE.Vector3();
-  const poloRod = new THREE.Vector3(), poloCodo = new THREE.Vector3(), cab = new THREE.Vector3();
+  const poloRod = new THREE.Vector3(), poloCodo = new THREE.Vector3(), cab = new THREE.Vector3(), _v = new THREE.Vector3();
   const tmp = new THREE.Vector3();
 
   // pose = { agache 0-1, aire 0-1, cuerpo -1..1 (atras/adelante), hunde m, viento 0-1 }
+  // LOS TRUCOS son la misma cinematica inversa con otros destinos: la cadera
+  // se mueve y manos o pies dejan puños y estriberas. `k` es cuanto del truco
+  // (0-1, con entrada y salida suaves: moto-trucos.js, pose).
+  //   SIN MANOS  brazos arriba y abiertos
+  //   SUPERMAN   las piernas estiradas hacia atras, el cuerpo en horizontal
+  //   TALONES    los pies muy por encima del manillar (a la altura del
+  //              manillar se tapaban con la moto y no se veia el truco)
+  //   CAN-CAN    la pierna de este lado fuera, hacia la camara y adelante
+  //              (cruzando al otro lado quedaba escondida detras de la moto)
+  //   NADA       sin manos y sin pies a la vez
+  // Y al ganar, CELEBRA: el brazo de este lado en alto.
+  const TR = {
+    sinmanos: { dx: 0, dy: 0.04, incl: 0.28, manos: [0.06, 0.44, 0.3] },
+    superman: { dx: -0.3, dy: 0.13, incl: -0.42, pies: [-0.95, 0.42, 0.1] },
+    talones: { dx: -0.22, dy: 0.1, incl: 0.38, pies: [0.5, 0.98, 0.1] },
+    cancan: { dx: -0.04, dy: 0.05, incl: 0.12, pieFuera: [0.34, 0.32, 0.66] },
+    nada: { dx: -0.16, dy: 0.12, incl: 0.1, manos: [0.02, 0.46, 0.32], pies: [-0.72, 0.46, 0.16] },
+  };
   function pose(p, t) {
+    const tr = p.truco && p.truco.id ? TR[p.truco.id] : null, kt = tr ? p.truco.k : 0;
+    const ce = p.celebra || 0;
     // Cadera: de pie sobre las estriberas. El agache la baja y la echa atras,
     // el cuerpo la adelanta o atrasa (asi se inclina la moto de verdad), el
     // aterrizaje la hunde (las piernas hacen de segunda suspension).
-    cad.set(-0.13 - p.agache * 0.05 + p.cuerpo * 0.13 - p.aire * 0.02,
-            0.47 - p.agache * 0.08 - p.hunde + p.aire * 0.05 - Math.abs(p.cuerpo) * 0.04, 0);
+    cad.set(-0.13 - p.agache * 0.05 + p.cuerpo * 0.13 - p.aire * 0.02 + (tr ? tr.dx * kt : 0),
+            0.47 - p.agache * 0.08 - p.hunde + p.aire * 0.05 - Math.abs(p.cuerpo) * 0.04 + (tr ? tr.dy * kt : 0) + ce * 0.05, 0);
     // Torso: a 38 grados de la horizontal parada; mas tumbado agachada.
-    const incl = 0.66 - p.agache * 0.18 + p.cuerpo * 0.12 + p.aire * 0.08;
+    const incl = 0.66 - p.agache * 0.18 + p.cuerpo * 0.12 + p.aire * 0.08 + (tr ? tr.incl * kt : 0) + ce * 0.35;
     cuello.set(cad.x + Math.cos(incl) * L.torso, cad.y + Math.sin(incl) * L.torso, 0);
     apunta(torso, cad, cuello);
     cadera.position.copy(cad);
@@ -563,9 +604,12 @@ function creaPiloto() {
       const z = pr.lado * 0.12;
       tmp.set(cad.x, cad.y - 0.04, z);
       pie.set(-0.02, -0.07, pr.lado * 0.19);
+      poloRod.set(1, 0.1, pr.lado * 0.35);
+      if (tr && tr.pies) pie.lerp(_v.set(tr.pies[0], tr.pies[1], pr.lado * tr.pies[2]), kt);
+      if (tr && tr.pieFuera && pr.lado > 0) { pie.lerp(_v.set(...tr.pieFuera), kt); poloRod.set(0.6, 0.5, 1); }
+      if (tr && (tr.pies || tr.pieFuera)) poloRod.y += kt * 0.8;
       // Suelta de la moto: las piernas pedalean en el aire.
       if (p.suelta) pie.set(cad.x + Math.sin(t * 9 + pr.lado) * 0.3, cad.y - 0.62, pr.lado * 0.3);
-      poloRod.set(1, 0.1, pr.lado * 0.35);
       rod.copy(ik(tmp, pie, L.muslo, L.tibia, poloRod));
       apunta(pr.muslo, tmp, rod);
       apunta(pr.tibia, rod, pie);
@@ -577,6 +621,8 @@ function creaPiloto() {
     for (const br of brazos) {
       hombro.set(cuello.x - Math.cos(incl) * 0.05, cuello.y - Math.sin(incl) * 0.05, br.lado * 0.19);
       mano.set(0.385, 0.41, br.lado * 0.34);
+      if (tr && tr.manos) mano.lerp(_v.set(hombro.x + tr.manos[0], hombro.y + tr.manos[1], br.lado * tr.manos[2]), kt);
+      if (ce > 0 && br.lado > 0) mano.lerp(_v.set(hombro.x + 0.12, hombro.y + 0.56, 0.3), ce);
       if (p.suelta) mano.set(hombro.x + Math.cos(t * 11 + br.lado * 2) * 0.3, hombro.y + 0.35, br.lado * 0.45);
       poloCodo.set(-0.3, 0.4, br.lado * 1.0);
       codo.copy(ik(hombro, mano, L.brazo, L.antebrazo, poloCodo));

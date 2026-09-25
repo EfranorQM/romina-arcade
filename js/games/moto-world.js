@@ -22,8 +22,14 @@ export const GRAV = 3400;        // px/s^2 (medido: con 2000 la moto flotaba el 
 //
 // El ancho se abre con la velocidad: parada, la moto se ve grande; a tope, se
 // ve lo que viene. La moto va al 28 % desde la izquierda.
-export const CAM = { spanMin: 640, spanMax: 840, bikeAt: 0.28 };
-export function span(vx) { return CAM.spanMin + (CAM.spanMax - CAM.spanMin) * Math.min(1, Math.max(0, vx / 520)); }
+// Con el turbo (hasta 700 px/s) se abre un escalon mas: a esa velocidad la
+// roca siguiente llegaba 200 ms antes (medido con el arnes) y ademas ir mas
+// rapido se tiene que VER.
+export const CAM = { spanMin: 640, spanMax: 840, spanTurbo: 980, bikeAt: 0.28 };
+export function span(vx) {
+  const a = Math.min(1, Math.max(0, vx / 520)), b = Math.min(1, Math.max(0, (vx - 520) / 180));
+  return CAM.spanMin + (CAM.spanMax - CAM.spanMin) * a + (CAM.spanTurbo - CAM.spanMax) * b;
+}
 export function vista(vx) { return span(vx) * (1 - CAM.bikeAt); }
 
 // ---------- Terreno ----------
@@ -98,6 +104,17 @@ export function groundY(T, x) {
   return T.h[i] * (1 - t) + T.h[i + 1] * t;
 }
 
+// El suelo que se DIBUJA bajo la madera de las rampas: el mismo terreno sin
+// ellas (T.base, ver aplicaRampas). Sin rampas en el nivel, es groundY.
+export function groundBase(T, x) {
+  const h = T.base || T.h;
+  if (x <= 0) return h[0];
+  const fi = x / STEP, i = fi | 0;
+  if (i >= T.n - 1) return h[T.n - 1];
+  const t = fi - i;
+  return h[i] * (1 - t) + h[i + 1] * t;
+}
+
 // Pendiente del suelo en x, en radianes. Se mide sobre una base ANCHA (un STEP
 // a cada lado) y no entre muestras contiguas: con la base corta la moto
 // temblaba en cada bache, porque copiaba el ruido de alta frecuencia.
@@ -107,9 +124,28 @@ export function groundAngle(T, x) {
 }
 
 // ---------- Obstaculos ----------
-// Tipos: 0 roca (esquivar saltando), 1 rampa (impulsa), 2 tronco (frena si se
-// toca lento, se rompe si se llega rapido), 3 pozo (hueco en el suelo).
-export const OB_ROCK = 0, OB_RAMP = 1, OB_LOG = 2, OB_PIT = 3;
+// Peligros (hay que saltarlos): 0 roca, 2 tronco (se rompe si se llega rapido),
+// 3 pozo, 6 cajas (una se rompe rapido; dos apiladas, no).
+// Ayudas: 1 rampa, 7 rampa grande (siempre con TURBO delante y un FOSO
+// detras: el SALTO GIGANTE), 4 turbo (flecha en el suelo: mas velocidad un
+// rato). Y 5 barro, que frena.
+export const OB_ROCK = 0, OB_RAMP = 1, OB_LOG = 2, OB_PIT = 3, OB_TURBO = 4, OB_BARRO = 5, OB_CAJA = 6, OB_RAMPA_G = 7;
+export const esPeligro = ob => ob.kind === OB_ROCK || ob.kind === OB_LOG || ob.kind === OB_PIT || ob.kind === OB_CAJA;
+
+// Aplana el terreno entre x0 y x1 hacia la recta que une sus extremos, con los
+// bordes suavizados. El salto gigante lo necesita: una rampa en mitad de una
+// loma lanza torcido, y aterrizar en una bajada de 35 grados es volcar.
+function aplana(T, x0, x1) {
+  const i0 = Math.max(1, Math.floor(x0 / STEP)), i1 = Math.min(T.n - 2, Math.ceil(x1 / STEP));
+  const h0 = T.h[i0], h1 = T.h[i1], borde = 160 / STEP;
+  for (let i = i0; i <= i1; i++) {
+    const u = (i - i0) / (i1 - i0);
+    const recta = h0 + (h1 - h0) * u;
+    const e = Math.min(1, (i - i0) / borde, (i1 - i) / borde);
+    const w = e * e * (3 - 2 * e);
+    T.h[i] = T.h[i] * (1 - w) + recta * w;
+  }
+}
 
 export function placeObstacles(T, rnd, levelIndex) {
   const list = [];
@@ -128,14 +164,48 @@ export function placeObstacles(T, rnd, levelIndex) {
   const gapMin = 440 - lv * 5;
   const gapRampa = 650;
   const gapVar = Math.max(60, 360 - lv * 38);
-  let x = 620;                            // el primer tramo queda libre
+  T.barro = [];
+
+  // Los SALTOS GIGANTES van en sitios fijos de la pista (uno en los dos
+  // primeros niveles, dos hasta el quinto, tres despues), y todo lo demas se
+  // reparte entre ellos. Cada uno ocupa su tramo entero: carrerilla llana con
+  // el turbo, la rampa, el foso, y 850 px de aterrizaje sin nada.
+  const nGig = lv <= 2 ? 1 : lv <= 5 ? 2 : 3;
+  const gig = [];
+  for (let k = 0; k < nGig; k++) gig.push(Math.round((T.len - 600) * (k + 1) / (nGig + 1) + 300 + (rnd() - 0.5) * 300));
+
+  // El primer tramo queda libre y LARGO: la moto sale de parada, y con la
+  // primera roca a 620 px el que salta calculaba con la velocidad del
+  // arranque, la moto seguia acelerando y llegaba antes (medido: la mitad de
+  // las muertes del nivel 1 con reflejos lentos eran esa roca).
+  let x = 900;
+  let gi = 0;
   while (x < T.len - 420) {
+    // ¿Toca el salto gigante? Si el siguiente obstaculo normal se le echaria
+    // encima, se pone el salto y se sigue detras de su aterrizaje.
+    if (gi < gig.length && x > gig[gi] - 900) {
+      const g = Math.max(x + 500, gig[gi]);
+      gi++;
+      if (g > T.len - 1500) continue;
+      const wr = 126, hr = 70;              // rampa grande: 3 m de largo, 1.6 de alto
+      // El foso: con turbo sobra siempre; sin el, en los niveles altos no llega
+      // (medido: con 130 + 8 por nivel se cruzaba sin turbo el 100 %).
+      const wf = 150 + lv * 10;
+      aplana(T, g - 700, g + wr * 0.5 + wf + 900);
+      list.push({ x: g - 300, kind: OB_TURBO, w: 90, h: 0, hit: 0 });
+      list.push({ x: g, kind: OB_RAMPA_G, w: wr, h: hr / 1.5, hr, kick: 380, hit: 0 });
+      list.push({ x: g + wr * 0.5 + 14 + wf * 0.5, kind: OB_PIT, w: wf, h: 20, foso: true, hit: 0 });
+      x = g + wr * 0.5 + 14 + wf + 850;
+      continue;
+    }
     const r = rnd();
     let kind;
-    if (r < 0.34) kind = OB_ROCK;
-    else if (r < 0.60) kind = OB_RAMP;
-    else if (r < 0.84) kind = OB_LOG;
-    else kind = OB_PIT;
+    if (r < 0.26) kind = OB_ROCK;
+    else if (r < 0.40) kind = OB_RAMP;
+    else if (r < 0.56) kind = OB_LOG;
+    else if (r < 0.72) kind = OB_PIT;
+    else if (r < 0.88) kind = OB_CAJA;
+    else kind = OB_BARRO;
     // Las rampas solo tienen sentido en subida o llano; en una bajada fuerte
     // lanzan a la moto de morro contra el suelo.
     if (kind === OB_RAMP && groundAngle(T, x) > 0.25) kind = OB_ROCK;
@@ -143,19 +213,143 @@ export function placeObstacles(T, rnd, levelIndex) {
     // de la cresta y lo cruza volando sin hacer nada (medido: los 12 pozos
     // que una moto rodando no pisaba estaban en bajadas de 35 grados).
     if (kind === OB_PIT && Math.abs(groundAngle(T, x)) > 0.52) kind = OB_ROCK;
+    // Las cajas y el barro, en llano o casi: una caja en una bajada de 35
+    // grados se saltaba sola desde la cresta (y apoyada ahi parece que resbala).
+    if ((kind === OB_CAJA || kind === OB_BARRO) && Math.abs(groundAngle(T, x)) > 0.35) kind = OB_ROCK;
     // El pozo nunca puede ser mas ancho que lo que cruza un salto. Se cruza
     // si la moto va en el aire desde que la rueda de delante pasa el primer
     // borde hasta que la de atras pasa el segundo: ancho + 64 px. El salto
     // pasa 0.45 s por encima de eso, asi que a 450 px/s un pozo de 90 dejaba
     // 0.11 s para acertar (medido con el arnes: la mitad de las muertes). El
     // ancho crece con el nivel: 40-60 px en el primero, hasta 78 en el ultimo.
-    const w = kind === OB_PIT ? 40 + rnd() * (18 + lv * 2.5)
-            : kind === OB_RAMP ? 70 + rnd() * 30
-            : 26 + rnd() * 22;
-    list.push({ x, kind, w, h: kind === OB_LOG ? 22 + rnd() * 10 : 20 + rnd() * 16, hit: 0 });
-    x += (kind === OB_RAMP ? gapRampa : gapMin) + rnd() * gapVar;
+    let ob;
+    if (kind === OB_PIT) ob = { kind, w: 40 + rnd() * (18 + lv * 2.5), h: 20 + rnd() * 16 };
+    else if (kind === OB_RAMP) {
+      const w = 70 + rnd() * 30;
+      ob = { kind, w, h: 20 + rnd() * 16, kick: 460 };
+      ob.hr = Math.min(ob.h * 1.5, w * 0.6);   // alto del labio: 31 grados como mucho
+    } else if (kind === OB_LOG) ob = { kind, w: 26 + rnd() * 22, h: 22 + rnd() * 10 };
+    else if (kind === OB_CAJA) {
+      // Una caja se rompe a toda velocidad, como el tronco; dos apiladas
+      // (desde el nivel 3) hay que saltarlas siempre.
+      const dos = lv >= 3 && rnd() < 0.4;
+      ob = { kind, w: 38, h: dos ? 66 : 34, pisos: dos ? 2 : 1 };
+    } else if (kind === OB_BARRO) {
+      ob = { kind, w: 150 + rnd() * 90, h: 0 };
+      T.barro.push([x - ob.w * 0.5, x + ob.w * 0.5]);
+    } else ob = { kind, w: 26 + rnd() * 22, h: 20 + rnd() * 16 };
+    ob.x = x; ob.hit = 0;
+    list.push(ob);
+    // Tras el barro la moto sale lenta: el siguiente peligro mas lejos, para
+    // que de tiempo a recuperar velocidad antes de saltar.
+    const tras = kind === OB_RAMP ? gapRampa : kind === OB_BARRO ? ob.w * 0.5 + 420 : gapMin;
+    x += tras + rnd() * gapVar;
   }
+  list.sort((a, b) => a.x - b.x);
+  aplicaRampas(T, list);
+  ponBaches(T, list, rnd, lv);
   return list;
+}
+
+// Las rampas son TERRENO: la moto sube por ellas apoyada y sale por el labio.
+// Hasta el 25-09-2026 la rampa era un empujon al llegar a su pie, y la moto
+// atravesaba la madera dibujada. Se alinean a la rejilla del terreno para que
+// el labio de la fisica caiga donde el dibujado. `T.base` guarda el suelo sin
+// rampas: es el que se dibuja debajo de la madera.
+function aplicaRampas(T, list) {
+  T.base = T.base || Float32Array.from(T.h);
+  for (const ob of list) {
+    if (ob.kind !== OB_RAMP && ob.kind !== OB_RAMPA_G) continue;
+    const n = Math.max(3, Math.round(ob.w / STEP));
+    const i0 = Math.round((ob.x - ob.w * 0.5) / STEP);
+    ob.x0 = i0 * STEP; ob.x1 = (i0 + n) * STEP; ob.w = ob.x1 - ob.x0; ob.x = (ob.x0 + ob.x1) * 0.5;
+    ob.y0 = T.h[i0];
+    for (let i = 0; i <= n; i++) T.h[i0 + i] -= ob.hr * (i / n);
+    ob.yLabio = T.h[i0 + n];
+  }
+}
+
+// BACHES (whoops): una fila de lomitas en los tramos largos sin nada. A toda
+// velocidad la moto las roza y se aligera; no matan (el arnes lo vigila).
+// Van en el terreno de la fisica y en el que se dibuja.
+function ponBaches(T, list, rnd, lv) {
+  T.baches = [];
+  for (let k = 0; k < list.length - 1; k++) {
+    const a = list[k], b = list[k + 1];
+    const libre0 = a.x + a.w * 0.5 + 170, libre1 = b.x - b.w * 0.5 - 170;
+    if (libre1 - libre0 < 420 || rnd() > 0.35) continue;
+    const nb = 4 + Math.floor(rnd() * 3), onda = 84, amp = 5 + Math.min(lv, 6) * 0.4;
+    const largo = nb * onda, x0 = (libre0 + libre1 - largo) * 0.5;
+    for (let i = Math.floor(x0 / STEP); i <= Math.ceil((x0 + largo) / STEP) && i < T.n; i++) {
+      const u = (i * STEP - x0) / onda;
+      if (u < 0 || u > nb) continue;
+      const d = -amp * (1 - Math.cos(u * Math.PI * 2)) * 0.5;
+      T.h[i] += d; T.base[i] += d;
+    }
+    T.baches.push([x0, x0 + largo]);
+  }
+}
+
+// ESTRELLAS: se colocan SIMULANDO la moto con la fisica de verdad, asi que
+// siempre se pueden coger. En el arco de cada rampa (a la velocidad de
+// crucero), en lo alto del salto sobre cada peligro (saltando cuando salta el
+// piloto del arnes), y en el salto gigante una fila mas alta que solo se
+// alcanza saltando en el labio. Se cogen con el cuerpo de la piloto.
+export function colocaEstrellas(T, obs) {
+  const out = [];
+  const sim = (desde, vx, saltaEn, obsSim, turbo) => {
+    const B = makeBike(desde, groundY(T, desde) - 23);
+    B.vx = vx; B.onGround = true; B.turbo = turbo || 0;
+    const tray = [];
+    let despego = false;
+    for (let t = 0; t < 3; t += 1 / 60) {
+      if (saltaEn !== null && !despego && B.x >= saltaEn) pideSalto(B);
+      stepBike(B, T, 1 / 60, 1, 0);
+      if (obsSim) choques(B, T, obsSim);
+      if (!B.onGround && B.air > 0.05) { despego = true; tray.push([B.x, B.y]); }
+      else if (despego && B.onGround) break;
+    }
+    return tray;
+  };
+  const arco = (tray, n, alto = 16) => {
+    if (tray.length < 8) return;
+    for (let k = 0; k < n; k++) {
+      const p = tray[Math.floor(tray.length * (0.2 + 0.6 * k / Math.max(1, n - 1)))];
+      out.push({ x: p[0], y: p[1] - alto, got: false });
+    }
+  };
+  for (const ob of obs) {
+    if (ob.kind === OB_RAMP) {
+      arco(sim(ob.x0 - 260, 470, null, [{ ...ob, hit: 0 }]), 4);
+    } else if (ob.kind === OB_RAMPA_G) {
+      const turbo = obs.some(o => o.kind === OB_TURBO && o.x < ob.x && o.x > ob.x - 500);
+      arco(sim(ob.x0 - 200, 520, null, [{ ...ob, hit: 0 }], turbo ? 1.2 : 0), 5);
+      arco(sim(ob.x0 - 200, 520, ob.x1 - 20, [{ ...ob, hit: 0 }], turbo ? 1.2 : 0), 3, 26);
+    } else if (esPeligro(ob) && !ob.foso) {
+      const plan = ob.kind === OB_PIT ? ob.w * 0.5 + WHEELBASE * 0.5 + 480 * 0.12 : ob.w * 0.55 + 480 * 0.2;
+      const tray = sim(ob.x - plan - 200, 480, ob.x - plan, null);
+      if (tray.length >= 8) {
+        // las dos del medio del vuelo: lo alto del salto
+        const a = tray[Math.floor(tray.length * 0.42)], b = tray[Math.floor(tray.length * 0.6)];
+        out.push({ x: a[0], y: a[1] - 16, got: false }, { x: b[0], y: b[1] - 16, got: false });
+      }
+    }
+  }
+  return out.sort((a, b) => a.x - b.x);
+}
+
+// Coge las estrellas que toca el cuerpo de la piloto (18 px por encima del
+// centro de la moto, siguiendo su giro; radio 36). Devuelve cuantas cogio.
+export function recogeEstrellas(B, estrellas) {
+  let n = 0;
+  const cx = B.x + Math.sin(B.ang) * 18, cy = B.y - Math.cos(B.ang) * 18;
+  for (const e of estrellas) {
+    if (e.got || e.x < cx - 40) continue;
+    if (e.x > cx + 40) break;
+    const dx = e.x - cx, dy = e.y - cy;
+    if (dx * dx + dy * dy < 36 * 36) { e.got = true; n++; }
+  }
+  return n;
 }
 
 // El suelo que SE VE, con los pozos hundidos. La fisica de rodar no los tiene
@@ -183,7 +377,8 @@ export function levelLen(n) { return 7200 + Math.min(n, 6) * 900; }
 export function makeLevel(rnd, n) {
   const T = makeTerrain(rnd, n, levelLen(n));
   const obs = placeObstacles(T, rnd, n);
-  return { T, obs };
+  const estrellas = colocaEstrellas(T, obs);
+  return { T, obs, estrellas };
 }
 
 // Las reglas de los obstaculos. Viven aqui, sin DOM, y no en furia.js, para
@@ -219,22 +414,51 @@ export function choques(B, T, obs) {
       }
       continue;
     }
-    if (ob.kind === OB_RAMP) {
-      // La rampa impulsa: no es un peligro, es una oportunidad.
-      if (Math.abs(dx) < ob.w * 0.5 && B.y > gy - ob.h * 2.2 && B.onGround) {
+    if (ob.kind === OB_RAMP || ob.kind === OB_RAMPA_G) {
+      // La moto sube la rampa apoyada (es terreno, ver aplicaRampas) y al
+      // pasar el labio recibe el golpe de la rampa: sale con la subida de la
+      // rampa MAS un impulso. Solo la natural (0.55*vx) daba un vuelo de 0.2 s.
+      //
+      // TIEMPO COLGADO. Con la gravedad del juego (fuerte, para saltos secos)
+      // un vuelo largo exige subir altisimo: medido, el salto gigante daba
+      // 0.53 s de aire, casi lo mismo que un salto normal, y ningun truco
+      // cabia. Tras una rampa la gravedad se afloja mientras dura el vuelo
+      // (B.flota): al 80 % en las pequeñas, al 60 % en la grande. La grande
+      // ademas lanza segun la velocidad (el turbo cuenta), y si se salta en
+      // el labio, un poco mas.
+      // Vale si la moto venia apoyada en la rampa O si acaba de saltar desde
+      // ella: el salto pone su reloj de aire en 0.11 s (el coyote), y solo con
+      // `air < 0.12` saltar en el labio perdia el golpe y volaba MENOS.
+      if (B.x >= ob.x1 && B.x < ob.x1 + 40 && (B.air < 0.12 || (B.jumpCool > 0 && B.air < 0.3))) {
         ob.hit = 1;
-        B.vy -= 320 + B.vx * 0.55;
-        B.av -= 1.2;
-        return { k: 'rampa', ob };
+        const grande = ob.kind === OB_RAMPA_G;
+        const base = grande ? 420 + B.vx : ob.kick + B.vx * 0.55;
+        const salto = grande && B.jumpCool > 0;
+        B.vy = Math.min(B.vy, -base) - (salto ? 200 : 0);
+        B.flota = grande ? 0.6 : 0.8;
+        B.av = Math.min(B.av, 0) - 0.5;
+        return { k: 'rampa', ob, salto };
       }
+      if (B.x >= ob.x1 + 40) ob.hit = 1;
       continue;
     }
-    // Roca y tronco: golpean si la moto esta a su altura.
-    const top = gy - ob.h * (ob.kind === OB_LOG ? 1.0 : 1.6);
+    if (ob.kind === OB_TURBO) {
+      if (Math.abs(dx) < ob.w * 0.5 && B.onGround) { ob.hit = 1; B.turbo = TURBO_T; return { k: 'turbo', ob }; }
+      continue;
+    }
+    if (ob.kind === OB_BARRO) {
+      // El freno lo pone stepBike (T.barro); aqui solo se avisa de la entrada.
+      if (Math.abs(dx) < ob.w * 0.5 && B.onGround) { ob.hit = 1; return { k: 'barro', ob }; }
+      continue;
+    }
+    // Roca, tronco y cajas: golpean si la moto esta a su altura.
+    const top = gy - ob.h * (ob.kind === OB_ROCK ? 1.6 : 1.0);
     if (Math.abs(dx) < ob.w * 0.55 && B.y + WHEEL_R > top) {
       ob.hit = 1;
-      // Rompe el tronco a alta velocidad: premia ir rapido.
+      // Rompe el tronco a alta velocidad: premia ir rapido. Una caja sola
+      // tambien; dos apiladas, nunca.
       if (ob.kind === OB_LOG && B.vx > 380) { B.vx *= 0.88; return { k: 'rompe', ob }; }
+      if (ob.kind === OB_CAJA && ob.pisos === 1 && B.vx > 360) { B.vx *= 0.85; return { k: 'rompe', ob }; }
       return { k: 'choca', ob };
     }
   }
@@ -270,7 +494,7 @@ export function makeBike(x, y) {
     wheelSpin: 0,                // rotacion visual de las ruedas
     throttle: 0, brake: 0, lean: 0,
     crashed: false, flips: 0, flipAcc: 0, jumpCool: 0, wipeT: 0,
-    jumpBuf: 0, saltos: 0,
+    jumpBuf: 0, saltos: 0, turbo: 0, enBarro: false, flota: 0,
     dist: 0,
   };
 }
@@ -292,6 +516,7 @@ export function makeBike(x, y) {
 // pillaba subiendo. Con 800: 94 px de alto (la roca mas alta pide 46 de
 // subida) y 0.47 s de vuelo.
 export const JUMP_V = 800;
+export const TURBO_T = 1.5;       // s de turbo tras pisar la flecha
 // Dos perdones de cualquier juego de plataformas, porque el salto exige apoyo:
 //  BUFFER: el toque se guarda un momento. Tocar justo antes de aterrizar
 //          saltaba NADA; ahora salta en cuanto las ruedas tocan.
@@ -318,6 +543,19 @@ function intentaSalto(B) {
 }
 // Salto inmediato, o nada. Lo usa el arnes para medir el salto a secas.
 export function bikeJump(B) { pideSalto(B); return intentaSalto(B); }
+
+// De los dos botones del pulgar derecho al giro (`lean` de stepBike).
+// EN EL AIRE, un boton que ya venia apretado desde el suelo NO gira la moto:
+// para girar hay que soltarlo y volver a apretarlo. Ella va siempre con el
+// pulgar en el GAS, y en el vuelo largo del salto gigante (1.2 s) eso ponia
+// la moto de morro y se estrellaba al caer. Sin tocar nada, la moto se
+// endereza sola (autoestabilizacion, en stepBike). `M` guarda los bloqueos.
+export function giro(B, gas, freno, M) {
+  if (B.onGround) { M.bloqGas = gas; M.bloqFreno = freno; }
+  else { if (!gas) M.bloqGas = false; if (!freno) M.bloqFreno = false; }
+  const g = gas && (B.onGround || !M.bloqGas), f = freno && (B.onGround || !M.bloqFreno);
+  return g && f ? 0 : g ? 1 : f ? -1 : 0;
+}
 
 // Un paso de fisica. `lean` viene del control: -1 inclina hacia atras
 // (wheelie), +1 hacia adelante.
@@ -393,23 +631,32 @@ export function stepBike(B, T, dt, throttle, lean) {
   if (B.onGround) B.air = 0; else B.air += dt;
 
   // --- Traslacion ---
-  B.vy += GRAV * dt;
+  // La gravedad, aflojada en el vuelo de una rampa (ver choques: B.flota).
+  if (B.onGround) B.flota = 0;
+  B.vy += GRAV * (B.flota && !B.onGround ? B.flota : 1) * dt;
   B.vy += (fyF + fyR) * 0.5 * dt;   // cada rueda soporta media moto
   // El motor empuja a lo largo del suelo, no en horizontal: en una cuesta
   // empujar horizontal hunde la rueda en la pendiente y frena de golpe.
   if (B.onGround) {
     const ga = groundAngle(T, B.x);
-    const push = throttle * 1500 - B.brake * 1800;
+    const push = throttle * (B.turbo > 0 ? 2600 : 1500) - B.brake * 1800;
     B.vx += Math.cos(ga) * push * dt;
     B.vy += Math.sin(ga) * push * dt;
     // Friccion de rodadura + resistencia del aire
     B.vx *= 1 - 1.2 * dt;
+    // En el barro las ruedas patinan: frena fuerte y no pasa de 240.
+    B.enBarro = false;
+    if (T.barro) for (const z of T.barro) if (B.x > z[0] && B.x < z[1]) { B.enBarro = true; break; }
+    if (B.enBarro) { B.vx *= 1 - 3 * dt; if (B.vx > 240) B.vx -= (B.vx - 240) * 5 * dt; }
   } else {
     B.vx *= 1 - 0.15 * dt;
   }
   if (B.vx < 0) B.vx = 0;                 // no se va marcha atras
-  const MAXV = 520;
-  if (B.vx > MAXV) B.vx = MAXV;
+  // El turbo sube el tope un rato: es lo que hace llegar sobrado al salto
+  // gigante. Al acabarse, la velocidad baja poco a poco, no de golpe.
+  if (B.turbo > 0) B.turbo -= dt;
+  const MAXV = B.turbo > 0 ? 700 : 520;
+  if (B.vx > MAXV) B.vx = B.turbo > 0 ? MAXV : Math.max(MAXV, B.vx - 600 * dt);
 
   B.x += B.vx * dt;
   B.y += B.vy * dt;

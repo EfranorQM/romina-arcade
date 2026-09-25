@@ -1,5 +1,5 @@
 {
-  "version": "1.0.28",
+  "version": "1.0.29",
   "fecha": "2026-09-25",
   "archivos": [
     "img/arena.png",
@@ -52,7 +52,14 @@
     "js/games/masa.js",
     "js/games/moto-3d.js",
     "js/games/moto-art.js",
+    "js/games/moto-bioma.js",
+    "js/games/moto-botones.js",
+    "js/games/moto-decor.js",
+    "js/games/moto-kenney.js",
     "js/games/moto-modelo.js",
+    "js/games/moto-obs3d.js",
+    "js/games/moto-pista3d.js",
+    "js/games/moto-trucos.js",
     "js/games/moto-world.js",
     "js/games/neonfist.js",
     "js/games/ogro-atlas.js",
@@ -87,8 +94,8 @@
     "js/vendor/three-moto.js"
   ],
   "notas": [
-    "FURIA NUEVA: LA MOTO EN 3D",
-    "SE JUEGA CON EL TELEFONO DE LADO",
-    "LA MOTO YA NO REBOTA"
+    "CUATRO MUNDOS NUEVOS",
+    "SALTO GIGANTE Y TRUCOS",
+    "BOTONES NUEVOS"
   ]
 }

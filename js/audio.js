@@ -114,6 +114,42 @@ export function sfx(o) {
   src.stop(t + dur + 0.02);
 }
 
+// ---------- El motor de FURIA ----------
+// Un sonido CONTINUO, no un disparo: dos osciladores (sierra y cuadrada, un
+// pelo desafinados, que es lo que da el "rrr" de un motor de dos tiempos) por
+// un filtro que se abre con el gas. `pon` se llama cada frame con las
+// revoluciones (0 parado, 1 a tope, algo mas con turbo) y la carga (0-1: gas
+// apretado o no); si deja de llamarse (pausa, muerte, fuera del juego) hay
+// que llamar a `calla`, que baja el volumen en vez de cortarlo en seco.
+// Va directo al master: no cuenta en MAX_VOICES, porque es uno y dura.
+let motorN = null;
+export const Motor = {
+  pon(rpm, carga) {
+    if (!ac || Save.muted) { Motor.calla(); return; }
+    if (!motorN) {
+      const g = ac.createGain(); g.gain.value = 0;
+      const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 3;
+      const a = ac.createOscillator(); a.type = 'sawtooth';
+      const b = ac.createOscillator(); b.type = 'square';
+      a.connect(f); b.connect(f); f.connect(g); g.connect(master);
+      a.start(); b.start();
+      motorN = { g, f, a, b };
+    }
+    const t = ac.currentTime, fr = 42 + rpm * 78;
+    motorN.a.frequency.setTargetAtTime(fr, t, 0.06);
+    motorN.b.frequency.setTargetAtTime(fr * 1.012, t, 0.06);
+    motorN.f.frequency.setTargetAtTime(280 + carga * 700 + rpm * 500, t, 0.05);
+    motorN.g.gain.setTargetAtTime(0.035 + carga * 0.045, t, 0.08);
+  },
+  calla() {
+    if (!motorN) return;
+    const n = motorN; motorN = null;
+    const t = ac.currentTime;
+    n.g.gain.setTargetAtTime(0, t, 0.08);
+    setTimeout(() => { try { n.a.stop(); n.b.stop(); n.g.disconnect(); } catch (e) {} }, 500);
+  },
+};
+
 // ---------- Musica: secuenciador con lookahead ----------
 // setTimeout solo derivaria: se programan notas por adelantado con tiempos
 // ABSOLUTOS del AudioContext. 0.15s de anticipacion aguanta el throttling de MIUI.
@@ -431,6 +467,16 @@ export const SFX = {
   desenvaina: () => { sfx({ type: 'noise', f0: 1600, f1: 5200, dur: 0.22, vol: 0.16 }); setTimeout(() => sfx({ type: 'pulse', duty: 0.125, f0: 2400, f1: 2100, dur: 0.06, vol: 0.14 }), 180); },
   graznido: () => { sfx({ type: 'saw', f0: 620, f1: 420, dur: 0.12, vol: 0.22 }); setTimeout(() => sfx({ type: 'saw', f0: 580, f1: 380, dur: 0.16, vol: 0.22 }), 150); },
   picado:   () => sfx({ type: 'tri', f0: 1500, f1: 260, dur: 0.34, vol: 0.26 }),
+  // FURIA: la estrella (dos notas que suben, mas agudas que la moneda), el
+  // truco (un zas de aire y una nota), el turbo (un soplido que sube), el
+  // barro (un chof grave), el aterrizaje perfecto (tres notas) y el confeti
+  // de la meta (un petardo y un tintineo).
+  estrella: () => { sfx({ type: 'pulse', duty: 0.25, f0: 1319, dur: 0.05, vol: 0.2 }); setTimeout(() => sfx({ type: 'pulse', duty: 0.25, f0: 1760, dur: 0.1, vol: 0.2 }), 50); },
+  truco:    () => { sfx({ type: 'noise', f0: 900, f1: 3800, dur: 0.18, vol: 0.18 }); setTimeout(() => sfx({ type: 'tri', f0: 880, f1: 1320, dur: 0.12, vol: 0.2 }), 90); },
+  turbo:    () => { sfx({ type: 'noise', f0: 400, f1: 4200, dur: 0.45, vol: 0.26 }); sfx({ type: 'saw', f0: 180, f1: 520, dur: 0.4, vol: 0.14 }); },
+  barro:    () => sfx({ type: 'noise', f0: 500, f1: 120, dur: 0.22, vol: 0.3 }),
+  perfecto: () => { [784, 988, 1319].forEach((f, i) => setTimeout(() => sfx({ type: 'pulse', duty: 0.5, f0: f, dur: 0.07, vol: 0.2 }), i * 55)); },
+  confeti:  () => { sfx({ type: 'noise', f0: 3000, f1: 600, dur: 0.12, vol: 0.4 }); [1568, 2093, 1760, 2349].forEach((f, i) => setTimeout(() => sfx({ type: 'pulse', duty: 0.125, f0: f, dur: 0.06, vol: 0.12 }), 120 + i * 70)); },
   // los vampiros: un siseo que sube y se corta
   siseo:    () => { sfx({ type: 'noise', f0: 3000, f1: 6000, dur: 0.18, vol: 0.14 }); sfx({ type: 'saw', f0: 180, f1: 240, dur: 0.16, vol: 0.12 }); },
   aullido:  () => { sfx({ type: 'tri', f0: 280, f1: 560, dur: 0.35, vol: 0.30 }); setTimeout(() => sfx({ type: 'tri', f0: 560, f1: 520, dur: 0.45, vol: 0.30 }), 330); setTimeout(() => sfx({ type: 'tri', f0: 520, f1: 300, dur: 0.4, vol: 0.26 }), 760); },
