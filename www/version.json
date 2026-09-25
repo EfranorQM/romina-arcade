@@ -1,6 +1,6 @@
 {
-  "version": "1.0.23",
-  "fecha": "2026-09-24",
+  "version": "1.0.24",
+  "fecha": "2026-09-25",
   "archivos": [
     "img/arena.png",
     "img/bosque.png",
@@ -29,7 +29,9 @@
     "js/games/caba-aventura.js",
     "js/games/caba-botones.js",
     "js/games/caba-cuerpo.js",
+    "js/games/caba-efectos.js",
     "js/games/caba-enemigos.js",
+    "js/games/caba-mandos.js",
     "js/games/caba-nivel.js",
     "js/games/caba-partida.js",
     "js/games/caballero.js",
@@ -77,7 +79,8 @@
     "js/update.js"
   ],
   "notas": [
-    "NUEVO AVISO DE ACTUALIZACION",
-    "REINICIAR SIN SALIR DE LA APP"
+    "ROMINA: SALTO ENTERO CON UN TOQUE",
+    "BOTONES MAS GRANDES Y SIN HUECOS",
+    "EFECTOS NUEVOS AL SALTAR Y PELEAR"
   ]
 }
