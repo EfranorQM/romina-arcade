@@ -354,24 +354,30 @@ conserva la carrerilla (saltando justo debajo de la repisa se pasa de largo).
 
 El segundo modo de ROMINA (pestaña AVENTURA en la pantalla de elegir; la pelea
 contra el ogro sigue en su pestaña). Un nivel que avanza: Romina va hacia la
-derecha por un bosque de 7400 px, la cámara la sigue, y por el camino hay
-fosos, troncos que ruedan, ramas que caen, una hoguera a mitad de camino y
-enemigos. Llegar al árbol con cara es ganar.
+derecha por un bosque de 11400 px, la cámara la sigue, y por el camino hay
+fosos, troncos que ruedan, ramas que caen, dos hogueras (si pierde, sigue
+desde la última; encenderla cura) y enemigos. El árbol con cara del final lo
+guarda el lobo blanco: llegar a él con el jefe vencido es ganar.
 
 ```
 node tools/prueba-nivel.mjs                                  # el nivel, medido
 node tools/ver-app.js x.png "espera1200;archivo:tools/prueba-aventura-final.js;disparo"
                                                              # cada final acaba (la escena de verdad)
 python tools/gif.py aventura:lobo vistas/lobo.gif            # grabar un tramo
+python tools/gif.py aventura:jefe vistas/jefe.mp4 --dif paseo --reac 0.6
+                                                             # en video, en PASEO, con reflejos de persona
+python tools/hoja-gif.py vistas/x.gif hoja.png 0.4           # un fotograma cada 0,4 s, en rejilla
+node tools/causas-bosque.mjs paseo --desde 7900              # que se lleva los corazones, por ataque
 python tools/bosque-atlas.py RUTA/PNG/Battleground3/Bright   # hornear el bosque
-python tools/enemigos-atlas.py RUTA/enemigos                 # hornear lobo y kitsune
+python tools/enemigos-atlas.py RUTA/enemigos                 # hornear los enemigos (dos hojas)
 ```
 
 Dónde está cada cosa, todo sin DOM salvo el dibujo:
 
 - `caba-nivel.js`: el nivel es DATOS (`BOSQUE`: fosos, tocones, zonas de
   troncos y de ramas, hoguera, salida y enemigos) y aquí vive lo que pasa en él.
-- `caba-enemigos.js`: el hombre lobo y la kitsune. `caba-aventura.js`: la
+- `caba-enemigos.js`: el hombre lobo, la kitsune, los dos tengus y el lobo
+  blanco. `caba-aventura.js`: la
   escena (entrada, juego, caída, final, resultado). La escena de ROMINA le pasa
   el mando: vive dentro de ella porque el arcade solo pausa las escenas que
   están en su lista de juegos.
@@ -420,6 +426,27 @@ Lo que miden las secciones de `prueba-nivel.mjs`:
   deshace en humo (la kitsune, en chispas de su fuego). Grabar con
   `python tools/gif.py aventura:barrido vistas/x.gif` (y `aventura:rastrero`;
   `&dif=paseo` en la URL de la página para ver el botón encima).
+- **Los tres del final** (24-09-2026), cada uno con UNA idea nueva, medidos en
+  `prueba-peleas.mjs` como los demás:
+  - EL CUERVO ataca desde el aire. El PICADO: sube de un salto hasta encima de
+    ella, la sigue (a 200 px/s: andando no se le escapa), se fija envolviéndose
+    en las alas y cae. Su SOMBRA dice dónde, y al fijarse se enciende un aro
+    del color de ESQUIVAR con el botón encima: esquivar desde que se fija vale
+    hasta 0,65 / 0,50 / 0,42 s. Ni andando, ni saltando, ni con la guardia.
+  - EL YAMABUSHI se cubre: de frente para los golpes de ella con la katana, y
+    contesta desenvainando. El DESENVAINE se para con la GUARDIA, y
+    reaccionando con los reflejos de la dificultad sale PARADA: aturdido, entra
+    el combo entero (si solo se tapa, un golpe). El RELÁMPAGO cruza a ras de
+    suelo y se SALTA; llega siempre a los 0,20 s de arrancar, sea de donde sea,
+    para que el ritmo del salto sea uno solo.
+  - EL LOBO BLANCO guarda la salida: aúlla y llama a un lobo de su manada, y se
+    aparta mientras pelea; a media vida vuelve a aullar (aullando no encaja) y
+    se aparta de un brinco. No se encoge al recibir (como el ogro) y contesta si
+    le pegan descansando. Sabe todo lo del lobo y el ZARPAZO HACIA ARRIBA, que se
+    PARA y no se salta: hay que mirar el color del aviso.
+- **El bosque, por tramos de hoguera a hoguera** (`prueba-peleas.mjs`, 3): en el
+  juego perder devuelve a la última hoguera con todo, así que se mide cada tramo
+  con sus corazones; el del jefe, con la vara del ogro (90/80/50 %).
 - **El piloto** (`tools/piloto-aventura.mjs`, el mismo que usa la grabadora):
   reacciona 0,25 s después de ver cada cosa, nunca antes, y salta con un
   TOQUE (hasta el 24-09-2026 mantenía el botón 40 frames: nadie juega así, y
@@ -446,6 +473,21 @@ Trampas que salieron midiendo, y que no se veían en una captura:
 - **Dos del mismo tramo a la vez.** Despertándose por distancia, los lobos de
   las ramas se sumaban a la pelea con la kitsune. Los que comparten tramo se
   despiertan cuando ella pasa por su sitio.
+- **El jefe que muere sin pelear.** Con 6 de vida y el dolor de los lobos, el
+  combo de ella (1 + 1 + 2 en un segundo) lo tumbaba en 1,3 s. Luego, con 12,
+  moría igual: descansaba 3 s entre ataques en PASEO dejándose pegar, peleaba a
+  la vez que su lobo, se quedaba acorralado donde acababa la pelea y moría
+  aullando. Cada cosa se vio en una traza de sucesos (quién ataca, qué le da),
+  no en el arnés: el arnés decía "llega 16/16".
+- **El yamabushi que no acaba.** Parando golpes seguidos, cada golpe volvía a
+  empezar su pausa y el que machaca lo tenía parado 400 s sin que atacara.
+- **El piloto que no esquivaba volando.** Solo atravesaba la acometida mientras
+  el lobo se agachaba; con reflejos de más de lo que dura el aviso no la
+  esquivaba nunca. En el tramo del jefe se comía 15 en 16 partidas.
+- **Lo que no cabe en pantalla.** El cuervo a 250 px de altura se salía por
+  arriba (se ajustó a su dibujo: 190 px con las alas abiertas, a 146 de
+  altura). La pelea del jefe al final del nivel quedaba debajo de los botones,
+  con la cámara parada: el último tramo es largo para que no lo esté.
 - **Las partículas** del arcade se pintan en coordenadas de pantalla: con la
   cámara en marcha, el polvo se quedaba atrás. Se corren con la cámara.
 - **Las bolas se borraban al salir de cámara**, y el arnés no mueve la cámara:
@@ -471,11 +513,19 @@ El arte:
   `bosque-atlas.py` con la paleta del propio bosque. El bosque cuesta 0,6 ms
   por frame y la escena entera 0,85 (pintado forzado).
 - **Los enemigos** son de dos packs gratis de CraftPix (el agente bajó nueve y
-  se compararon a escala): el hombre lobo negro y la kitsune. En esos packs las
+  se compararon a escala): el hombre lobo y los yokai. En esos packs las
   animaciones NO comparten lienzo: el mismo cuerpo sale hasta 19 px más atrás
   en unas que en otras, y `enemigos-atlas.py` las alinea con el reposo (el
-  tronco, de la cintura para arriba). Doblados con Scale2x, como ella. Los
-  packs no están en el repo, solo lo horneado.
+  tronco, de la cintura para arriba; los tengus, por los pies: su reposo es de
+  tres cuartos y en el tronco mandan las alas). Doblados con Scale2x, como ella.
+  Los packs no están en el repo, solo lo horneado, en DOS hojas: juntos pasaban
+  de 4096 px de alto (lo que muchos móviles suben a la gráfica). La segunda ya
+  mide 4083: lo que venga, a una tercera.
+- **El lobo blanco es el negro con otra paleta**: sus animaciones son los mismos
+  dibujos pixel a pixel, salvo el reposo, que el pack pinta oscuro. Se hornean
+  los del negro con la tabla de colores negro → blanco (30 colores, sin
+  ambigüedad), los claros más blancos (su beige se leía gris en el bosque) y el
+  reposo un escalón más claro (el pack lo pinta en sombra).
 - La música del bosque es `SONGS.caballeroBosque`, en Fa lidio (el modo que
   suena a encantado y cabe entero en el secuenciador).
 

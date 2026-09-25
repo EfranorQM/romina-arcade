@@ -59,19 +59,24 @@ function ogro(dif, atk, dist, resp) {
   return pierde;
 }
 // Un ataque de un enemigo del bosque, forzado, con ella en 1000 mirandole.
+// Deja apuntado si hubo PARADA (`paro`) y cuando se fijo el picado (`fija`).
+let paro = false, fija = null;
 function bosque(dif, tipo, atk, dist, resp) {
-  const def = { ...N.BOSQUE, fosos: [], tocones: [], troncos: [], ramas: [], enemigos: [[tipo, 1000 + dist]], hoguera: 99999, salida: 99999 };
+  const def = { ...N.BOSQUE, fosos: [], tocones: [], troncos: [], ramas: [], enemigos: [[tipo, 1000 + dist]], hogueras: [], salida: 99999 };
   const L = N.makeNivel(def, semilla(8), P.opcionesBosque(dif));
   const K = C.makeCaballero(1000, { y: def.suelo, ...P.opcionesElla(dif) });
   const E = L.enemigos[0];
   E.despierto = true; E.recarga = 0; E.x0 = 0; E.x1 = 99999;
   E.atk = atk; E.st = EN.AVISO; E.t = 0; E.animT = 0; E.vx = 0; E.dir = -1;
   let pierde = 0;
+  paro = false; fija = null;
   for (let n = 0; n < 300; n++) {
     const hp = K.hp;
     C.stepCaballero(K, resp(n * DT), DT, N.mundo(L));
     N.stepNivel(L, K, DT, VW);
     pierde += hp - K.hp;
+    if (K.parada > 0) paro = true;
+    if (E.fase === 'fija' && fija === null) fija = (n + 1) * DT;
     if (E.st === EN.ESPERA && n > 10) E.recarga = 99;       // solo este ataque
     if ((E.st === EN.RECUPERA || E.st === EN.AGOTADA || E.st === EN.ESPERA) && !L.fuegos.some(F => !F.propio && !F.fin) && n > 10) break;
   }
@@ -113,6 +118,48 @@ for (const dif of P.ORDEN) {
     ['el BARRIDO BAJO del lobo a 110 px: SALTAR', cubre, tramo(tr => bosque(dif, 'lobo', 'barre', 110, salta(tr)))],
   ];
   for (const [nom, regla, t] of casos) ok(regla(t, refl), nom + ' vale reaccionando en ' + texto(t));
+  // LOS DEL FINAL DEL BOSQUE (24-09-2026).
+  const nuevos = [
+    ['el TAJO del cuervo a 110 px: GUARDIA', plazo, tramo(tr => bosque(dif, 'karasu', 'tajo', 110, guardia(tr)))],
+    ['el DESENVAINE del yamabushi a 140 px: GUARDIA', plazo, tramo(tr => bosque(dif, 'yamabushi', 'iai', 140, guardia(tr)))],
+    ['el ZARPAZO HACIA ARRIBA del jefe a 110 px: GUARDIA', plazo, tramo(tr => bosque(dif, 'alfa', 'levanta', 110, guardia(tr)))],
+  ];
+  // El relampago se salta por el ritmo, desde lo que tarda en arrancar: como
+  // el barrido, a las dos puntas de la distancia a la que lo suelta.
+  for (const d of [310, 390, 460]) nuevos.push(['el RELAMPAGO del yamabushi a ' + d + ' px: SALTAR', cubre, tramo(tr => bosque(dif, 'yamabushi', 'relampago', d, salta(tr)))]);
+  for (const [nom, regla, t] of nuevos) ok(regla(t, refl), nom + ' vale reaccionando en ' + texto(t));
+  // EL PICADO se contesta desde que se FIJA (antes la sigue, y esquivar no la
+  // saca de debajo): desde ahi, como los demas, del primer instante a sus
+  // reflejos. Hacia los dos lados.
+  bosque(dif, 'karasu', 'picado', 300, () => NADA);
+  const tf = fija;
+  for (const lado of [1, -1]) {
+    const t = tramo(r => bosque(dif, 'karasu', 'picado', 300, esquiva(tf + r, lado)), 1.0);
+    ok(plazo(t, refl), 'el PICADO del cuervo (se fija a los ' + f2(tf) + ' s): ESQUIVAR hacia ' + (lado > 0 ? 'delante' : 'atras') + ' vale reaccionando en ' + texto(t));
+  }
+  // Andando no se sale de su sombra, ni se salta, ni la guardia lo para: el
+  // picado pide ESQUIVAR.
+  {
+    const andando = tramo(r => bosque(dif, 'karasu', 'picado', 300, t => ({ ...NADA, dx: t >= tf + r ? 1 : 0 })), 1.0);
+    const saltando = tramo(r => bosque(dif, 'karasu', 'picado', 300, salta(tf + r)), 1.0);
+    const parando = tramo(r => bosque(dif, 'karasu', 'picado', 300, guardia(tf + r)), 1.0);
+    ok(!plazo(andando, refl) && !saltando && !parando, 'el PICADO no se libra andando (' + texto(andando) + '), saltando (' + texto(saltando) + ') ni con la guardia (' + texto(parando) + ')');
+  }
+  // EL JEFE: su zarpazo hacia arriba no se salta (es lo que lo distingue del
+  // barrido).
+  {
+    const t = tramo(tr => bosque(dif, 'alfa', 'levanta', 110, salta(tr)));
+    ok(!t, 'el ZARPAZO HACIA ARRIBA no se libra saltando (' + texto(t) + ')');
+  }
+  // LA PARADA del desenvaine (lo que lo aturde): reaccionando con los
+  // reflejos de la dificultad, la guardia sube a tiempo de PARARLO, no solo
+  // de taparse. Es lo que abre al yamabushi.
+  {
+    const ok0 = [];
+    for (let k = 0; k * DT <= 1.2; k++) { if (bosque(dif, 'yamabushi', 'iai', 140, guardia(k * DT)) === 0 && paro) ok0.push(k * DT); }
+    const t = ok0.length ? { de: ok0[0], a: ok0[ok0.length - 1], huecos: 0 } : null;
+    ok(t && t.de <= refl && t.a >= refl, 'la PARADA del desenvaine sale reaccionando en ' + texto(t) + ' (sus reflejos, ' + f2(refl) + ' s, dentro)');
+  }
   // El FUEGO RASTRERO se salta cuando llega (se ve venir por el suelo, como la
   // onda del ogro): que el tramo exista y sea ancho.
   {
@@ -160,12 +207,19 @@ for (const dif of P.ORDEN) {
 }
 
 // ============================================================
-console.log('\n3. EL BOSQUE ENTERO (tools/piloto-aventura.mjs, 16 partidas)');
-function recorre(dif, mu, sem, machacon = false) {
+// EL BOSQUE, POR TRAMOS DE HOGUERA A HOGUERA. Desde el 24-09-2026 es largo
+// (10700 px, dos hogueras) y en el juego perder devuelve a la ultima hoguera
+// con todos los corazones: lo que se mide es cada tramo con los suyos. Los dos
+// primeros son camino (se pasan casi siempre); el ultimo es la pelea del jefe
+// (el yamabushi y el lobo blanco con su manada) y se le pide lo que al ogro.
+// El que no se defiende se mide en el bosque entero y sin hogueras.
+console.log('\n3. EL BOSQUE, POR TRAMOS (tools/piloto-aventura.mjs, 16 partidas por tramo)');
+function recorre(dif, mu, sem, machacon = false, desde = 0, hasta = 0) {
   const def = N.BOSQUE, rnd = semilla(sem * 31 + 7);
   const reac = () => Math.max(12, Math.round(normal(rnd, mu, 0.08) * 60));
   const L = N.makeNivel(def, semilla(sem), P.opcionesBosque(dif));
-  const K = C.makeCaballero(160, { y: def.suelo, ...P.opcionesElla(dif) });
+  if (desde) { L.hoguera = desde; L.seguroX = desde + 40; }
+  const K = C.makeCaballero(desde ? desde + 40 : 160, { y: def.suelo, ...P.opcionesElla(dif) });
   const m = {};
   let espera = 0;
   for (let f = 0; f < 60 * 300; f++) {
@@ -175,30 +229,41 @@ function recorre(dif, mu, sem, machacon = false) {
       if (e.tipo === 'cae') espera = 30;
       if (e.tipo === 'salida') return { llego: true, hp: K.hp };
     }
+    // (a 20 px de la hoguera: encenderla cura, y se mediria la vida curada)
+    if (hasta && K.x >= hasta - 20) return { llego: true, hp: K.hp };
     N.camara(L, K, VW, DT);
     if (!K.vivo) return { llego: false };
   }
   return { llego: false, atascada: true };
 }
+const H = N.BOSQUE.hogueras;
+const TRAMOS = [['hasta la 1a hoguera', 0, H[0]], ['de la 1a a la 2a', H[0], H[1]], ['de la 2a al final (el jefe)', H[1], 0]];
 for (const dif of P.ORDEN) {
   const D = P.DIFICULTADES[dif];
-  const rs = [];
-  for (let s = 1; s <= 16; s++) rs.push(recorre(dif, D.reflejos, s));
-  const llegan = rs.filter(r => r.llego);
-  const pierde = rs.reduce((a, r) => a + (r.llego ? D.corazones - r.hp : D.corazones), 0) / rs.length;
+  console.log('  -- ' + D.nombre + ' (reflejos de ' + f2(D.reflejos) + ' s, ' + D.corazones + ' corazones)');
+  TRAMOS.forEach(([nom, desde, hasta], i) => {
+    const rs = [];
+    for (let s = 1; s <= 16; s++) rs.push(recorre(dif, D.reflejos, s, false, desde, hasta));
+    const llegan = rs.filter(r => r.llego).length;
+    const pierde = rs.reduce((a, r) => a + (r.llego ? D.corazones - r.hp : D.corazones), 0) / rs.length;
+    const jefe = i === TRAMOS.length - 1, pide = jefe ? Math.ceil(16 * GANA[dif]) : 15;
+    ok(llegan >= pide, D.nombre + ' ' + nom + ': llega en ' + llegan + '/16 (pide ' + pide + ') perdiendo ' + pierde.toFixed(1) + '/' + D.corazones +
+       (rs.some(r => r.atascada) ? ' (' + rs.filter(r => r.atascada).length + ' ATASCADAS: el piloto, no el bosque)' : ''));
+  });
   const mach = [];
   for (let s = 1; s <= 12; s++) mach.push(recorre(dif, 0.4, s, true));
-  console.log('  -- ' + D.nombre + ': con ' + f2(D.reflejos) + ' s llega en ' + llegan.length + '/16 perdiendo ' + pierde.toFixed(1) + '/' + D.corazones +
-              (rs.some(r => r.atascada) ? ' (' + rs.filter(r => r.atascada).length + ' ATASCADAS: el piloto, no el bosque)' : '') +
-              '; el que no se defiende llega en ' + mach.filter(r => r.llego).length + '/12');
-  ok(llegan.length >= 15, D.nombre + ': con sus reflejos se pasa el bosque casi siempre');
+  const mll = mach.filter(r => r.llego);
   if (dif === 'paseo') {
-    // En PASEO, como contra el ogro: machacando se puede, pero defenderse
-    // tiene que valer mucho mas (menos de la mitad llegan, y casi sin vida).
-    const mll = mach.filter(r => r.llego);
+    // En PASEO, como contra el ogro: defenderse tiene que valer mucho mas
+    // (menos de la mitad llegan, y perdiendo el triple o todo). Desde que el
+    // lobo blanco guarda la salida, sin defenderse no llega ninguno.
+    const bien = [];
+    for (let s = 1; s <= 12; s++) bien.push(recorre(dif, D.reflejos, s));
+    const pierde = bien.reduce((a, r) => a + (r.llego ? D.corazones - r.hp : D.corazones), 0) / bien.length;
     const mpierde = mach.reduce((a, r) => a + (r.llego ? D.corazones - r.hp : D.corazones), 0) / mach.length;
-    ok(mll.length <= 6 && mpierde >= 3 * pierde, 'PASEO: defenderse vale la pena (sin defenderse llega en ' + mll.length + '/12 y pierde ' + mpierde.toFixed(1) + ')');
-  } else ok(mach.filter(r => r.llego).length <= 1, D.nombre + ': sin defenderse no se pasa');
+    ok(mll.length <= 6 && mpierde >= Math.min(3 * pierde, D.corazones),
+       'PASEO: defenderse vale la pena (el bosque entero sin hogueras: defendiendose pierde ' + pierde.toFixed(1) + '; sin defenderse llega en ' + mll.length + '/12 y pierde ' + mpierde.toFixed(1) + ')');
+  } else ok(mll.length <= 1, D.nombre + ': sin defenderse no se pasa (llega en ' + mll.length + '/12)');
 }
 
 console.log(fallos ? '\n' + fallos + ' FALLOS' : '\nTODO OK');

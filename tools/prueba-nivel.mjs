@@ -30,7 +30,7 @@ function semilla(s) { return () => { s = (s * 1664525 + 1013904223) >>> 0; retur
 
 // Un nivel de pruebas con un solo foso [a, b] (y lo que se le pida).
 function nivelCon(extra) {
-  return { ...N.BOSQUE, fosos: [], tocones: [], troncos: [], ramas: [], enemigos: [], hoguera: 99999, salida: 99999, ...extra };
+  return { ...N.BOSQUE, fosos: [], tocones: [], troncos: [], ramas: [], enemigos: [], hogueras: [], salida: 99999, ...extra };
 }
 
 // ============================================================

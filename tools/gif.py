@@ -3,6 +3,11 @@
     python tools/gif.py ogro:garrote salida.gif
     python tools/gif.py ogro:garrote,ogro:pisoton salida.gif
     python tools/gif.py caballera:combo salida.gif --x2    # como en el telefono
+    python tools/gif.py aventura:picado salida.gif --dif paseo  # en PASEO
+    python tools/gif.py aventura:jefe salida.mp4 --reac 0.6     # en video
+
+UN VIDEO si la salida acaba en .mp4 (con ffmpeg, H.264): la pelea del jefe
+en GIF pesaba 74 MB; en video, una fraccion, y sin reducir colores.
 
 Las secuencias del ogro son las de tools/ver-ogro.html (garrote, pisoton,
 barrido, embestida, ruge, dolor, pared, parada, jadeo, muere, anda, espera) y
@@ -26,6 +31,10 @@ import tempfile
 
 from PIL import Image
 
+# La tira de una grabacion larga (la pelea del jefe, 34 s) pasa del limite
+# contra 'bombas de descompresion' de PIL; la genera ver.js, es nuestra.
+Image.MAX_IMAGE_PIXELS = None
+
 AQUI = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.join(AQUI, '..')
 # 25 y no 30: el GIF guarda la duracion en CENTESIMAS. A 30 fps cada fotograma
@@ -38,7 +47,8 @@ PAGINA = {'ogro': ('tools/ver-ogro.html', 620, 470), 'caballera': ('tools/ver-ca
 DURA = {
     'escena': {'arena': 5.2, 'parada': 2.2, 'barrido': 1.8, 'embestida': 2.6,
                'inicio': 4.6, 'victoria': 6.6},
-    'aventura': {'inicio': 8.0, 'foso': 2.4, 'barrido': 7.0, 'rastrero': 8.0, 'lobo': 7.0, 'troncos': 6.0, 'kitsune': 9.0, 'ramas': 6.0, 'tocon': 5.0, 'final': 16.0},
+    'aventura': {'inicio': 8.0, 'foso': 2.4, 'barrido': 7.0, 'rastrero': 8.0, 'lobo': 7.0, 'troncos': 6.0, 'kitsune': 9.0, 'ramas': 6.0, 'tocon': 5.0, 'final': 16.0,
+                 'picado': 6.0, 'cuervo': 9.0, 'relampago': 5.0, 'iai': 7.0, 'jefe': 34.0},
     'ogro': {'garrote': 0.95, 'pisoton': 1.45, 'barrido': 0.88, 'embestida': 1.30,
              'ruge': 1.2, 'dolor': 0.24, 'pared': 1.25, 'parada': 0.55, 'jadeo': 0.55,
              'muere': 1.2, 'anda': 1.2, 'espera': 1.0},
@@ -59,15 +69,30 @@ def tira(sec):
     filas = (n + cols - 1) // cols
     with tempfile.TemporaryDirectory() as tmp:
         png = os.path.join(tmp, 'tira.png')
-        subprocess.run(['node', os.path.join(AQUI, 'ver.js'), f'{pagina}?s={nombre}&fps={FPS}&dura={dura}',
+        dif = f'&dif={sys.argv[sys.argv.index("--dif") + 1]}' if '--dif' in sys.argv else ''
+        dif += f'&reac={sys.argv[sys.argv.index("--reac") + 1]}' if '--reac' in sys.argv else ''
+        subprocess.run(['node', os.path.join(AQUI, 'ver.js'), f'{pagina}?s={nombre}&fps={FPS}&dura={dura}{dif}',
                         png, str(min(n, cols) * cw), str(filas * ch)], cwd=RAIZ, check=True, capture_output=True)
         im = Image.open(png).convert('RGB')
         im.load()
     return [im.crop(((i % cols) * cw, (i // cols) * ch, (i % cols + 1) * cw, (i // cols + 1) * ch)) for i in range(n)]
 
 
+def video(fotos, salida):
+    if '--x2' in sys.argv:
+        fotos = [f.resize((f.width * 2, f.height * 2), Image.NEAREST) for f in fotos]
+    w, h = fotos[0].width // 2 * 2, fotos[0].height // 2 * 2
+    with tempfile.TemporaryDirectory() as tmp:
+        for i, f in enumerate(fotos):
+            f.crop((0, 0, w, h)).save(os.path.join(tmp, f'{i:05d}.png'))
+        subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-framerate', str(FPS), '-i', os.path.join(tmp, '%05d.png'),
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', '-movflags', '+faststart', salida], check=True)
+    print(f'{salida}: {len(fotos)} fotogramas a {FPS} fps, {os.path.getsize(salida) / 1024:.0f} KB')
+    return 0
+
+
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    args = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith('--') and sys.argv[i - 1] not in ('--dif', '--reac')]
     if len(args) < 2:
         print(__doc__)
         return 1
@@ -75,6 +100,8 @@ def main():
     for nombre in args[0].split(','):
         tr = tira(nombre)
         fotos += tr + [tr[-1]] * (FPS // 3)      # un respiro entre secuencias
+    if args[1].endswith('.mp4'):
+        return video(fotos, args[1])
     # la paleta comun, sacada de un mosaico de fotogramas repartidos
     muestra = fotos[::max(1, len(fotos) // 12)]
     fw, fh = fotos[0].size

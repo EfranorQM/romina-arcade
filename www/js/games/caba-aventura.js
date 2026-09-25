@@ -34,30 +34,38 @@ const ALTO = 540;
 const ENTRADA_T = 2.4, FINAL_T = 2.4, CAE_T = 0.9;
 const NADA = { dx: 0, salta: false, golpea: false, esquiva: false, bloquea: false };
 const ORO = '#ffe066', ROSA = '#ef4a84', BLANCO = '#fff4fa';
+// LO QUE SE GUARDA. El 24-09-2026 el bosque crecio (los tengus y el lobo
+// blanco, 3300 px mas): el tiempo y las notas del bosque corto no se pueden
+// comparar con los del largo, asi que se guardan aparte, y el NUEVO! de la
+// pestaña vuelve a salir hasta que lo juegue.
+export const GUARDADO = 'caba.bosque2', VISTA = 'caba.aventuraVista2';
 // El polvo de los EFECTOS (saltar, caer): mas claro que el del bosque. Con el
 // suyo (#cecb85) sobre el camino (#adaa6d) el aro y las nubes no se veian.
 const POLVO_FX = ['#fff8d8', '#ece6b8', PB.polvo3];
 
-// Empezar el bosque (desde el principio, o desde la hoguera si ya llego).
-export function empieza(S, desdeHoguera = false) {
+// Empezar el bosque (desde el principio, o desde la ultima hoguera a la que
+// llego: `desdeHoguera` es su x).
+export function empieza(S, desdeHoguera = 0) {
   const def = N.BOSQUE;
   const L = N.makeNivel(def, Math.random, P.opcionesBosque(S.dif));
-  if (desdeHoguera) L.hoguera = true;
-  const x0 = desdeHoguera ? def.hoguera + 40 : 40;
+  if (desdeHoguera) L.hoguera = desdeHoguera;
+  const x0 = desdeHoguera ? desdeHoguera + 40 : 40;
   S.K = C.makeCaballero(x0, { ...P.opcionesElla(S.dif), y: def.suelo });
-  L.seguroX = desdeHoguera ? def.hoguera + 40 : 160;
+  L.seguroX = desdeHoguera ? desdeHoguera + 40 : 160;
   N.camara(L, S.K, VW, 0, true);
   S.av = {
     N: L, fase: 'entrada', faseT: 0, t: 0, tJuego: 0,
     golpes: 0, caidas: 0, desdeHoguera, gano: false, acabada: false, res: null, funde: 0,
     msg: '', msgT: 0, hitstop: 0,
+    // cuantas veces le ha parado el yamabushi un golpe (lo dice las primeras)
+    rechazos: 0,
     // Los EFECTOS de lo que hace ella: los mismos que en la pelea.
     fx: FX.makeEfectos(POLVO_FX),
   };
   S.salta = false; S.golpea = false; S.esquiva = false;
   S.combo = 0; S.comboT = 0; S.leccion = null;
   S.fase = 'aventura'; S.faseT = 0;
-  Save.guarda('caba.aventuraVista', true);      // ya no hace falta el NUEVO
+  Save.guarda(VISTA, true);                     // ya no hace falta el NUEVO
   playMusic(SONGS.caballeroBosque || SONGS.caballero);
 }
 
@@ -93,7 +101,7 @@ export function update(S, dt) {
 function entrada(S, dt) {
   const A = S.av, K = S.K;
   // Entra andando hasta su sitio.
-  C.stepCaballero(K, { ...NADA, dx: K.x < (A.desdeHoguera ? N.BOSQUE.hoguera + 120 : 170) ? 1 : 0 }, dt, N.mundo(A.N));
+  C.stepCaballero(K, { ...NADA, dx: K.x < (A.desdeHoguera ? A.desdeHoguera + 120 : 170) ? 1 : 0 }, dt, N.mundo(A.N));
   camara(S, dt);
   if (A.faseT >= ENTRADA_T) empiezaJuego(S);
 }
@@ -167,10 +175,12 @@ function juego(S, dt) {
       return;
     } else if (e.tipo === 'hoguera') {
       SFX.powerup(); vibrate(20);
-      A.msg = 'HOGUERA ENCENDIDA'; A.msgT = 1.6;
+      A.msg = e.cura ? 'LA HOGUERA TE CURA' : 'HOGUERA ENCENDIDA'; A.msgT = 1.6;
       burst(ex, e.y - 20, 22, { rnd: Math.random, colors: [PB.fuego1, PB.fuego2, BLANCO], speed: 200, life: 0.7, size: 4, grav: -80 });
     } else if (e.tipo === 'salida') {
       termina(S, true);
+    } else if (e.tipo === 'guardada') {
+      A.msg = 'EL LOBO BLANCO GUARDA LA SALIDA'; A.msgT = 1.6;
     } else enemigo(S, e, ex);
   }
   camara(S, dt);
@@ -192,15 +202,40 @@ function camara(S, dt, instantanea = false) {
 function enemigo(S, e, ex) {
   const A = S.av, K = S.K;
   if (e.tipo === 'aviso') {
-    if (e.atk === 'zarpazo' || e.atk === 'acomete' || e.atk === 'barre') SFX.grune();
+    if (e.atk === 'zarpazo' || e.atk === 'acomete' || e.atk === 'barre' || e.atk === 'levanta') SFX.grune();
     else if (e.atk === 'lanza' || e.atk === 'rastrero') SFX.crece();
     else if (e.atk === 'corro') SFX.alarm();
+    else if (e.atk === 'tajo' || e.atk === 'iai' || e.atk === 'relampago') SFX.desenvaina();
+    else if (e.atk === 'picado') SFX.graznido();
     // EL AVISO BRILLA DEL COLOR DEL BOTON que lo contesta; en PASEO, el boton
     // sale encima (para quien todavia no se sabe cada ataque de memoria).
     const E = e.enemigo, resp = EN.RESPUESTA[e.atk];
     if (E && resp) FX.aviso(A.fx, E.x, E.y - E.T.alto - 28, resp, E.T[e.atk].aviso, S.dif === 'paseo' ? S.mini[resp] : null);
   } else if (e.tipo === 'fuego') {
     SFX.dash();
+  } else if (e.tipo === 'fija') {
+    // EL PICADO SE FIJA: va a caer donde esta su sombra. Es el momento de
+    // esquivar, y ahi (en la sombra) sale el aviso del boton.
+    SFX.picado(); vibrate(8);
+    const E = e.enemigo;
+    FX.aviso(A.fx, e.x, e.y - 30, 'esquivar', E.T.picado.fija, S.dif === 'paseo' ? S.mini.esquivar : null);
+  } else if (e.tipo === 'aterriza') {
+    cam.shake(4, 0.16); vibrate(16); SFX.aterriza();
+    FX.aterriza(A.fx, e.x, e.y, 1.2);
+    burst(ex, e.y, 16, { rnd: Math.random, colors: [PB.polvo1, PB.polvo2, PE.pluma], speed: 260, life: 0.45, size: 4, grav: 500 });
+  } else if (e.tipo === 'relampago') {
+    SFX.dash(); cam.shake(2, 0.1);
+  } else if (e.tipo === 'aullido') {
+    // EL JEFE AULLA: la primera vez se dice quien es; si llama, a quien
+    SFX.aullido(); cam.shake(3, 0.5); vibrate(30);
+    A.msg = e.llama ? 'EL LOBO BLANCO LLAMA A SU MANADA' : 'EL LOBO BLANCO AULLA'; A.msgT = 1.8;
+  } else if (e.tipo === 'rechazo') {
+    // EL YAMABUSHI LE PARA EL GOLPE: acero contra acero
+    A.hitstop = 5 / 60; cam.shake(2.5, 0.1); SFX.clang(); vibrate(12);
+    FX.bloquea(A.fx, e.x, e.y, -e.enemigo.dir);
+    burst(ex, e.y, 12, { rnd: Math.random, colors: [PE.acero, ORO, '#ffffff'], speed: 280, life: 0.35, size: 3, grav: 300 });
+    if (e.aullando) { A.msg = 'AULLANDO NO LE HACES NADA'; A.msgT = 1.2; }
+    else if (A.rechazos++ < 3) { A.msg = 'SE CUBRE: PARA SU TAJO Y PEGA'; A.msgT = 1.6; }
   } else if (e.tipo === 'corro') {
     cam.shake(3, 0.2); vibrate(12); SFX.explode();
     burst(ex, e.y - 80, 20, { rnd: Math.random, colors: [PE.fuego1, PE.fuego2, PE.fuego3], speed: 300, life: 0.5, size: 4, grav: -40 });
@@ -212,6 +247,10 @@ function enemigo(S, e, ex) {
     // ni de un fuego); los demas, solo si le rompen la guardia.
     if (atk === 'barre' || atk === 'rastrero') {
       A.msg = atk === 'barre' ? 'SALTA EL BARRIDO' : 'SALTA EL FUEGO'; A.msgT = 1.2;
+    } else if (atk === 'picado' || atk === 'relampago') {
+      A.msg = atk === 'picado' ? 'ESQUIVA: SAL DE SU SOMBRA' : 'SALTA EL RELAMPAGO'; A.msgT = 1.3;
+    } else if (atk === 'levanta' && e.aire) {
+      A.msg = 'ESE SE PARA CON LA GUARDIA'; A.msgT = 1.3;
     } else if (e.r === 'rota') {
       A.msg = atk === 'acomete' ? 'ESQUIVALO' : atk === 'corro' ? 'APARTATE DEL FUEGO' : 'GUARDIA ROTA';
       A.msgT = 1.2;
@@ -219,7 +258,7 @@ function enemigo(S, e, ex) {
   } else if (e.tipo === 'parada' || e.tipo === 'devuelto') {
     // LA PARADA: el golpe rebota; con la bola, se la devuelve
     A.hitstop = 9 / 60; cam.shake(4, 0.14); SFX.clang(); vibrate(26);
-    A.msg = e.tipo === 'parada' ? 'PARADA!' : 'DEVUELTA!'; A.msgT = 0.9;
+    A.msg = e.tipo === 'devuelto' ? 'DEVUELTA!' : e.aturde ? 'PARADA! ESTA ATURDIDO' : 'PARADA!'; A.msgT = e.aturde ? 1.3 : 0.9;
     FX.para(A.fx, K.x + K.dir * 44, K.y - 110);
     burst(K.x - A.N.camX + K.dir * 44, K.y - 110, 18, { rnd: Math.random, colors: [ORO, BLANCO, '#ffffff'], speed: 320, life: 0.5, size: 4, grav: 120 });
   } else if (e.tipo === 'bloqueo' || e.tipo === 'apagado') {
@@ -234,7 +273,8 @@ function enemigo(S, e, ex) {
     cam.shake(e.contra ? 6 : e.fuerte ? 4 : 3, 0.12);
     SFX.corta(); vibrate(e.fuerte || e.contra ? 22 : 14);
     FX.acierta(A.fx, E.x - K.dir * 12, e.y, K.dir, e.contra ? 3 : e.fuerte ? 2 : K.combo);
-    const cols = E.tipo === 'lobo' ? [PE.lobo1, PE.lobo2, PE.sangre] : [PE.kitsune1, PE.kitsune2, PE.fuego1];
+    const cols = E.tipo === 'lobo' ? [PE.lobo1, PE.lobo2, PE.sangre] : E.tipo === 'kitsune' ? [PE.kitsune1, PE.kitsune2, PE.fuego1]
+      : E.tipo === 'alfa' ? [PE.alfa1, PE.alfa2, PE.sangre] : [PE.tengu1, PE.tengu2, PE.pluma];
     burst(ex, e.y, e.muere ? 26 : 14, { rnd: Math.random, colors: cols, speed: e.muere ? 340 : 260, life: 0.5, size: 4, grav: 620 });
     if (e.contra) {
       A.msg = 'CONTRAATAQUE'; A.msgT = 0.8;
@@ -271,7 +311,7 @@ function cierra(S) {
   const A = S.av, K = S.K;
   const perdidos = K.hpMax - Math.max(0, K.hp);
   const nota = !A.gano ? null : perdidos === 0 ? 'S' : perdidos <= 1 ? 'A' : perdidos <= 2 ? 'B' : 'C';
-  const guardado = Save.dato('caba.bosque', { hecho: false, mejorT: 0, notas: {} });
+  const guardado = Save.dato(GUARDADO, { hecho: false, mejorT: 0, notas: {} });
   let recordT = false;
   if (A.gano) {
     guardado.hecho = true;
@@ -279,10 +319,11 @@ function cierra(S) {
     const orden = ['C', 'B', 'A', 'S'];
     const antes = guardado.notas[S.dif];
     if (!antes || orden.indexOf(nota) > orden.indexOf(antes)) guardado.notas[S.dif] = nota;
-    Save.guarda('caba.bosque', guardado);
+    Save.guarda(GUARDADO, guardado);
   }
   A.res = { gano: A.gano, t: A.tJuego, vida: Math.max(0, K.hp), vidaMax: K.hpMax, caidas: A.caidas,
-            vencidos: A.N.vencidos, enemigos: A.N.enemigos.length,
+            // (los lobos de la manada que el jefe no llego a llamar no cuentan)
+            vencidos: A.N.vencidos, enemigos: A.N.enemigos.filter(E => !E.oculto).length,
             nota, recordT, mejorT: guardado.mejorT, hoguera: A.N.hoguera, desdeHoguera: A.desdeHoguera };
   if (recordT) SFX.record();
   A.fase = 'resultado'; A.faseT = 0; A.sello = false;
@@ -372,12 +413,24 @@ function drawHud(S, g) {
   const u = Math.max(0, Math.min(1, K.x / fin));
   g.fillStyle = '#adaa6d'; g.fillRect(bx, by, Math.round(bw * u), 4);
   for (const [a, b] of L.def.fosos) { g.fillStyle = '#0b0907'; g.fillRect(bx + Math.round(bw * a / fin), by, Math.max(2, Math.round(bw * (b - a) / fin)), 4); }
-  const hx = bx + Math.round(bw * L.def.hoguera / fin);
-  g.fillStyle = L.hoguera ? '#ff9628' : '#6a6a60'; g.fillRect(hx - 3, by - 8, 6, 8);
+  for (const h of L.def.hogueras) {
+    const hx = bx + Math.round(bw * h / fin);
+    g.fillStyle = h <= L.hoguera ? '#ff9628' : '#6a6a60'; g.fillRect(hx - 3, by - 8, 6, 8);
+  }
   g.fillStyle = '#6a8a4a'; g.fillRect(bx + bw - 4, by - 12, 8, 12);
   g.fillStyle = ROSA; g.fillRect(bx + Math.round(bw * u) - 4, by - 6, 8, 8);
   g.fillStyle = BLANCO; g.fillRect(bx + Math.round(bw * u) - 2, by - 4, 4, 4);
   text(g, L.def.nombre, bx, by + 14, '#c8d8b0', 2);
+  // EL JEFE, en cuanto aulla: su nombre y su vida, a la derecha (la pausa
+  // esta en el centro).
+  const J = N.jefeVivo(L);
+  if (J && J.aullidos > 0) {
+    const jw = 220, jx = VW - 110 - jw, jy = 22;
+    g.fillStyle = '#10140c'; g.fillRect(jx - 3, jy - 3, jw + 6, 12);
+    g.fillStyle = '#3a2030'; g.fillRect(jx, jy, jw, 6);
+    g.fillStyle = '#e83a5a'; g.fillRect(jx, jy, Math.round(jw * J.hp / J.hpMax), 6);
+    text(g, 'EL LOBO BLANCO', jx, jy + 14, '#f0e8d8', 2);
+  }
   const s = P.DIFICULTADES[S.dif].nombre + '   ' + reloj(A.tJuego);
   text(g, s, VW - 14 - measure(s, 2), 36, '#c8d8b0', 2);
   if (A.msgT > 0 && A.fase === 'juego') {

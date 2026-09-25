@@ -971,7 +971,7 @@ export default {
     }
     // NUEVO, sobre la pestaña de la aventura, hasta que la juegue una vez: la
     // primera vez que se publico, no la encontro.
-    if (!Save.dato('caba.aventuraVista', false) && Math.sin(this.t * 6) > -0.4) {
+    if (!Save.dato(AV.VISTA, false) && Math.sin(this.t * 6) > -0.4) {
       const c = this.pestana('aventura');
       BT.rotulo(g, 'NUEVO!', c.x - 76, c.y + 14, '#5cffd8', 3);
     }
@@ -987,7 +987,7 @@ export default {
       if (this.modo === 'aventura') {
         // En la aventura no hay puntos: el lema del bosque y la mejor nota.
         textCenter(g, LEMA_BOSQUE[key], mx, c.y + 118, '#e8d8e8', 2);
-        const B = Save.dato('caba.bosque', null), nota = B && B.notas && B.notas[key];
+        const B = Save.dato(AV.GUARDADO, null), nota = B && B.notas && B.notas[key];
         textCenter(g, nota ? 'MEJOR NOTA ' + nota : 'SIN NOTA AUN', mx, c.y + 150, nota ? '#ffd76a' : '#8a7ab8', 2);
       } else {
         textCenter(g, D.lema, mx, c.y + 118, '#e8d8e8', 2);
@@ -998,7 +998,7 @@ export default {
     if (this.modo === 'aventura') {
       // La aventura: que nivel es, y su mejor tiempo.
       BT.rotulo(g, NV.BOSQUE.nombre + ': LLEGA AL ARBOL DEL FINAL', VW / 2, 438, '#c8e8a0', 2);
-      const B = Save.dato('caba.bosque', null);
+      const B = Save.dato(AV.GUARDADO, null);
       if (B && B.mejorT) BT.rotulo(g, 'MEJOR TIEMPO ' + reloj(B.mejorT), VW / 2, 464, '#c8b8ff', 2);
     } else {
       // Si todavia le queda que aprender, se le dice: la primera pelea enseña.

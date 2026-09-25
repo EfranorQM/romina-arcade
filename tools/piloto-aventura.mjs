@@ -9,12 +9,16 @@
 // miente).
 //
 // Lo que hace, por orden de urgencia:
-//   - el zarpazo del lobo o una bola de fuego que viene: GUARDIA
-//   - la acometida del lobo: ESQUIVA hacia el (lo atraviesa)
+//   - lo que va por el suelo (barrido, fuego rastrero, relampago): SALTA
 //   - el corro de la kitsune: se aparta
+//   - la acometida del lobo: ESQUIVA hacia el (lo atraviesa); el picado del
+//     cuervo: ESQUIVA fuera de su sombra en cuanto se fija
+//   - el zarpazo, el tajo, el desenvaine, el zarpazo hacia arriba o una bola
+//     de fuego que viene: GUARDIA
 //   - una rama que cae cerca: se aparta
 //   - un foso o un tronco delante: SALTA
-//   - un enemigo al alcance: ATACA (encadenando el combo)
+//   - un enemigo al alcance: ATACA (encadenando el combo); al yamabushi, solo
+//     cuando tiene la katana fuera, esta aturdido o de espaldas
 //   - si no, corre hacia la salida
 
 import * as C from '../www/js/games/caba-cuerpo.js';
@@ -62,11 +66,26 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
     const hace = n - m.ataque[E.id].desde;
     if (hace < reacDe('a' + E.id + ':' + m.ataque[E.id].desde)) continue;
     const d = E.x - K.x;
-    if (E.atk === 'zarpazo' && Math.abs(d) < 240) guardia = true;
+    if ((E.atk === 'zarpazo' || E.atk === 'tajo' || E.atk === 'iai' || E.atk === 'levanta') && Math.abs(d) < 240) guardia = true;
+    // EL PICADO: se esquiva al verlo FIJARSE (antes, la sigue), hacia donde
+    // quede mas lejos de su sombra. Los reflejos cuentan desde que se fija.
+    if (E.atk === 'picado' && E.st === EN.ATACA && (E.fase === 'fija' || E.fase === 'cae')) {
+      const k = 'fija' + E.id + ':' + m.ataque[E.id].desde;
+      if (ve(k) >= reacDe(k) && Math.abs(d) < E.T.picado.radio + 60) esquivaHacia = -(Math.sign(d) || 1);
+    }
+    // EL RELAMPAGO: se salta por el ritmo, como el barrido: justo cuando
+    // arranca (o ya cruzando, si se le paso el momento).
+    if (E.atk === 'relampago' && Math.abs(d) < 520 &&
+        ((E.st === EN.AVISO && E.t >= E.T.relampago.aviso - 0.06) || (E.st === EN.ATACA && !E.golpeo))) salta = true;
     // la bola creciendo en la mano: ya sabe que viene una (no hay que
     // volver a reaccionar cuando sale)
     if (E.atk === 'lanza' && E.st === EN.AVISO) m.anticipa = true;
-    if (E.atk === 'acomete' && E.st === EN.AVISO && Math.abs(d) < 420) esquivaHacia = Math.sign(d) || 1;
+    // LA ACOMETIDA se atraviesa agachado o ya volando hacia ella (hasta el
+    // 24-09-2026 solo agachado: con reflejos de mas de lo que dura el aviso,
+    // 0.62 s en PASEO, el piloto no la esquivaba nunca y se la comia; una
+    // persona la ve venir volando y esquiva)
+    if (E.atk === 'acomete' && Math.abs(d) < 420 &&
+        (E.st === EN.AVISO || (E.st === EN.ATACA && !E.golpeo && (K.x - E.x) * E.dir > 0))) esquivaHacia = Math.sign(d) || 1;
     if (E.atk === 'corro' && Math.abs(d) < 260) aparta = -(Math.sign(d) || 1);
     // EL BARRIDO BAJO: se salta justo antes de que barra (lo que una persona
     // cronometra mirando como se echa atras), nunca antes de verlo.
@@ -110,7 +129,7 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
   // --- La GUARDIA mira hacia lo que viene: se gira con el stick.
   if (guardia && K.enSuelo) {
     const amenaza = L.fuegos.find(F => !F.propio && !F.fin && Math.abs(F.x - K.x) < 300) ||
-                    L.enemigos.find(E => E.vivo && E.atk === 'zarpazo' && (E.st === EN.AVISO || E.st === EN.ATACA));
+                    L.enemigos.find(E => E.vivo && ['zarpazo', 'tajo', 'iai', 'levanta'].includes(E.atk) && (E.st === EN.AVISO || E.st === EN.ATACA));
     const hacia = amenaza ? Math.sign(amenaza.x - K.x) || 1 : K.dir;
     if (K.dir !== hacia) { inp.dx = hacia * 0.5; return inp; }    // girarse primero
     inp.dx = 0; inp.bloquea = true;
@@ -157,11 +176,14 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
   if (K.enSuelo && (foso || tronco || toconSalta)) { inp.salta = true; return inp; }
 
   // --- Enemigos: el mas cercano delante (o detras, si esta encima).
-  let blanco = null;
+  // (Mientras la manada del jefe pelea, el jefe cuenta como 400 px mas lejos:
+  // una persona pelea con el lobo que se le echa encima, no persigue al jefe,
+  // que se aparta.)
+  let blanco = null, lejos = Infinity;
   for (const E of L.enemigos) {
-    if (!E.vivo || !E.despierto || E.st === EN.MUERTO) continue;
-    const d = E.x - K.x;
-    if (Math.abs(d) < 600 && (!blanco || Math.abs(d) < Math.abs(blanco.x - K.x))) blanco = E;
+    if (!E.vivo || !E.despierto || E.oculto || E.st === EN.MUERTO) continue;
+    const d = Math.abs(E.x - K.x) + (E.T.jefe && E.manada && E.manada.some(W => W.vivo && W.despierto) ? 400 : 0);
+    if (d < 600 && d < lejos) { blanco = E; lejos = d; }
   }
   if (blanco) {
     const d = blanco.x - K.x, ad = Math.abs(d), hacia = Math.sign(d) || 1;
@@ -178,6 +200,16 @@ export function piloto(n, K, L, m, sem = 1, reac = REAC, machacon = false) {
       const abierta = blanco.st === EN.AGOTADA || blanco.st === EN.DOLOR;
       if (blanco.st === EN.ATACA) { inp.dx = sinFoso(-hacia); return inp; }
       if (!abierta || ad > 260) { inp.dx = ad > 480 ? hacia : ad < 360 ? sinFoso(-hacia) : 0; return inp; }
+    }
+    // EL CUERVO EN EL AIRE: no se le alcanza; se le espera debajo.
+    if (blanco.alt > 40) { inp.dx = 0; return inp; }
+    // EL YAMABUSHI: de frente y en guardia para los golpes. Se le espera a
+    // tiro de su desenvaine (que lo pare la guardia) y se le pega cuando
+    // tiene la katana fuera, aturdido, dolido o de espaldas.
+    if (blanco.tipo === 'yamabushi' && !machacon) {
+      const abierto = blanco.st === EN.RECUPERA || blanco.st === EN.AGOTADA || blanco.st === EN.DOLOR ||
+                      (blanco.st === EN.ATACA && blanco.atk === 'relampago') || blanco.dir === Math.sign(blanco.x - K.x);
+      if (!abierto) { inp.dx = ad > 150 ? hacia : 0; if (ad <= 150 && K.dir !== hacia) inp.dx = hacia * 0.5; return inp; }
     }
     if (ad < 120) {
       inp.dx = K.dir !== hacia ? hacia : 0;

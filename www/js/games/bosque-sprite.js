@@ -124,14 +124,15 @@ export function drawBosque(g, N, cx, VW, VH, t) {
   }
 }
 
-// LA HOGUERA: apagada hasta que llega; encendida, con su luz.
+// LAS HOGUERAS: apagadas hasta que llega; encendidas, con su luz.
 export function drawHoguera(g, N, cx, t) {
-  const x = N.def.hoguera - cx;
+  for (const hx of N.def.hogueras) una(g, hx - cx, N.def.suelo, hx <= N.hoguera, t);
+}
+function una(g, x, y, encendida, t) {
   if (x < -100 || x > 1300) return;
-  const y = N.def.suelo;
   const [, , w, h] = PIEZAS.hoguera;
   sombra(g, x, y + 2, 34, 5, 0.3);
-  if (N.hoguera) {
+  if (encendida) {
     // la luz en el suelo y en el aire
     g.globalCompositeOperation = 'lighter';
     const f = 0.8 + 0.2 * Math.sin(t * 9) * Math.sin(t * 5.3);
@@ -143,7 +144,7 @@ export function drawHoguera(g, N, cx, t) {
     g.globalCompositeOperation = 'source-over';
   }
   pieza(g, 'hoguera', x - (w * ESCALA) / 2, y - h * ESCALA + 4);
-  if (N.hoguera) {
+  if (encendida) {
     const k = Math.floor(t * 10) % 4;
     const [, , fw, fh] = PIEZAS['fuego' + k];
     pieza(g, 'fuego' + k, x - (fw * ESCALA) / 2, y - h * ESCALA - fh * ESCALA + 12);

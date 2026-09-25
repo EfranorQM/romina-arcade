@@ -29,18 +29,19 @@
     AV.empieza(S);
     S.av.fase = 'juego'; S.av.faseT = 0;         // sin el cartel de entrada
     prepara(S.K);
-    const fases = [];
+    const fases = [], msgs = [];
     let sigue = true;
     const mira = () => {
       if (!sigue) return;
       const f = S.av.fase;
       if (fases[fases.length - 1] !== f) fases.push(f);
+      if (S.av.msg && msgs[msgs.length - 1] !== S.av.msg) msgs.push(S.av.msg);
       requestAnimationFrame(mira);
     };
     mira();
     await espera(ms);
     sigue = false;
-    return { fases: fases.join(' > '), vida: S.K.hp, caidas: S.av.caidas, gano: S.av.gano, res: !!S.av.res };
+    return { fases: fases.join(' > '), msgs, vida: S.K.hp, caidas: S.av.caidas, gano: S.av.gano, res: !!S.av.res };
   }
   const alFoso = (K, hp) => { K.x = enFoso; K.y = def.suelo + 10; K.vx = 0; K.vy = 0; K.enSuelo = false; K.hp = hp; };
 
@@ -51,9 +52,17 @@
   let e = await caso(K => alFoso(K, 3), 2500);
   apunta('cae con 3 corazones: vuelve a jugar con 2', e.fases === 'juego > cae > juego' && e.vida === 2 && e.caidas === 1, e);
 
-  // 2. Llega a la salida: gana y acaba en el resultado.
-  e = await caso(K => { K.x = def.salida + 2; }, 5000);
-  apunta('llega a la salida: gana y sale el resultado', e.fases === 'juego > final > resultado' && e.gano && e.res, e);
+  // 2. Llega a la salida. Desde el 24-09-2026 la guarda el lobo blanco: con
+  //    el en pie no se acaba (se le dice), y vencido, gana y sale el resultado.
+  // (el jefe, dormido: despierto, aullaria y su lobo la echaria de alli)
+  e = await caso(K => { for (const E of S.av.N.enemigos) if (E.T.jefe) E.despiertaX = Infinity; K.x = def.salida + 2; }, 2500);
+  apunta('llega a la salida con el jefe en pie: sigue jugando y se le dice', e.fases === 'juego' && !e.gano && e.msgs.some(m => /GUARDA/.test(m)),
+         { fases: e.fases + ' / ' + e.msgs.join(' | ') });
+  e = await caso(K => {
+    for (const E of S.av.N.enemigos) if (E.T.jefe) { E.vivo = false; E.hp = 0; E.st = 6; E.muertoT = 9; }
+    K.x = def.salida + 2;
+  }, 5000);
+  apunta('llega a la salida con el jefe vencido: gana y sale el resultado', e.fases === 'juego > final > resultado' && e.gano && e.res, e);
 
   // 3. Pierde el ultimo corazon en el aire sobre un foso (un golpe en pleno
   //    salto): el cuerpo cae por el, y se acaba sin pasar por 'cae'.

@@ -416,4 +416,11 @@ export const SFX = {
   // LA AVENTURA de ROMINA: el lobo que se alza y caer a un foso
   grune:    () => sfx({ type: 'saw', f0: 130, f1: 70, dur: 0.30, vol: 0.30 }),
   cae:      () => sfx({ type: 'tri', f0: 700, f1: 110, dur: 0.6, vol: 0.30 }),
+  // los tengus y el lobo blanco: la katana que sale de la vaina (un roce que
+  // sube y el filo), el graznido del cuervo, el silbido del picado (baja) y
+  // el aullido (sube, se sostiene y cae)
+  desenvaina: () => { sfx({ type: 'noise', f0: 1600, f1: 5200, dur: 0.22, vol: 0.16 }); setTimeout(() => sfx({ type: 'pulse', duty: 0.125, f0: 2400, f1: 2100, dur: 0.06, vol: 0.14 }), 180); },
+  graznido: () => { sfx({ type: 'saw', f0: 620, f1: 420, dur: 0.12, vol: 0.22 }); setTimeout(() => sfx({ type: 'saw', f0: 580, f1: 380, dur: 0.16, vol: 0.22 }), 150); },
+  picado:   () => sfx({ type: 'tri', f0: 1500, f1: 260, dur: 0.34, vol: 0.26 }),
+  aullido:  () => { sfx({ type: 'tri', f0: 280, f1: 560, dur: 0.35, vol: 0.30 }); setTimeout(() => sfx({ type: 'tri', f0: 560, f1: 520, dur: 0.45, vol: 0.30 }), 330); setTimeout(() => sfx({ type: 'tri', f0: 520, f1: 300, dur: 0.4, vol: 0.26 }), 760); },
 };

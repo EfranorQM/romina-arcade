@@ -17,8 +17,11 @@
 //   RAMAS     caen de los arboles con aviso (su sombra), como los cascotes del
 //             salon. Vienen de arriba: la guardia ni se entera; hay que
 //             apartarse.
-//   HOGUERA   a mitad de camino: si cae, sigue desde ahi.
-//   SALIDA    llegar a ella es acabar el nivel.
+//   HOGUERAS  por el camino: si cae, sigue desde la ultima que encendio. Y
+//             encenderla cura (el bosque largo, sin curar, acababa casi
+//             siempre en nota C: 3.8 corazones de 6 en PASEO defendiendose).
+//   SALIDA    llegar a ella es acabar el nivel (si la guarda un jefe, con el
+//             jefe vencido).
 // Cada cosa pide una respuesta distinta de los cuatro botones, que es la ley
 // del juego (ver ogro-cuerpo.js): no hay un boton que valga para todo.
 
@@ -30,13 +33,19 @@ import * as EN from './caba-enemigos.js';
 // 177..225 del dibujo (x2: 354..450); ella pisa por el centro, en 392.
 export const BOSQUE = {
   id: 'bosque', nombre: 'EL BOSQUE',
-  ancho: 7400,
+  // Hasta el 24-09-2026 acababa en 7400 (con dos lobos al final). Ahora sigue
+  // con los tres nuevos (ver caba-enemigos.js): el cuervo en el tramo de los
+  // dos lobos, una hoguera, el yamabushi solo, y el lobo blanco con su manada
+  // guardando el arbol del final. EL ULTIMO TRAMO ES LARGO (2300 px) PORQUE
+  // ES UNA PELEA: con la camara parada al final del nivel, ella peleaba en el
+  // borde derecho de la pantalla, debajo de los botones.
+  ancho: 11400,
   suelo: 392,
   // [x0, x1] de cada foso. Los anchos salen del salto medido en
   // tools/prueba-nivel.mjs: corriendo se cruzan 170 px como mucho, y un foso
   // de 120 ya solo deja 233 ms para despegar (uno de 150, 117: injusto con el
   // pulgar). Por eso van de 100 a 120, y el ancho lleva un tocon en medio.
-  fosos: [[1260, 1370], [2780, 2900], [4640, 4740], [5760, 6060]],
+  fosos: [[1260, 1370], [2780, 2900], [4640, 4740], [5760, 6060], [7700, 7810], [9150, 9260]],
   // Tocones en mitad del foso ancho: [x0, x1, alto sobre el camino].
   tocones: [[5865, 5955, 16]],
   // Zonas donde ruedan troncos mientras ella este dentro: [x0, x1, cada].
@@ -46,7 +55,9 @@ export const BOSQUE = {
   troncos: [[1950, 2450, 2.6], [5300, 5650, 2.4]],
   // Zonas donde caen ramas: [x0, x1, cada].
   ramas: [[3550, 4150, 2.0]],
-  hoguera: 4200,
+  // La segunda, justo antes de lo nuevo: perder con el yamabushi o con el
+  // jefe no devuelve a la mitad del bosque.
+  hogueras: [4200, 7900],
   // LOS ENEMIGOS: [tipo, x, y donde se despierta]. Primero uno de cada, solo
   // (el lobo antes de los troncos, la kitsune antes de las ramas); luego
   // mezclados con obstaculos (un lobo bajo las ramas; la kitsune disparando
@@ -58,15 +69,27 @@ export const BOSQUE = {
   // El cuarto dato (opcional) dice que ataques sabe: el bosque los enseña de
   // uno en uno. El primer lobo y la primera kitsune, los de siempre; los
   // lobos de las ramas añaden el BARRIDO BAJO (se salta); la segunda
-  // kitsune, el FUEGO RASTRERO (se salta); los dos del final, todo.
+  // kitsune, el FUEGO RASTRERO (se salta); el lobo del tramo del tocon, todo.
+  // Los nuevos, cada uno solo: el cuervo se despierta cuando ella deja atras
+  // al lobo, y el yamabushi tiene su tramo. El jefe lleva su MANADA: dos
+  // lobos (x de donde salen, detras del arbol) que no se ven ni se mueven
+  // hasta que el los llama aullando.
   enemigos: [['lobo', 1700], ['kitsune', 3300],
              ['lobo', 3950, 3750, { ataques: ['zarpazo', 'barre'] }], ['lobo', 4330, 4150, { ataques: ['zarpazo', 'barre', 'acomete'] }],
              ['kitsune', 5250, undefined, { ataques: ['lanza', 'rastrero', 'corro'] }],
-             ['lobo', 6400, undefined, { ataques: ['zarpazo', 'barre', 'acomete'] }], ['lobo', 6900, 6650, { ataques: ['zarpazo', 'barre', 'acomete'] }]],
-  salida: 7050,
+             ['lobo', 6400, undefined, { ataques: ['zarpazo', 'barre', 'acomete'] }],
+             ['karasu', 7150, 6750],
+             ['yamabushi', 8500],
+             ['alfa', 9950, undefined, { manada: [11000, 11050] }]],
+  salida: 11050,
   // El arbol con cara, al final del camino: el que guarda la salida.
-  arbol: 7050,
+  arbol: 11050,
 };
+
+// Lo que se aparta del borde de su tramo cada uno: el lobo 300 y la kitsune
+// 150 (ver makeNivel). El cuervo, 200: esquivar su picado junto al borde era
+// caerse al foso.
+const MARGEN = { lobo: 300, alfa: 300, kitsune: 150, karasu: 200, yamabushi: 150 };
 
 // ---------- Los troncos ----------
 // Con 30 de radio a 330 px/s, saltarlo solo salvaba pulsando en 117 ms: el
@@ -105,14 +128,32 @@ export function makeNivel(def, rnd = Math.random, dif = {}) {
   // 300 px y la kitsune 150. Asi la pelea no es de espaldas a un foso (con el
   // lobo a 90 px, esquivar hacia atras era caerse) ni en el sitio donde ella
   // aterriza del salto.
-  const enemigos = (def.enemigos || []).map(([tipo, x, despiertaX, extra], i) => {
+  const enemigos = [];
+  const crea = (tipo, x, ataques) => {
     const s = suelo.find(t => x >= t.x0 && x <= t.x1);
-    const m = tipo === 'lobo' ? 300 : 150;
-    const E = EN.makeEnemigo(tipo, x, def.suelo, Math.max(s.x0, 0) + m, Math.min(s.x1, def.ancho) - m, i + 1, dif, [s.x0, s.x1],
-                             extra && extra.ataques);
-    if (despiertaX !== undefined) E.despiertaX = despiertaX;
+    const m = MARGEN[tipo];
+    const E = EN.makeEnemigo(tipo, x, def.suelo, Math.max(s.x0, 0) + m, Math.min(s.x1, def.ancho) - m, enemigos.length + 1, dif, [s.x0, s.x1], ataques);
+    enemigos.push(E);
     return E;
-  });
+  };
+  for (const [tipo, x, despiertaX, extra] of def.enemigos || []) {
+    const E = crea(tipo, x, extra && extra.ataques);
+    if (despiertaX !== undefined) E.despiertaX = despiertaX;
+    // La manada del jefe: lobos que saben todo, escondidos hasta que aulla.
+    // Pueden andar hasta pasado el final del nivel: al llamarlos entran
+    // corriendo desde fuera de la pantalla (ver stepNivel). Y el jefe tambien:
+    // mientras pelea su manada se aparta hasta la espesura, fuera de la
+    // pantalla (con el borde de su tramo en 10400 se quedaba acorralado donde
+    // acababa la pelea, y ella tumbaba a los dos de un golpe).
+    if (extra && extra.manada) {
+      E.x1 = def.ancho + 150;
+      E.manada = extra.manada.map(mx => {
+        const W = crea('lobo', mx, ['zarpazo', 'barre', 'acomete']);
+        W.oculto = true; W.despiertaX = Infinity; W.x1 = def.ancho + 150;
+        return W;
+      });
+    }
+  }
   return {
     def, rnd,
     suelo, tocones, enemigos, fuegos: [], vencidos: 0,
@@ -120,9 +161,9 @@ export function makeNivel(def, rnd = Math.random, dif = {}) {
     troncos: [], ramas: [],
     relojTroncos: def.troncos.map(() => 0.8),   // el primero llega enseguida
     relojRamas: def.ramas.map(() => 0.6),
-    hoguera: false,                              // ¿ha llegado ya?
+    hoguera: 0,                                  // la x de la ultima encendida (0: ninguna)
     seguroX: 160,                                // donde vuelve si cae
-    salio: false,
+    salio: false, guardada: false,
     caidas: 0,
     id: 0,
   };
@@ -151,8 +192,11 @@ export function hayCamino(N, x) {
   return false;
 }
 
-// Donde empieza la hoguera: si ha llegado, alli; si no, el principio.
-export function inicio(N) { return N.hoguera ? N.def.hoguera : 160; }
+// Donde se empieza: en la ultima hoguera encendida, o al principio.
+export function inicio(N) { return N.hoguera || 160; }
+
+// El jefe que guarda la salida, si sigue en pie.
+export function jefeVivo(N) { return N.enemigos.find(E => E.T.jefe && E.vivo) || null; }
 
 // ---------- La camara ----------
 // Va un poco por delante de hacia donde mira: se ve lo que viene. Suave, para
@@ -176,11 +220,14 @@ export function camara(N, K, VW, dt, instantanea = false) {
 //   golpeTronco / golpeRama   le da a ella (ya herida con C.herir)
 //   rama       una rama choca contra el camino y se rompe
 //   cae        ella se ha caido a un foso (la escena decide si sigue)
-//   hoguera    acaba de llegar a la hoguera
+//   hoguera    acaba de llegar a una hoguera (`cura`: le ha devuelto corazones)
 //   salida     acaba de llegar a la salida
+//   guardada   ha llegado a la salida con el jefe en pie (una vez)
 // y los de los enemigos (ver caba-enemigos.js), con `enemigo` o del fuego:
 //   aviso golpe parada bloqueo fuego corro devuelto apagado quema quemado
+//   fija aterriza aullido relampago
 //   tajo       la espada de ella le da a un enemigo (`muere` si lo tumba)
+//   rechazo    el yamabushi le para el golpe (o el jefe aullando: `aullando`)
 export function stepNivel(N, K, dt, VW) {
   const ev = [], def = N.def, rnd = N.rnd;
 
@@ -188,16 +235,27 @@ export function stepNivel(N, K, dt, VW) {
   // en la pelea (ver caballero.js).
   for (const E of N.enemigos) {
     if (E.st === EN.MUERTO && E.muertoT > 2) continue;
-    for (const e of EN.stepEnemigo(E, K, dt, rnd, N.fuegos)) { e.enemigo = E; ev.push(e); }
+    for (const e of EN.stepEnemigo(E, K, dt, rnd, N.fuegos)) {
+      e.enemigo = E; ev.push(e);
+      // EL LOBO QUE LLAMA EL JEFE entra por el borde derecho, desde fuera de
+      // la pantalla: desde su sitio, en el segundo aullido aparecia de golpe
+      // a la vista (y si ella andaba por alli, pegado a ella).
+      if (e.tipo === 'aullido' && e.lobo) e.lobo.x = Math.min(e.lobo.x1, Math.max(e.lobo.x, N.camX + VW + 60));
+    }
     EN.empuja(E, K);
   }
   ev.push(...EN.stepFuegos(N.fuegos, K, N.enemigos, dt));
-  // La espada: UN golpe por tajo (K.golpeo), a todos los que alcance.
+  // La espada: UN golpe por tajo (K.golpeo), a todos los que alcance. El
+  // yamabushi puede pararlo ('rechazo': la katana contra la espada).
   if (C.espadaActiva(K) && !K.golpeo) {
     let dio = false;
     for (const E of N.enemigos) {
       if (!EN.espadaToca(E, K)) continue;
-      if (EN.hiere(E, C.danoTajo(K), K.dir)) {
+      const r = EN.hiere(E, C.danoTajo(K), K.dir);
+      if (r === 'rechazo' || r === 'aullando') {
+        dio = true;
+        ev.push({ tipo: 'rechazo', x: E.x + E.dir * 36, y: E.y - 112, enemigo: E, aullando: r === 'aullando' });
+      } else if (r) {
         dio = true;
         if (!E.vivo) N.vencidos++;
         ev.push({ tipo: 'tajo', x: E.x, y: E.y - E.T.alto * 0.55, enemigo: E, muere: !E.vivo, contra: !!K.contra, fuerte: K.combo === 2 });
@@ -273,9 +331,21 @@ export function stepNivel(N, K, dt, VW) {
   // pantalla "se quedo volviendo negra y encendiendo congelada" (23-09-2026).
   if (K.vivo && K.y > def.suelo + CAIDA_Y && !N.cayo) { N.cayo = true; N.caidas++; ev.push({ tipo: 'cae', x: K.x, y: K.y }); }
 
-  // --- La hoguera y la salida.
-  if (!N.hoguera && K.vivo && K.x >= def.hoguera) { N.hoguera = true; ev.push({ tipo: 'hoguera', x: def.hoguera, y: def.suelo }); }
-  if (!N.salio && K.vivo && K.x >= def.salida) { N.salio = true; ev.push({ tipo: 'salida', x: def.salida, y: def.suelo }); }
+  // --- Las hogueras y la salida. La salida, con el jefe vencido: si llega
+  // antes (esquivandolo), se le dice una vez que se la guarda.
+  if (K.vivo) {
+    for (const hx of def.hogueras) {
+      if (hx > N.hoguera && K.x >= hx) {
+        const cura = K.hp < K.hpMax;
+        N.hoguera = hx; K.hp = K.hpMax;
+        ev.push({ tipo: 'hoguera', x: hx, y: def.suelo, cura });
+      }
+    }
+  }
+  if (!N.salio && K.vivo && K.x >= def.salida) {
+    if (!jefeVivo(N)) { N.salio = true; ev.push({ tipo: 'salida', x: def.salida, y: def.suelo }); }
+    else if (!N.guardada) { N.guardada = true; ev.push({ tipo: 'guardada', x: def.salida, y: def.suelo }); }
+  }
   return ev;
 }
 
