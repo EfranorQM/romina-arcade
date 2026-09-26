@@ -1,6 +1,6 @@
 {
-  "version": "1.0.29",
-  "fecha": "2026-09-25",
+  "version": "1.0.30",
+  "fecha": "2026-09-26",
   "archivos": [
     "img/arena.png",
     "img/bosque.png",
@@ -38,6 +38,9 @@
     "js/games/caba-nivel.js",
     "js/games/caba-partida.js",
     "js/games/caballero.js",
+    "js/games/carretera-arte.js",
+    "js/games/carretera-mundo.js",
+    "js/games/carretera-sprites.js",
     "js/games/cementerio-atlas.js",
     "js/games/cementerio-sprite.js",
     "js/games/enemigos-atlas.js",
@@ -50,17 +53,6 @@
     "js/games/masa-mente.js",
     "js/games/masa-pelea.js",
     "js/games/masa.js",
-    "js/games/moto-3d.js",
-    "js/games/moto-art.js",
-    "js/games/moto-bioma.js",
-    "js/games/moto-botones.js",
-    "js/games/moto-decor.js",
-    "js/games/moto-kenney.js",
-    "js/games/moto-modelo.js",
-    "js/games/moto-obs3d.js",
-    "js/games/moto-pista3d.js",
-    "js/games/moto-trucos.js",
-    "js/games/moto-world.js",
     "js/games/neonfist.js",
     "js/games/ogro-atlas.js",
     "js/games/ogro-cuerpo.js",
@@ -90,12 +82,11 @@
     "js/menu.js",
     "js/pausa.js",
     "js/salon.js",
-    "js/update.js",
-    "js/vendor/three-moto.js"
+    "js/update.js"
   ],
   "notas": [
-    "CUATRO MUNDOS NUEVOS",
-    "SALTO GIGANTE Y TRUCOS",
-    "BOTONES NUEVOS"
+    "FURIA NUEVA: MOTO EN CARRETERA",
+    "8 NIVELES DE DIA Y DE NOCHE",
+    "MANTEN UN LADO PARA GIRAR"
   ]
 }

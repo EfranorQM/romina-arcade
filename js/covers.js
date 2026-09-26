@@ -11,6 +11,7 @@ import { cargaRomina, drawRomina } from './games/romi-sprite.js';
 import { cargaOgro, bakeOgro, poseOgro, drawOgro } from './games/ogro-sprite.js';
 import { cargaArena, drawSalon } from './games/arena-sprite.js';
 import * as OG from './games/ogro-cuerpo.js';
+import { motoDetras } from './games/carretera-arte.js';
 
 export const CW = 96, CH = 128;
 // Se hornean al DOBLE (192x256) y se dibujan con las coordenadas de siempre:
@@ -264,46 +265,48 @@ const symbiote = () => make(d => {
   frame(d, '#c9203a');
 });
 
-// ---------- FURIA: la moto en el aire sobre la montana ----------
+// ---------- FURIA: la carretera hacia el atardecer, vista desde atras ----------
+// Lo que hay que leer es la VELOCIDAD hacia el horizonte: la carretera que se
+// estrecha hasta un punto, los bordillos rojos y blancos que se hacen chicos, y
+// la piloto de espaldas (el mismo dibujo del juego, carretera-arte.js) tumbada
+// en la curva.
 const furia = () => make(d => {
-  sky(d, '#2b1030', '#f0b45a');
-  // Sol bajo.
-  d.fillStyle = 'rgba(255,200,120,0.45)'; d.beginPath(); d.arc(66, 84, 22, 0, 7); d.fill();
-  // Cordillera al fondo y colina del frente.
-  const far = [10, 26, 14, 34, 20, 30, 12, 24, 16];
-  const near = [4, 12, 6, 16, 8, 14, 4, 10, 6];
-  d.fillStyle = '#4a2040';
-  d.beginPath(); d.moveTo(0, CH);
-  for (let i = 0; i < far.length; i++) d.lineTo(i * 12, 96 - far[i]);
-  d.lineTo(CW, CH); d.fill();
-  d.fillStyle = '#20101c';
-  d.beginPath(); d.moveTo(0, CH);
-  for (let i = 0; i < near.length; i++) d.lineTo(i * 12, 112 - near[i]);
-  d.lineTo(CW, CH); d.fill();
-  // La moto, inclinada en pleno salto.
-  d.save();
-  d.translate(48, 62); d.rotate(-0.42);
-  // Ruedas.
-  d.strokeStyle = '#141018'; d.lineWidth = 4;
-  d.beginPath(); d.arc(-16, 8, 10, 0, 7); d.stroke();
-  d.beginPath(); d.arc(16, 8, 10, 0, 7); d.stroke();
-  d.strokeStyle = '#5a4a60'; d.lineWidth = 1;
-  d.beginPath(); d.arc(-16, 8, 4, 0, 7); d.stroke();
-  d.beginPath(); d.arc(16, 8, 4, 0, 7); d.stroke();
-  // Chasis y horquilla.
-  d.strokeStyle = '#ff5c7a'; d.lineWidth = 3; d.lineJoin = 'round';
-  d.beginPath(); d.moveTo(-16, 8); d.lineTo(-2, -2); d.lineTo(12, 0); d.lineTo(16, 8); d.stroke();
-  d.beginPath(); d.moveTo(12, 0); d.lineTo(18, -8); d.stroke();
-  // El piloto, echado hacia adelante.
-  d.fillStyle = '#ffe14d';
-  d.fillRect(-6, -14, 8, 10);                          // torso
-  d.beginPath(); d.arc(4, -16, 5, 0, 7); d.fill();     // casco
-  d.strokeStyle = '#ffe14d'; d.lineWidth = 3;
-  d.beginPath(); d.moveTo(0, -10); d.lineTo(16, -7); d.stroke();   // brazo al manubrio
-  d.restore();
-  // Tierra levantada.
-  d.fillStyle = 'rgba(240,180,90,0.5)';
-  for (let i = 0; i < 8; i++) d.fillRect(4 + i * 5, 88 + (i % 3) * 4, 4, 2);
+  sky(d, '#3a2a6c', '#ffb07a');
+  const hy = 64;
+  // Sol grande en el horizonte y el mar debajo.
+  d.fillStyle = 'rgba(255,220,160,0.35)'; d.beginPath(); d.arc(66, hy, 22, 0, 7); d.fill();
+  d.fillStyle = '#fff0c4'; d.beginPath(); d.arc(66, hy, 13, Math.PI, 0); d.fill();
+  d.fillStyle = '#b86a8a'; d.fillRect(0, hy - 6, CW, 6);
+  d.fillStyle = '#6a5aa0'; d.fillRect(0, hy, CW, 4);
+  // Cesped a los lados.
+  d.fillStyle = '#6a9a4a'; d.fillRect(0, hy + 4, CW, CH - hy - 4);
+  // La carretera: bandas que se estrechan hacia el punto de fuga.
+  const cx = 50, n = 14;
+  for (let i = n - 1; i >= 0; i--) {
+    const t0 = i / n, t1 = (i + 1) / n;
+    const y0 = hy + 4 + (CH - hy - 4) * t0 * t0, y1 = hy + 4 + (CH - hy - 4) * t1 * t1;
+    const w0 = 2 + 50 * t0 * t0, w1 = 2 + 50 * t1 * t1, r0 = w0 * 0.14, r1 = w1 * 0.14;
+    d.fillStyle = i % 2 ? '#e2374f' : '#f4f4f4';
+    d.beginPath(); d.moveTo(cx - w0 - r0, y0); d.lineTo(cx + w0 + r0, y0); d.lineTo(cx + w1 + r1, y1); d.lineTo(cx - w1 - r1, y1); d.fill();
+    d.fillStyle = i % 2 ? '#8e939c' : '#898e97';
+    d.beginPath(); d.moveTo(cx - w0, y0); d.lineTo(cx + w0, y0); d.lineTo(cx + w1, y1); d.lineTo(cx - w1, y1); d.fill();
+    if (i % 2 === 0) { d.fillStyle = '#f7f7f2'; d.fillRect(cx - 0.4 - t1, y0, 0.8 + t1 * 2, y1 - y0); }
+  }
+  // Palmeras a los lados, en silueta.
+  const palma = (x, y, h, lado) => {
+    d.strokeStyle = '#3a2440'; d.lineWidth = 2;
+    d.beginPath(); d.moveTo(x, y); d.quadraticCurveTo(x + lado * 3, y - h * 0.6, x + lado * 6, y - h); d.stroke();
+    d.fillStyle = '#3a2440';
+    for (let k = 0; k < 6; k++) {
+      const a = Math.PI + (k / 5) * Math.PI;
+      d.beginPath(); d.moveTo(x + lado * 6, y - h);
+      d.quadraticCurveTo(x + lado * 6 + Math.cos(a) * 8, y - h + Math.sin(a) * 6, x + lado * 6 + Math.cos(a) * 14, y - h + 5);
+      d.lineTo(x + lado * 6, y - h + 1); d.fill();
+    }
+  };
+  palma(8, 108, 44, 1); palma(20, 84, 22, 1); palma(88, 104, 40, -1); palma(78, 82, 20, -1);
+  // La piloto de espaldas, tumbada un poco en la curva.
+  motoDetras(d, 50, 121, 0.44, 0.16, 0.4, {});
   frame(d, '#ff5c7a');
 });
 
